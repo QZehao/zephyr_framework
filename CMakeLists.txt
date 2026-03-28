@@ -43,6 +43,114 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(zephyr_event_template)
 
 # =============================================================================
+# Version Information
+# =============================================================================
+
+set(PROJECT_VERSION_MAJOR 1)
+set(PROJECT_VERSION_MINOR 0)
+set(PROJECT_VERSION_PATCH 0)
+set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+
+message(STATUS "Project Version: ${PROJECT_VERSION}")
+
+# =============================================================================
+# Git Information (Auto-detect)
+# =============================================================================
+
+# Find Git
+find_package(Git)
+
+if(GIT_FOUND)
+    # Get git commit hash
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_RESULT
+        ERROR_QUIET
+    )
+    
+    if(GIT_RESULT EQUAL 0)
+        message(STATUS "Git Commit: ${GIT_COMMIT_HASH}")
+    else()
+        set(GIT_COMMIT_HASH "unknown")
+    endif()
+    
+    # Get git branch
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_BRANCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_RESULT
+        ERROR_QUIET
+    )
+    
+    if(NOT GIT_RESULT EQUAL 0)
+        set(GIT_BRANCH "unknown")
+    endif()
+    
+    # Get git tag
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --exact-match 2>/dev/null
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_TAG
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_RESULT
+        ERROR_QUIET
+    )
+    
+    if(NOT GIT_RESULT EQUAL 0)
+        set(GIT_TAG "untagged")
+    endif()
+    
+    # Check for uncommitted changes
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} diff-index --quiet HEAD --
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        RESULT_VARIABLE GIT_DIRTY
+        ERROR_QUIET
+    )
+    
+    if(NOT GIT_DIRTY EQUAL 0)
+        set(GIT_DIRTY 1)
+        message(STATUS "Git Status: dirty (uncommitted changes)")
+    else()
+        set(GIT_DIRTY 0)
+        message(STATUS "Git Status: clean")
+    endif()
+else()
+    set(GIT_COMMIT_HASH "unknown")
+    set(GIT_BRANCH "unknown")
+    set(GIT_TAG "unknown")
+    set(GIT_DIRTY 0)
+    message(STATUS "Git not found, version info will be limited")
+endif()
+
+# =============================================================================
+# Build Timestamp
+# =============================================================================
+
+string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S")
+string(TIMESTAMP BUILD_DATE "%Y-%m-%d")
+string(TIMESTAMP BUILD_TIME "%H:%M:%S")
+
+message(STATUS "Build Timestamp: ${BUILD_TIMESTAMP}")
+
+# =============================================================================
+# Target Board
+# =============================================================================
+
+if(BOARD)
+    set(BUILD_TARGET ${BOARD})
+else()
+    set(BUILD_TARGET "unknown")
+endif()
+
+message(STATUS "Build Target: ${BUILD_TARGET}")
+
+# =============================================================================
 # Project Source Files
 # =============================================================================
 
@@ -73,6 +181,8 @@ target_sources(app PRIVATE
     src/app/app_main.c
     src/app/app_main.h
     src/app/app_config.h
+    src/app/app_version.c
+    src/app/app_version.h
 )
 
 # Business Modules (Example - Extendable)
@@ -92,9 +202,18 @@ target_sources(app PRIVATE
 # =============================================================================
 
 target_compile_definitions(app PRIVATE
-    PROJECT_VERSION_MAJOR=1
-    PROJECT_VERSION_MINOR=0
-    PROJECT_VERSION_PATCH=0
+    PROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+    PROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+    PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH}
+    PROJECT_VERSION="${PROJECT_VERSION}"
+    GIT_COMMIT_HASH="${GIT_COMMIT_HASH}"
+    GIT_BRANCH="${GIT_BRANCH}"
+    GIT_TAG="${GIT_TAG}"
+    GIT_DIRTY=${GIT_DIRTY}
+    BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"
+    BUILD_DATE="${BUILD_DATE}"
+    BUILD_TIME="${BUILD_TIME}"
+    BUILD_TARGET="${BUILD_TARGET}"
 )
 
 # =============================================================================
@@ -107,4 +226,19 @@ target_include_directories(app PRIVATE
     ${CMAKE_SOURCE_DIR}/src/services
     ${CMAKE_SOURCE_DIR}/src/app
     ${CMAKE_SOURCE_DIR}/src/modules
+)
+
+# =============================================================================
+# Generate Version Header (Optional - for auto-generated version file)
+# =============================================================================
+
+# Configure a version header file with build-time values
+configure_file(
+    ${CMAKE_SOURCE_DIR}/src/app/app_version_config.h.in
+    ${CMAKE_BINARY_DIR}/generated/app_version_config.h
+    @ONLY
+)
+
+target_include_directories(app PRIVATE
+    ${CMAKE_BINARY_DIR}/generated
 )

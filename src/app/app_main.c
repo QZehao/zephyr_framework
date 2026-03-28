@@ -10,6 +10,7 @@
 
 #include "app_main.h"
 #include "app_config.h"
+#include "app_version.h"
 #include "event_system.h"
 #include "event_dispatcher.h"
 #include "sys_log.h"
@@ -60,9 +61,15 @@ static void app_print_banner(void);
 
 static int cmd_app_status(const struct shell *shell, size_t argc, char **argv)
 {
+    char version_str[VERSION_STRING_MAX_LEN];
+    char info_str[VERSION_INFO_STRING_MAX_LEN];
+    
+    app_version_get_string(version_str, sizeof(version_str));
+    app_version_get_info_string(info_str, sizeof(info_str));
+
     shell_print(shell, "Application Status:");
-    shell_print(shell, "  Version: %s", APP_VERSION_STRING);
-    shell_print(shell, "  Build: %s (%s)", APP_BUILD_TYPE, APP_TARGET_NAME);
+    shell_print(shell, "  Version: %s", version_str);
+    shell_print(shell, "  Info: %s", info_str);
     shell_print(shell, "  State: %s", g_app.running ? "RUNNING" : "STOPPED");
     shell_print(shell, "  Uptime: %d ms", app_get_uptime());
     shell_print(shell, "  Heartbeats: %d", g_app.heartbeat_count);
@@ -156,9 +163,10 @@ int app_init(const app_config_t *config)
 {
     LOG_INF("========================================");
     LOG_INF("Application Initializing...");
-    LOG_INF("Version: %s", APP_VERSION_STRING);
-    LOG_INF("Build: %s (%s)", APP_BUILD_TYPE, APP_TARGET_NAME);
     LOG_INF("========================================");
+
+    /* Print version information FIRST */
+    app_version_print();
 
     memset(&g_app, 0, sizeof(g_app));
 
