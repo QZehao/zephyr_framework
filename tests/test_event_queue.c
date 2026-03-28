@@ -1,0 +1,182 @@
+/**
+ * @file test_event_queue.c
+ * @brief 事件队列单元测试
+ * 
+ * @copyright Copyright (c) 2026
+ * @license SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/logging/log.h>
+#include <zephyr/ztest.h>
+#include "event_queue.h"
+
+LOG_MODULE_REGISTER(test_event_queue);
+
+/* =============================================================================
+ * 测试用例
+ * ============================================================================= */
+
+/**
+ * @brief 测试队列初始化
+ */
+ZTEST(test_event_queue, test_queue_init)
+{
+    struct k_msgq test_queue;
+    char buffer[10 * sizeof(event_t)];
+    event_status_t status;
+
+    /* 测试正常初始化 */
+    status = event_queue_init(&test_queue, buffer, 10);
+    zassert_equal(status, EVENT_OK, "队列初始化失败");
+
+    /* 测试空参数 */
+    status = event_queue_init(NULL, buffer, 10);
+    zassert_equal(status, EVENT_ERR_INVALID_ARG, "应拒绝空队列参数");
+
+    status = event_queue_init(&test_queue, NULL, 10);
+    zassert_equal(status, EVENT_ERR_INVALID_ARG, "应拒绝空缓冲区参数");
+}
+
+/**
+ * @brief 测试队列入队和出队
+ */
+ZTEST(test_event_queue, test_queue_enqueue_dequeue)
+{
+    struct k_msgq test_queue;
+    char buffer[10 * sizeof(event_t)];
+    event_status_t status;
+    event_t event_in = {
+        .type = 50,
+        .priority = EVENT_PRIORITY_NORMAL,
+        .data = NULL,
+        .data_len = 0
+    };
+    event_t event_out;
+
+    /* 初始化 */
+    event_queue_init(&test_queue, buffer, 10);
+
+    /* 测试入队 */
+    status = event_queue_enqueue(&test_queue, &event_in, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    zassert_equal(status, EVENT_OK, "入队失败");
+
+    /* 测试队列深度 */
+    zassert_equal(event_queue_depth(&test_queue), 1, "队列深度应为 1");
+
+    /* 测试出队 */
+    status = event_queue_dequeue(&test_queue, &event_out, K_NO_WAIT);
+    zassert_equal(status, EVENT_OK, "出队失败");
+    zassert_equal(event_out.type, 50, "事件类型不匹配");
+
+    /* 测试空队列出队 */
+    status = event_queue_dequeue(&test_queue, &event_out, K_NO_WAIT);
+    zassert_equal(status, EVENT_ERR_QUEUE_EMPTY, "空队列应返回 EMPTY");
+}
+
+/**
+ * @brief 测试队列满的情况
+ */
+ZTEST(test_event_queue, test_queue_full)
+{
+    struct k_msgq test_queue;
+    char buffer[3 * sizeof(event_t)];
+    event_status_t status;
+    event_t event = {
+        .type = 51,
+        .priority = EVENT_PRIORITY_NORMAL
+    };
+
+    /* 初始化小队列 */
+    event_queue_init(&test_queue, buffer, 3);
+
+    /* 填满队列 */
+    status = event_queue_enqueue(&test_queue, &event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    zassert_equal(status, EVENT_OK, "入队 1 失败");
+    
+    status = event_queue_enqueue(&test_queue, &event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    zassert_equal(status, EVENT_OK, "入队 2 失败");
+    
+    status = event_queue_enqueue(&test_queue, &event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    zassert_equal(status, EVENT_OK, "入队 3 失败");
+
+    /* 队列已满，新入队应失败（DROP_NEWEST 策略）*/
+    status = event_queue_enqueue(&test_queue, &event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    zassert_equal(status, EVENT_ERR_QUEUE_FULL, "队列满时应返回 FULL");
+
+    /* 测试 is_full */
+    zassert_true(event_queue_is_full(&test_queue), "队列应标记为满");
+}
+
+/**
+ * @brief 测试队列清空
+ */
+ZTEST(test_event_queue, test_queue_purge)
+{
+    struct k_msgq test_queue;
+    char buffer[5 * sizeof(event_t)];
+    event_t event = {
+        .type = 52,
+        .priority = EVENT_PRIORITY_NORMAL
+    };
+
+    /* 初始化 */
+    event_queue_init(&test_queue, buffer, 5);
+
+    /* 添加一些事件 */
+    for (int i = 0; i < 3; i++) {
+        event_queue_enqueue(&test_queue, &event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    }
+
+    zassert_equal(event_queue_depth(&test_queue), 3, "队列深度应为 3");
+
+    /* 清空队列 */
+    event_queue_purge(&test_queue);
+
+    zassert_equal(event_queue_depth(&test_queue), 0, "队列应为空");
+    zassert_true(event_queue_is_empty(&test_queue), "队列应标记为空");
+}
+
+/**
+ * @brief 测试队列统计
+ */
+ZTEST(test_event_queue, test_queue_stats)
+{
+    struct k_msgq test_queue;
+    char buffer[10 * sizeof(event_t)];
+    queue_stats_t stats;
+    event_t event = {
+        .type = 53,
+        .priority = EVENT_PRIORITY_NORMAL
+    };
+
+    /* 初始化 */
+    event_queue_init(&test_queue, buffer, 10);
+
+    /* 入队一些事件 */
+    for (int i = 0; i < 5; i++) {
+        event_queue_enqueue(&test_queue, &event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    }
+
+    /* 出队一些事件 */
+    event_t out;
+    for (int i = 0; i < 3; i++) {
+        event_queue_dequeue(&test_queue, &out, K_NO_WAIT);
+    }
+
+    /* 获取统计 */
+    event_queue_get_stats(&test_queue, &stats);
+    
+    zassert_true(stats.enqueue_count >= 5, "入队计数应至少为 5");
+    zassert_true(stats.dequeue_count >= 3, "出队计数应至少为 3");
+
+    /* 重置统计 */
+    event_queue_reset_stats(&test_queue);
+    event_queue_get_stats(&test_queue, &stats);
+    zassert_equal(stats.enqueue_count, 0, "重置后入队计数应为 0");
+}
+
+/* =============================================================================
+ * 测试套件
+ * ============================================================================= */
+
+ZTEST_SUITE(test_event_queue, NULL, NULL, NULL, NULL, NULL);
