@@ -1,18 +1,34 @@
 # West manifest file for zephyr_template
-# This file is optional - use if you want to manage the project with West
+#
+# This is a FREESTANDING APPLICATION - the application and Zephyr are in
+# separate directories. This west.yml is OPTIONAL and is only needed if you
+# want to use west commands that require a workspace.
+#
+# For freestanding applications, you have two options:
+#
+# Option 1: Use ZEPHYR_BASE environment variable (recommended)
+#   - Set ZEPHYR_BASE to point to your Zephyr installation
+#   - Build with: west build -b <board>
+#
+# Option 2: Use this west.yml to create a local workspace
+#   - Run: west init -l .
+#   - Run: west update
+#   - Build with: west build -b <board>
+#
+# See: https://docs.zephyrproject.org/latest/application/index.html#zephyr-freestanding-app
 
 manifest:
   version: 0.13
 
-  remotes:
-    - name: zephyrproject
-      url-base: https://github.com/zephyrproject-rtos
-
   projects:
     - name: zephyr
-      remote: zephyrproject
+      path: zephyr
+      # Update this path to your Zephyr installation
+      url: file://D:/Code/1-github-code/zephyrproject/zephyr
       revision: main
-      import: true
+      # Disable import for freestanding applications
+      # import: true
 
   self:
+    # This application is located in the manifest repository itself
     path: .

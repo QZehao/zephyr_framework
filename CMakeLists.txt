@@ -1,6 +1,9 @@
 # Zephyr Event-Driven Project Template
 # Copyright (c) 2026
 # SPDX-License-Identifier: Apache-2.0
+#
+# This is a freestanding Zephyr application (application and Zephyr are in separate directories)
+# See: https://docs.zephyrproject.org/latest/application/index.html#zephyr-freestanding-app
 
 cmake_minimum_required(VERSION 3.20.0)
 
@@ -9,6 +12,7 @@ cmake_minimum_required(VERSION 3.20.0)
 # =============================================================================
 
 # Check for ZEPHYR_BASE environment variable
+# For freestanding applications, ZEPHYR_BASE must point to the Zephyr repository
 if(NOT DEFINED ENV{ZEPHYR_BASE})
     # Try to load from zephyr_config.env file
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/zephyr_config.env")
@@ -24,7 +28,7 @@ if(NOT DEFINED ENV{ZEPHYR_BASE})
             endif()
         endforeach()
     else()
-        message(FATAL_ERROR 
+        message(FATAL_ERROR
             "ZEPHYR_BASE not set and zephyr_config.env not found.\n"
             "Please either:\n"
             "  1. Set ZEPHYR_BASE environment variable, or\n"
@@ -37,7 +41,12 @@ endif()
 message(STATUS "ZEPHYR_BASE: $ENV{ZEPHYR_BASE}")
 message(STATUS "ZEPHYR_SDK_INSTALL_DIR: $ENV{ZEPHYR_SDK_INSTALL_DIR}")
 
-# Find Zephyr SDK
+# Note: BOARD_ROOT is not needed for standard boards like nucleo_l4r5zi
+# Only use BOARD_ROOT if you have custom boards in the boards/ directory
+# list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boards)
+
+# Find Zephyr package
+# For freestanding applications, explicitly specify ZEPHYR_BASE
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(zephyr_event_template)

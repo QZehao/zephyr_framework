@@ -63,6 +63,26 @@ zephyr_template/
 - Python 3.8+
 - West（Zephyr 构建工具）
 
+### 项目类型：独立应用程序 (Freestanding Application)
+
+本项目是一个 **Zephyr 独立应用程序**，应用程序和 Zephyr 源代码位于不同的目录中。
+
+```
+<home>/
+├── zephyrproject/          # Zephyr 工作区
+│   ├── .west/
+│   ├── zephyr/             # Zephyr 源代码 (ZEPHYR_BASE)
+│   ├── modules/            # Zephyr 模块
+│   └── ...
+└── zephyr_template/        # 应用程序目录 (本目录)
+    ├── CMakeLists.txt
+    ├── prj.conf
+    ├── src/
+    └── ...
+```
+
+**重要**：构建时需要设置 `ZEPHYR_BASE` 环境变量指向 Zephyr 源代码目录。
+
 ### 配置（本地路径）
 
 本项目使用本地 Zephyr SDK 和源代码路径。构建前请进行配置：
@@ -111,6 +131,13 @@ west build -b <your_board> .
 
 # 构建 native POSIX（用于测试）
 west build -b native_posix .
+
+# 使用特定配置文件
+west build -b <your_board> -DCONF_FILE=prj.conf .
+
+# 清理并重新构建
+west build -t pristine
+west build -b <your_board> .
 ```
 
 ### 烧录
@@ -124,6 +151,37 @@ west flash
 ```bash
 west console
 ```
+
+### 使用自定义开发板
+
+本项目支持在 `boards/` 目录中添加自定义开发板，无需修改 Zephyr 源代码。
+
+**开发板目录结构**：
+
+```
+boards/
+└── vendor/
+    └── board_name/
+        ├── board_name_defconfig
+        ├── board_name.dts
+        ├── board_name.yaml
+        ├── board.cmake
+        ├── Kconfig.defconfig
+        └── ...
+```
+
+**构建命令**：
+
+```bash
+# BOARD_ROOT 已在 CMakeLists.txt 中自动配置
+west build -b vendor/board_name .
+```
+
+**设备树覆盖**：
+
+- 通用覆盖：`boards/overlay.dts`
+- 开发板特定覆盖：`boards/<board_name>.overlay`
+- 使用 FILE_SUFFIX：`boards/<board_name>_<suffix>.overlay`
 
 ## 架构概览
 
