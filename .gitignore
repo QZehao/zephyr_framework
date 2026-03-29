@@ -21,11 +21,6 @@ compile_commands.json
 *.so
 *.elf
 
-# Zephyr
-zephyr/
-include/
-deps/
-
 # Python
 __pycache__/
 *.pyc
