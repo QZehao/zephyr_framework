@@ -36,7 +36,6 @@ typedef struct {
     event_filter_t filter;
     void *filter_user_data;
     struct k_mutex lock;
-    struct k_sem sem;
     uint32_t events_in_batch;
     uint64_t last_event_time;
 } dispatcher_cb_t;
@@ -79,14 +78,15 @@ event_status_t event_dispatcher_init(const dispatcher_config_t *config)
 
     /* Initialize synchronization primitives */
     k_mutex_init(&g_dispatcher.lock);
-    k_sem_init(&g_dispatcher.sem, 0, 1);
 
     g_dispatcher.state = DISPATCHER_STOPPED;
     g_dispatcher.last_event_time = k_uptime_get();
 
-    /* Get reference to global event queue */
-    extern struct k_msgq *event_system_get_queue(void);
     g_event_queue = event_system_get_queue();
+    if (g_event_queue == NULL) {
+        LOG_ERR("Call event_system_init() before event_dispatcher_init()");
+        return EVENT_ERR_INVALID_ARG;
+    }
 
     LOG_INF("Event dispatcher initialized");
     return EVENT_OK;
@@ -135,10 +135,6 @@ event_status_t event_dispatcher_stop(void)
     g_dispatcher.state = DISPATCHER_STOPPED;
     k_mutex_unlock(&g_dispatcher.lock);
 
-    /* Wake up thread if waiting */
-    k_sem_give(&g_dispatcher.sem);
-
-    /* Wait for thread to stop */
     k_thread_abort(&g_dispatcher.thread);
 
     LOG_INF("Event dispatcher stopped");
@@ -218,7 +214,10 @@ event_status_t event_dispatcher_process_one(k_timeout_t timeout)
     /* Apply filter if set */
     if (g_dispatcher.filter != NULL) {
         if (!g_dispatcher.filter(&event, g_dispatcher.filter_user_data)) {
-            return EVENT_OK;  /* Filtered out, but not an error */
+            if (event.is_dynamic && event.data != NULL) {
+                k_free(event.data);
+            }
+            return EVENT_OK;
         }
     }
 
@@ -290,19 +289,12 @@ static void dispatcher_thread_func(void *p1, void *p2, void *p3)
 
     LOG_INF("Dispatcher thread running");
 
-    while (g_dispatcher.state == DISPATCHER_RUNNING) {
-        /* Wait for event or timeout */
-        k_sem_take(&g_dispatcher.sem, K_MSEC(100));
-
-        /* Process batch of events */
-        uint32_t processed = event_dispatcher_process_all(0);
-        
-        if (processed == 0) {
-            /* No events, check if we should continue */
-            if (g_dispatcher.state != DISPATCHER_RUNNING) {
-                break;
-            }
+    while (1) {
+        if (g_dispatcher.state != DISPATCHER_RUNNING) {
+            break;
         }
+
+        (void)event_dispatcher_process_one(K_FOREVER);
     }
 
     LOG_INF("Dispatcher thread exiting");
@@ -316,9 +308,7 @@ static void process_event(const event_t *event)
 
     uint64_t start_time = k_cycle_get_64();
 
-    /* Call event system to notify subscribers */
-    extern event_status_t event_dispatch_internal(const event_t *event);
-    event_status_t status = event_dispatch_internal(event);
+    event_status_t status = event_notify_subscribers(event);
 
     uint64_t end_time = k_cycle_get_64();
     uint32_t latency_us = (uint32_t)((end_time - start_time) * 1000000ULL /
@@ -346,6 +336,8 @@ static void process_event(const event_t *event)
         k_mutex_unlock(&g_dispatcher.lock);
     }
 
+    g_dispatcher.last_event_time = k_uptime_get();
+
     LOG_DBG("Processed event type=%d, latency=%dus", event->type, latency_us);
 }
 
@@ -356,20 +348,3 @@ static uint32_t calculate_latency_us(uint64_t event_timestamp)
     return (uint32_t)(delta_ms * 1000);  /* ms to us */
 }
 
-/* =============================================================================
- * Event System Integration
- * ============================================================================= */
-
-/* This function is called by event_system.c */
-event_status_t event_dispatch_internal(const event_t *event)
-{
-    /* Forward to event_system's subscriber notification */
-    extern event_status_t event_notify_subscribers(const event_t *event);
-    return event_notify_subscribers(event);
-}
-
-struct k_msgq *event_system_get_queue(void)
-{
-    extern struct k_msgq g_event_msgq;
-    return &g_event_msgq;
-}

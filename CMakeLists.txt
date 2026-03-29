@@ -100,9 +100,9 @@ if(GIT_FOUND)
         set(GIT_BRANCH "unknown")
     endif()
     
-    # Get git tag
+    # Get git tag (ERROR_QUIET suppresses stderr; avoid shell redirects for portability)
     execute_process(
-        COMMAND ${GIT_EXECUTABLE} describe --tags --exact-match 2>/dev/null
+        COMMAND ${GIT_EXECUTABLE} describe --tags --exact-match
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_TAG
         OUTPUT_STRIP_TRAILING_WHITESPACE

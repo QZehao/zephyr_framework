@@ -288,6 +288,16 @@ void event_get_statistics(uint32_t *total_events,
                           uint32_t *queue_depth,
                           uint32_t *dropped_events);
 
+/**
+ * @brief Global event queue (valid after event_system_init).
+ */
+struct k_msgq *event_system_get_queue(void);
+
+/**
+ * @brief Deliver one event to all subscribers of its type (callbacks run without entry lock held).
+ */
+event_status_t event_notify_subscribers(const event_t *event);
+
 #ifdef __cplusplus
 }
 #endif

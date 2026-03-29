@@ -11,6 +11,7 @@
 #include "event_system.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <stdatomic.h>
 
 LOG_MODULE_REGISTER(event_system, CONFIG_SYS_LOG_LEVEL);
 
@@ -37,7 +38,6 @@ typedef struct {
     struct k_msgq          *event_queue;
     event_type_entry_t      event_types[MAX_EVENT_TYPES];
     uint32_t                total_events;
-    uint32_t                dropped_events;
     struct k_mutex          stats_lock;
     uint32_t                next_subscriber_id;
 } event_system_cb_t;
@@ -50,12 +50,14 @@ static event_system_cb_t g_event_system;
 static struct k_msgq g_event_msgq;
 static char g_event_msgq_buffer[CONFIG_EVENT_QUEUE_SIZE * sizeof(event_t)];
 
+/* ISR-safe drop counter (avoid mutex in event_publish_from_isr) */
+static _Atomic uint32_t g_event_dropped_count;
+
 /* =============================================================================
  * Forward Declarations
  * ============================================================================= */
 
 static void event_dispatcher_thread(void *p1, void *p2, void *p3);
-static event_status_t notify_subscribers(const event_t *event);
 static subscriber_entry_t *find_subscriber(event_type_entry_t *entry, uint32_t subscriber_id);
 
 /* =============================================================================
@@ -347,10 +349,8 @@ event_status_t event_publish(const event_t *event)
 
     int ret = k_msgq_put(g_event_system.event_queue, event, K_NO_WAIT);
     if (ret != 0) {
-        k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);
-        g_event_system.dropped_events++;
-        k_mutex_unlock(&g_event_system.stats_lock);
-        
+        atomic_fetch_add_explicit(&g_event_dropped_count, 1U, memory_order_relaxed);
+
         LOG_WRN("Event queue full, event dropped (type=%d)", event->type);
         return EVENT_ERR_QUEUE_FULL;
     }
@@ -366,10 +366,7 @@ event_status_t event_publish_from_isr(const event_t *event)
 
     int ret = k_msgq_put(g_event_system.event_queue, event, K_NO_WAIT);
     if (ret != 0) {
-        k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);
-        g_event_system.dropped_events++;
-        k_mutex_unlock(&g_event_system.stats_lock);
-        
+        atomic_fetch_add_explicit(&g_event_dropped_count, 1U, memory_order_relaxed);
         return EVENT_ERR_QUEUE_FULL;
     }
 
@@ -387,8 +384,20 @@ event_status_t event_publish_copy(event_type_t type,
     }
 
     event_status_t status = event_publish(event);
-    event_free(event);  /* Event system made a copy in the queue */
-    
+    /*
+     * k_msgq_put copies event_t; the queued copy still points at heap event->data.
+     * Free only the event shell; payload remains owned by the queued message.
+     */
+    if (status == EVENT_OK) {
+        if (event->data != NULL && event->is_dynamic) {
+            event->data = NULL;
+            event->is_dynamic = false;
+        }
+        event_free(event);
+    } else {
+        event_free(event);
+    }
+
     return status;
 }
 
@@ -501,7 +510,7 @@ void event_get_statistics(uint32_t *total_events,
         *queue_depth = k_msgq_num_used_get(g_event_system.event_queue);
     }
     if (dropped_events != NULL) {
-        *dropped_events = g_event_system.dropped_events;
+        *dropped_events = atomic_load_explicit(&g_event_dropped_count, memory_order_relaxed);
     }
     
     k_mutex_unlock(&g_event_system.stats_lock);
@@ -530,7 +539,7 @@ static void event_dispatcher_thread(void *p1, void *p2, void *p3)
         }
 
         /* Process event */
-        notify_subscribers(&event);
+        event_notify_subscribers(&event);
 
         k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);
         g_event_system.total_events++;
@@ -545,14 +554,22 @@ static void event_dispatcher_thread(void *p1, void *p2, void *p3)
     LOG_INF("Event dispatcher thread stopped");
 }
 
-static event_status_t notify_subscribers(const event_t *event)
+event_status_t event_notify_subscribers(const event_t *event)
 {
-    if (event->type >= MAX_EVENT_TYPES) {
+    if (event == NULL || event->type >= MAX_EVENT_TYPES) {
         return EVENT_ERR_INVALID_ARG;
     }
 
     event_type_entry_t *entry = &g_event_system.event_types[event->type];
-    
+
+    typedef struct {
+        event_callback_t cb;
+        void *ud;
+    } sub_snap_t;
+
+    sub_snap_t snap[CONFIG_EVENT_MAX_SUBSCRIBERS];
+    uint32_t n = 0U;
+
     k_mutex_lock(&entry->lock, K_FOREVER);
 
     if (entry->subscriber_count == 0) {
@@ -560,18 +577,31 @@ static event_status_t notify_subscribers(const event_t *event)
         return EVENT_ERR_NO_SUBSCRIBER;
     }
 
-    /* Notify all active subscribers */
     for (uint32_t i = 0; i < CONFIG_EVENT_MAX_SUBSCRIBERS; i++) {
         subscriber_entry_t *sub = &entry->subscribers[i];
-        
+
         if (sub->is_active && sub->callback != NULL) {
-            /* Call subscriber callback */
-            sub->callback(event, sub->user_data);
+            snap[n].cb = sub->callback;
+            snap[n].ud = sub->user_data;
+            n++;
         }
     }
 
     k_mutex_unlock(&entry->lock);
+
+    for (uint32_t i = 0; i < n; i++) {
+        snap[i].cb(event, snap[i].ud);
+    }
+
     return EVENT_OK;
+}
+
+struct k_msgq *event_system_get_queue(void)
+{
+    if (!g_event_system.initialized) {
+        return NULL;
+    }
+    return g_event_system.event_queue;
 }
 
 static subscriber_entry_t *find_subscriber(event_type_entry_t *entry, uint32_t subscriber_id)
