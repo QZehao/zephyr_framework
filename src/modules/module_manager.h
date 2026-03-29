@@ -116,11 +116,12 @@ int module_manager_register(const module_interface_t *interface,
 int module_manager_unregister(uint32_t module_id);
 
 /**
- * @brief Get module info by ID
+ * @brief Copy module info under lock (thread-safe snapshot).
  * @param module_id Module ID
- * @return Module info pointer, NULL if not found
+ * @param out Output; must not be NULL
+ * @return 0 on success, -1 if not found or invalid args
  */
-module_info_t *module_manager_get_module(uint32_t module_id);
+int module_manager_get_module_info(uint32_t module_id, module_info_t *out);
 
 /**
  * @brief Get module ID by name
@@ -130,9 +131,8 @@ module_info_t *module_manager_get_module(uint32_t module_id);
 uint32_t module_manager_get_id_by_name(const char *name);
 
 /**
- * @brief Iterate over all modules
- * @param callback Callback for each module
- * @param user_data User data for callback
+ * @brief Iterate over all modules (snapshots each slot under lock; safe if callback is slow).
+ * Do not call back into module_manager from the callback (risk of deadlock with future changes).
  */
 void module_manager_foreach(void (*callback)(module_info_t *, void *), 
                             void *user_data);

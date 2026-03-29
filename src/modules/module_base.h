@@ -88,6 +88,18 @@ typedef struct {
     int (*control)(int cmd, void *arg);
 } module_interface_t;
 
+#ifndef CONFIG_MODULE_MAX_EVENT_SUBSCRIPTIONS
+#define CONFIG_MODULE_MAX_EVENT_SUBSCRIPTIONS 8
+#endif
+
+/**
+ * @brief One event-system subscription owned by a module slot
+ */
+typedef struct {
+    event_type_t type;
+    uint32_t subscriber_id;
+} module_event_subscription_t;
+
 /**
  * @brief Module registration info
  */
@@ -97,7 +109,8 @@ typedef struct {
     void *internal_data;
     module_status_t status;
     uint32_t id;
-    uint32_t event_subscriber_id;
+    module_event_subscription_t event_subscriptions[CONFIG_MODULE_MAX_EVENT_SUBSCRIPTIONS];
+    uint8_t event_subscription_count;
 } module_info_t;
 
 /* =============================================================================
@@ -111,6 +124,7 @@ typedef struct {
 #define MODULE_VERSION_MINOR(v)  (((v) >> 8) & 0xFF)
 #define MODULE_VERSION_PATCH(v)  ((v) & 0xFF)
 
+/** Full vtable: requires name##_shutdown, name##_get_status, name##_control */
 #define DECLARE_MODULE_INTERFACE(name) \
     extern const module_interface_t name##_interface; \
     const module_interface_t name##_interface = { \
@@ -124,6 +138,22 @@ typedef struct {
         .on_event = name##_on_event, \
         .get_status = name##_get_status, \
         .control = name##_control \
+    }
+
+/** Minimal vtable: optional hooks are NULL (manager always NULL-checks). */
+#define DECLARE_MODULE_INTERFACE_MINIMAL(name) \
+    extern const module_interface_t name##_interface; \
+    const module_interface_t name##_interface = { \
+        .name = #name, \
+        .version = MODULE_VERSION(1, 0, 0), \
+        .priority = MODULE_PRIORITY_NORMAL, \
+        .init = name##_init, \
+        .start = name##_start, \
+        .stop = name##_stop, \
+        .shutdown = NULL, \
+        .on_event = name##_on_event, \
+        .get_status = NULL, \
+        .control = NULL \
     }
 
 #ifdef __cplusplus
