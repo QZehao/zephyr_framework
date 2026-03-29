@@ -2,6 +2,10 @@
     // VSCode 设置 - Zephyr 项目
     "version": "2.0.0",
 
+    // west 构建：与 zephyr_config.env 中 DEFAULT_BOARD / BUILD_DIR 保持一致；tasks.json 使用这两项
+    "zephyr.defaultBoard": "nucleo_l4r5zi",
+    "zephyr.buildDir": "build",
+
     // C/C++  IntelliSense 配置
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "C_Cpp.default.includePath": [
@@ -35,14 +39,13 @@
         "*.dtsi": "dts"
     },
 
-    // 排除的文件
+    // 排除的文件（仅隐藏资源管理器视图；构建仍生成于 ./build）
     "files.exclude": {
         "**/.git": true,
         "**/.svn": true,
         "**/.hg": true,
         "**/CVS": true,
         "**/.DS_Store": true,
-        "**/build": true,
         "**/build_*": true,
         "**/zephyr": true,
         "**/.west": true

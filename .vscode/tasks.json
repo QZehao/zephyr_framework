@@ -1,62 +1,84 @@
 {
-    // VSCode 构建任务配置
+    // VSCode 构建任务配置（固定在工作区根目录执行，输出始终为 ./build）
     "version": "2.0.0",
     "tasks": [
         {
             "label": "west build",
             "type": "shell",
-            "command": "west build -b native_posix",
+            "command": "west build -b ${config:zephyr.defaultBoard} -d ${config:zephyr.buildDir} .",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {}
+            },
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "problemMatcher": ["$gcc"],
-            "detail": "使用 west 构建项目（native_posix）"
+            "detail": "west 构建：产物在 ${workspaceFolder}/build/"
         },
         {
             "label": "west build (clean)",
             "type": "shell",
-            "command": "west build -b native_posix --clean",
+            "command": "west build -b ${config:zephyr.defaultBoard} -d ${config:zephyr.buildDir} . --pristine",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": ["$gcc"],
-            "detail": "清理并构建项目"
+            "detail": "清理后构建（pristine）"
         },
         {
             "label": "west flash",
             "type": "shell",
-            "command": "west flash",
+            "command": "west flash -d ${config:zephyr.buildDir}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": [],
-            "detail": "烧录固件到开发板"
+            "detail": "烧录 ./build 中的固件"
         },
         {
             "label": "west debug",
             "type": "shell",
-            "command": "west debug",
+            "command": "west debug -d ${config:zephyr.buildDir}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": [],
-            "detail": "启动调试会话"
+            "detail": "调试（使用 ./build）"
         },
         {
             "label": "west debugserver",
             "type": "shell",
-            "command": "west debugserver",
+            "command": "west debugserver -d ${config:zephyr.buildDir}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": [],
-            "detail": "启动调试服务器（GDB）"
+            "detail": "调试服务器"
         },
         {
             "label": "west build (custom board)",
             "type": "shell",
-            "command": "west build -b ${input:boardName}",
+            "command": "west build -b ${input:boardName} -d ${config:zephyr.buildDir} .",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": ["$gcc"],
-            "detail": "构建指定开发板"
+            "detail": "指定开发板构建，输出仍在 ./build"
         },
         {
             "label": "format code",
             "type": "shell",
             "command": "find src -name '*.c' -o -name '*.h' | xargs clang-format -i",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": [],
             "detail": "格式化代码"
@@ -65,6 +87,9 @@
             "label": "generate docs",
             "type": "shell",
             "command": "doxygen Doxyfile",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": [],
             "detail": "生成 API 文档"
@@ -73,6 +98,9 @@
             "label": "west test",
             "type": "shell",
             "command": "west test",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "test",
             "problemMatcher": [],
             "detail": "运行测试"
@@ -81,6 +109,9 @@
             "label": "setup environment",
             "type": "shell",
             "command": "${input:setupScript}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
             "problemMatcher": [],
             "detail": "设置 Zephyr 环境"
@@ -90,7 +121,7 @@
         {
             "id": "boardName",
             "type": "promptString",
-            "description": "输入开发板名称（如 nucleo_f429zi）"
+            "description": "输入开发板名称（如 nucleo_l4r5zi）"
         },
         {
             "id": "setupScript",

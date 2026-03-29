@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env pwsh
+#!/usr/bin/env pwsh
 # =============================================================================
 # Zephyr 环境设置脚本 (Windows PowerShell)
 # =============================================================================
@@ -99,5 +99,5 @@ Write-Host "ZEPHYR_SDK_INSTALL_DIR=$ZEPHYR_SDK_INSTALL_DIR"
 Write-Host "============================================"
 Write-Host ""
 Write-Host "现在可以构建项目：" -ForegroundColor Green
-Write-Host "  west build -b $DEFAULT_BOARD ."
+Write-Host "  west build -b $DEFAULT_BOARD -d build ."
 Write-Host ""
