@@ -1,9 +1,9 @@
 /**
  * @file sys_timer.c
  * @brief System Timer Service Implementation
- * 
+ *
  * High-resolution timer service with one-shot and periodic timers.
- * 
+ *
  * @copyright Copyright (c) 2026
  * @license SPDX-License-Identifier: Apache-2.0
  */
@@ -127,7 +127,7 @@ sys_timer_handle_t sys_timer_create(const sys_timer_config_t *config)
 
     /* Create timer thread */
     int priority = config->priority != 0 ? config->priority : CONFIG_SYS_TIMER_PRIORITY;
-    
+
     k_thread_create(&timer->thread,
                     timer->stack,
                     K_THREAD_STACK_SIZEOF(timer->stack),
@@ -201,9 +201,9 @@ int sys_timer_start(sys_timer_handle_t timer)
 
     timer->status = SYS_TIMER_RUNNING;
     timer->next_fire_time = k_uptime_get_32() + timer->config.delay_ms;
-    
+
     k_sem_give(&timer->sem);  /* Wake up thread */
-    
+
     if (k_thread_is_started(&timer->thread)) {
         k_thread_start(&timer->thread);
     }
@@ -442,13 +442,13 @@ static void timer_thread_func(void *p1, void *p2, void *p3)
 
     sys_timer_handle_t timer = (sys_timer_handle_t)p1;
 
-    LOG_DBG("Timer thread started: %s", 
+    LOG_DBG("Timer thread started: %s",
             timer->config.name != NULL ? timer->config.name : "unnamed");
 
     while (timer->status == SYS_TIMER_RUNNING) {
         /* Wait for trigger or timeout */
         uint32_t wait_time = timer->next_fire_time - k_uptime_get_32();
-        
+
         if (wait_time > 0) {
             k_sem_take(&timer->sem, K_MSEC(wait_time));
         }
@@ -478,7 +478,7 @@ static void timer_thread_func(void *p1, void *p2, void *p3)
             }
 
             /* Calculate running average latency */
-            timer->avg_latency_us = (timer->avg_latency_us * (timer->fire_count - 1) + 
+            timer->avg_latency_us = (timer->avg_latency_us * (timer->fire_count - 1) +
                                      latency_us) / timer->fire_count;
 
             /* Calculate next fire time */

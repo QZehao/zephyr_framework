@@ -65,10 +65,16 @@ int app_stop(void);
 uint32_t app_get_uptime(void);
 
 /**
- * @brief Get application status
+ * @brief Check if application is running
  * @return true if running, false otherwise
  */
 bool app_is_running(void);
+
+/**
+ * @brief Get application heartbeat count
+ * @return Heartbeat count
+ */
+uint32_t app_get_heartbeat_count(void);
 
 #ifdef __cplusplus
 }

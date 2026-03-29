@@ -405,18 +405,18 @@ static void app_print_banner(void)
  * Main Entry Point
  * ============================================================================= */
 
-void main(void)
+int main(void)
 {
     /* Initialize application */
     if (app_init(NULL) != APP_OK) {
         LOG_ERR("Application initialization failed");
-        return;
+        return -1;
     }
 
     /* Start application */
     if (app_start() != APP_OK) {
         LOG_ERR("Application start failed");
-        return;
+        return -1;
     }
 
     /* Main loop - in event-driven design, this is mostly idle */
@@ -428,7 +428,10 @@ void main(void)
 
         /* Sleep to save power */
         k_msleep(1000);
-        
+
         /* Could add main loop tasks here if needed */
     }
+
+    /* Should not reach here */
+    return 0;
 }
