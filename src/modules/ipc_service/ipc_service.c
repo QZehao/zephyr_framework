@@ -4,24 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @file ipc_service.c
- * @brief IPC Service Framework Implementation
- */
-
 #include "ipc_service.h"
 
-#include <zephyr/arch/cpu.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
+#include <zephyr/sys/util.h>
 #include <errno.h>
 #include <string.h>
 
-LOG_MODULE_REGISTER(ipc_service, CONFIG_IPC_SERVICE_LOG_LEVEL);
-
-/* ============================================================================
- * Internal Functions
- * ============================================================================ */
+LOG_MODULE_REGISTER(thread_ipc_svc, CONFIG_THREAD_IPC_SERVICE_LOG_LEVEL);
 
 static atomic_t s_request_id_counter;
 
@@ -38,7 +29,7 @@ ipc_request_id_t ipc_generate_request_id(void)
 static ipc_pending_request_t *find_pending_entry(ipc_service_t *service,
 						ipc_request_id_t request_id)
 {
-	for (int i = 0; i < CONFIG_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
+	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
 		if (service->pending_requests[i].in_use &&
 		    service->pending_requests[i].request_id == request_id) {
 			return &service->pending_requests[i];
@@ -49,7 +40,7 @@ static ipc_pending_request_t *find_pending_entry(ipc_service_t *service,
 
 static ipc_pending_request_t *allocate_pending_entry(ipc_service_t *service)
 {
-	for (int i = 0; i < CONFIG_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
+	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
 		if (!service->pending_requests[i].in_use) {
 			return &service->pending_requests[i];
 		}
@@ -112,7 +103,7 @@ static void release_future(ipc_service_t *service, ipc_future_t *future)
 static bool future_belongs_to_service(const ipc_service_t *service,
 				      const ipc_future_t *future)
 {
-	for (int i = 0; i < CONFIG_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
+	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
 		if (future == &service->futures[i]) {
 			return true;
 		}
@@ -237,10 +228,6 @@ static void response_dispatcher_thread(void *p1, void *p2, void *p3)
 	LOG_INF("IPC service '%s' dispatcher stopped", service->name);
 }
 
-/* ============================================================================
- * Service Lifecycle APIs
- * ============================================================================ */
-
 int ipc_service_init(ipc_service_t *service,
 		     const char *name,
 		     ipc_service_func_t service_func,
@@ -253,13 +240,9 @@ int ipc_service_init(ipc_service_t *service,
 		return -EINVAL;
 	}
 
-	if (request_queue_size == 0U || response_queue_size == 0U) {
-		return -EINVAL;
-	}
-
-	size_t alloc_stack = K_THREAD_STACK_LEN(stack_size);
-
-	if (alloc_stack < K_THREAD_STACK_LEN(256)) {
+	if (stack_size != (size_t)CONFIG_THREAD_IPC_SERVICE_STACK_SIZE ||
+	    request_queue_size != (size_t)CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE ||
+	    response_queue_size != (size_t)CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE) {
 		return -EINVAL;
 	}
 
@@ -267,50 +250,26 @@ int ipc_service_init(ipc_service_t *service,
 
 	service->name = name;
 	service->service_func = service_func;
-	service->stack_size = stack_size;
 	service->priority = priority;
 	service->running = false;
 	service->shutdown = false;
 
-	service->request_queue_buf =
-		k_calloc(request_queue_size, sizeof(ipc_request_msg_t));
-	if (service->request_queue_buf == NULL) {
-		return -ENOMEM;
-	}
-
-	service->response_queue_buf =
-		k_calloc(response_queue_size, sizeof(ipc_response_msg_t));
-	if (service->response_queue_buf == NULL) {
-		k_free(service->request_queue_buf);
-		return -ENOMEM;
-	}
-
-	service->stack_mem =
-		k_aligned_alloc(ARCH_STACK_PTR_ALIGN, alloc_stack);
-	service->dispatcher_stack_mem =
-		k_aligned_alloc(ARCH_STACK_PTR_ALIGN, alloc_stack);
-	if (service->stack_mem == NULL || service->dispatcher_stack_mem == NULL) {
-		k_free(service->request_queue_buf);
-		k_free(service->response_queue_buf);
-		k_free(service->stack_mem);
-		k_free(service->dispatcher_stack_mem);
-		return -ENOMEM;
-	}
-
 	k_msgq_init(&service->request_queue, (char *)service->request_queue_buf,
-		    sizeof(ipc_request_msg_t), request_queue_size);
+		    sizeof(ipc_request_msg_t),
+		    CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE);
 
 	k_msgq_init(&service->response_queue, (char *)service->response_queue_buf,
-		    sizeof(ipc_response_msg_t), response_queue_size);
+		    sizeof(ipc_response_msg_t),
+		    CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
 
 	k_mutex_init(&service->pending_lock);
 
-	for (int i = 0; i < CONFIG_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
+	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
 		service->pending_requests[i].in_use = false;
 	}
 
 	service->free_futures = NULL;
-	for (int i = 0; i < CONFIG_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
+	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
 		service->futures[i].request_id = 0;
 		service->futures[i].completed = false;
 		service->futures[i].next = service->free_futures;
@@ -333,22 +292,23 @@ int ipc_service_start(ipc_service_t *service)
 		return -EALREADY;
 	}
 
-	if (service->stack_mem == NULL || service->dispatcher_stack_mem == NULL) {
-		return -EINVAL;
-	}
-
 	service->shutdown = false;
 
-	k_thread_create(&service->thread, (k_thread_stack_t *)service->stack_mem,
-			service->stack_size, service_thread_func, service, NULL, NULL,
-			service->priority, 0, K_NO_WAIT);
+	k_thread_create(&service->thread, service->worker_stack,
+			K_KERNEL_STACK_SIZEOF(service->worker_stack),
+			service_thread_func, service, NULL, NULL, service->priority, 0,
+			K_NO_WAIT);
+#if IS_ENABLED(CONFIG_THREAD_NAME)
 	k_thread_name_set(&service->thread, service->name);
+#endif
 
-	k_thread_create(&service->response_thread,
-			(k_thread_stack_t *)service->dispatcher_stack_mem,
-			service->stack_size, response_dispatcher_thread, service, NULL,
-			NULL, service->priority, 0, K_NO_WAIT);
+	k_thread_create(&service->response_thread, service->dispatcher_stack,
+			K_KERNEL_STACK_SIZEOF(service->dispatcher_stack),
+			response_dispatcher_thread, service, NULL, NULL,
+			service->priority, 0, K_NO_WAIT);
+#if IS_ENABLED(CONFIG_THREAD_NAME)
 	k_thread_name_set(&service->response_thread, "ipc_disp");
+#endif
 
 	service->running = true;
 
@@ -384,29 +344,10 @@ int ipc_service_stop(ipc_service_t *service)
 
 	service->running = false;
 
-	if (service->request_queue_buf != NULL) {
-		k_free(service->request_queue_buf);
-		service->request_queue_buf = NULL;
-	}
-
-	if (service->response_queue_buf != NULL) {
-		k_free(service->response_queue_buf);
-		service->response_queue_buf = NULL;
-	}
-
-	k_free(service->stack_mem);
-	service->stack_mem = NULL;
-	k_free(service->dispatcher_stack_mem);
-	service->dispatcher_stack_mem = NULL;
-
 	LOG_INF("IPC service '%s' stopped", service->name);
 
 	return 0;
 }
-
-/* ============================================================================
- * Invocation APIs
- * ============================================================================ */
 
 int ipc_call_sync(ipc_service_t *service,
 		  const void *data,
@@ -667,7 +608,7 @@ size_t ipc_service_get_pending_count(ipc_service_t *service)
 
 	k_mutex_lock(&service->pending_lock, K_FOREVER);
 
-	for (int i = 0; i < CONFIG_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
+	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
 		if (service->pending_requests[i].in_use) {
 			count++;
 		}

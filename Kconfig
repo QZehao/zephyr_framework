@@ -98,7 +98,7 @@ config SYS_WATCHDOG_TIMEOUT_MS
 
 endmenu
 
-menu "IPC Service Framework Configuration"
+menu "Thread IPC service (in-app)"
 
 rsource "src/modules/ipc_service/Kconfig"
 
