@@ -6,7 +6,7 @@
  * 
  * 架构说明：
  * - 事件队列：使用 Zephyr k_msgq 实现，支持多生产者单消费者
- * - 事件分发：专用分发器线程异步处理队列中的事件
+ * - 事件分发：由 event_dispatcher 模块中的线程消费队列并调用 event_notify_subscribers
  * - 订阅管理：每个事件类型维护一个订阅者列表
  * - 线程安全：使用互斥锁保护共享数据结构
  * - ISR 支持：提供专门的中断上下文发布函数
@@ -44,9 +44,7 @@ LOG_MODULE_REGISTER(event_system, CONFIG_SYS_LOG_LEVEL);
 typedef struct {
     uint32_t                magic;          /**< 魔术字，用于验证有效性 */
     bool                    initialized;    /**< 系统是否已初始化 */
-    bool                    running;        /**< 分发器是否正在运行 */
-    struct k_thread         dispatcher_thread;  /**< 分发器线程控制块 */
-    K_KERNEL_STACK_MEMBER(dispatcher_stack, CONFIG_EVENT_DISPATCHER_STACK_SIZE);  /**< 分发器线程栈 */
+    bool                    running;        /**< 系统是否允许投递/处理事件 */
     struct k_msgq          *event_queue;    /**< 事件队列指针 */
     event_type_entry_t      event_types[MAX_EVENT_TYPES];  /**< 事件类型表 */
     uint32_t                total_events;   /**< 已处理的事件总数 */
@@ -76,11 +74,6 @@ static _Atomic uint32_t g_event_dropped_count;
 /* =============================================================================
  * 前置声明 (Forward Declarations)
  * ============================================================================= */
-
-/**
- * @brief 分发器线程入口函数
- */
-static void event_dispatcher_thread(void *p1, void *p2, void *p3);
 
 /**
  * @brief 查找订阅者
@@ -141,10 +134,10 @@ event_status_t event_system_init(void)
 }
 
 /**
- * @brief 启动事件分发器
- * 
- * 创建并启动分发器线程。
- * 
+ * @brief 启动事件系统
+ *
+ * 标记为运行状态；事件消费由 event_dispatcher 线程完成。
+ *
  * @return EVENT_OK 成功，EVENT_ERR_INVALID_ARG 未初始化
  */
 event_status_t event_system_start(void)
@@ -159,28 +152,14 @@ event_status_t event_system_start(void)
         return EVENT_OK;
     }
 
-    /* 创建分发器线程 */
-    k_thread_create(&g_event_system.dispatcher_thread,
-                    g_event_system.dispatcher_stack,
-                    CONFIG_EVENT_DISPATCHER_STACK_SIZE,
-                    event_dispatcher_thread,
-                    NULL, NULL, NULL,
-                    CONFIG_EVENT_DISPATCHER_PRIORITY,
-                    0,
-                    K_NO_WAIT);
-
-    k_thread_name_set(&g_event_system.dispatcher_thread, "event_disp");
-
     g_event_system.running = true;
     LOG_INF("Event system started");
     return EVENT_OK;
 }
 
 /**
- * @brief 停止事件分发器
- * 
- * 停止分发器线程。
- * 
+ * @brief 停止事件系统
+ *
  * @return EVENT_OK 成功
  */
 event_status_t event_system_stop(void)
@@ -190,12 +169,6 @@ event_status_t event_system_stop(void)
     }
 
     g_event_system.running = false;
-
-    /* 唤醒分发器线程（通过发送虚拟事件） */
-    event_t dummy_event = {0};
-    k_msgq_put(&g_event_msgq, &dummy_event, K_NO_WAIT);
-
-    k_thread_abort(&g_event_system.dispatcher_thread);
 
     LOG_INF("Event system stopped");
     return EVENT_OK;
@@ -679,49 +652,6 @@ void event_get_statistics(uint32_t *total_events,
  * ============================================================================= */
 
 /**
- * @brief 事件分发器线程入口函数
- * 
- * 主循环：
- * 1. 从队列中获取事件（带超时）
- * 2. 调用 event_notify_subscribers 分发事件
- * 3. 更新统计信息
- * 4. 释放动态分配的事件数据
- */
-static void event_dispatcher_thread(void *p1, void *p2, void *p3)
-{
-    ARG_UNUSED(p1);
-    ARG_UNUSED(p2);
-    ARG_UNUSED(p3);
-
-    LOG_INF("Event dispatcher thread started");
-
-    while (g_event_system.running) {
-        event_t event;
-
-        /* 带超时等待事件，以便检查 running 标志 */
-        int ret = k_msgq_get(g_event_system.event_queue, &event, K_MSEC(100));
-
-        if (ret != 0) {
-            continue;  /* 超时，检查 running 标志 */
-        }
-
-        /* 处理事件 */
-        event_notify_subscribers(&event);
-
-        k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);
-        g_event_system.total_events++;
-        k_mutex_unlock(&g_event_system.stats_lock);
-
-        /* 释放动态数据 */
-        if (event.is_dynamic && event.data != NULL) {
-            k_free(event.data);
-        }
-    }
-
-    LOG_INF("Event dispatcher thread stopped");
-}
-
-/**
  * @brief 将事件分发给所有订阅者
  * 
  * 使用快照技术：先复制所有活跃订阅者的回调信息，
@@ -752,6 +682,9 @@ event_status_t event_notify_subscribers(const event_t *event)
 
     if (entry->subscriber_count == 0) {
         k_mutex_unlock(&entry->lock);
+        k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);
+        g_event_system.total_events++;
+        k_mutex_unlock(&g_event_system.stats_lock);
         return EVENT_ERR_NO_SUBSCRIBER;
     }
 
@@ -772,6 +705,10 @@ event_status_t event_notify_subscribers(const event_t *event)
     for (uint32_t i = 0; i < n; i++) {
         snap[i].cb(event, snap[i].ud);
     }
+
+    k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);
+    g_event_system.total_events++;
+    k_mutex_unlock(&g_event_system.stats_lock);
 
     return EVENT_OK;
 }

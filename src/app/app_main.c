@@ -219,6 +219,17 @@ int app_init(const app_config_t *config)
     event_system_init();
     LOG_INF("Event system initialized");
 
+    /* Initialize event dispatcher (consumes queue; actual thread created in event_dispatcher_start) */
+    dispatcher_config_t dispatcher_config = {
+        .stack_size = CONFIG_EVENT_DISPATCHER_STACK_SIZE,
+        .priority = CONFIG_EVENT_DISPATCHER_PRIORITY,
+        .thread_name = "event_disp",
+        .enable_stats = true,
+        .max_events_per_cycle = 100
+    };
+    event_dispatcher_init(&dispatcher_config);
+    LOG_INF("Event dispatcher initialized");
+
     /* Initialize timer service */
 #if APP_CONFIG_ENABLE_TIMER_SVC
     sys_timer_init();
@@ -267,7 +278,11 @@ int app_start(void)
 
     /* Start event system */
     event_system_start();
-    
+
+    /* Start event dispatcher thread (single consumer for event queue) */
+    event_dispatcher_start();
+    LOG_INF("Event dispatcher started");
+
     /* Start module manager */
     module_manager_start();
     
@@ -315,7 +330,11 @@ int app_stop(void)
 
     /* Stop all modules */
     module_manager_stop_all();
-    
+
+    /* Stop event dispatcher before event system */
+    event_dispatcher_stop();
+    LOG_INF("Event dispatcher stopped");
+
     /* Stop event system */
     event_system_stop();
     
