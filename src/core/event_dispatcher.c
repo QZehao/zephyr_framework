@@ -34,6 +34,9 @@ LOG_MODULE_REGISTER(event_dispatcher, CONFIG_SYS_LOG_LEVEL);
 /** 每个周期默认最大处理事件数 */
 #define DEFAULT_MAX_EVENTS_CYCLE  100
 
+/** 分发线程在 RUNNING 下从队列取事件的超时（便于响应 pause/stop，避免永久阻塞） */
+#define DISPATCH_THREAD_MSGQ_TIMEOUT_MS  100
+
 /* =============================================================================
  * 内部数据结构 (Internal Data Structures)
  * ============================================================================= */
@@ -280,8 +283,7 @@ void event_dispatcher_clear_filter(void)
  */
 event_status_t event_dispatcher_process_one(k_timeout_t timeout)
 {
-    if (g_dispatcher.state != DISPATCHER_RUNNING &&
-        g_dispatcher.state != DISPATCHER_PAUSED) {
+    if (g_dispatcher.state != DISPATCHER_RUNNING) {
         return EVENT_ERR_INVALID_ARG;
     }
 
@@ -382,8 +384,8 @@ uint32_t event_dispatcher_get_current_latency(void)
 
 /**
  * @brief 分发器线程入口函数
- * 
- * 主循环：持续从队列中获取并处理事件。
+ *
+ * 主循环：RUNNING 时带超时取队事件；PAUSED 时休眠不消费；STOPPED 时退出。
  */
 static void dispatcher_thread_func(void *p1, void *p2, void *p3)
 {
@@ -394,11 +396,22 @@ static void dispatcher_thread_func(void *p1, void *p2, void *p3)
     LOG_INF("Dispatcher thread running");
 
     while (1) {
-        if (g_dispatcher.state != DISPATCHER_RUNNING) {
+        dispatcher_state_t st;
+
+        k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
+        st = g_dispatcher.state;
+        k_mutex_unlock(&g_dispatcher.lock);
+
+        if (st == DISPATCHER_STOPPED) {
             break;
         }
 
-        (void)event_dispatcher_process_one(K_FOREVER);
+        if (st == DISPATCHER_PAUSED) {
+            k_msleep(10);
+            continue;
+        }
+
+        (void)event_dispatcher_process_one(K_MSEC(DISPATCH_THREAD_MSGQ_TIMEOUT_MS));
     }
 
     LOG_INF("Dispatcher thread exiting");

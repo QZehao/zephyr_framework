@@ -227,7 +227,10 @@ int app_init(const app_config_t *config)
         .enable_stats = true,
         .max_events_per_cycle = 100
     };
-    event_dispatcher_init(&dispatcher_config);
+    if (event_dispatcher_init(&dispatcher_config) != EVENT_OK) {
+        LOG_ERR("event_dispatcher_init failed");
+        return APP_ERR_INIT;
+    }
     LOG_INF("Event dispatcher initialized");
 
     /* Initialize timer service */
@@ -280,7 +283,11 @@ int app_start(void)
     event_system_start();
 
     /* Start event dispatcher thread (single consumer for event queue) */
-    event_dispatcher_start();
+    if (event_dispatcher_start() != EVENT_OK) {
+        LOG_ERR("event_dispatcher_start failed");
+        (void)event_system_stop();
+        return APP_ERR_INIT;
+    }
     LOG_INF("Event dispatcher started");
 
     /* Start module manager */
@@ -332,8 +339,11 @@ int app_stop(void)
     module_manager_stop_all();
 
     /* Stop event dispatcher before event system */
-    event_dispatcher_stop();
-    LOG_INF("Event dispatcher stopped");
+    if (event_dispatcher_stop() != EVENT_OK) {
+        LOG_ERR("event_dispatcher_stop failed");
+    } else {
+        LOG_INF("Event dispatcher stopped");
+    }
 
     /* Stop event system */
     event_system_stop();

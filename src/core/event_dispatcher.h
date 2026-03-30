@@ -162,8 +162,9 @@ void event_dispatcher_clear_filter(void);
  * @param timeout 等待超时时间
  * @return EVENT_OK 成功处理了事件，其他错误码见 event_status_t
  * 
+ * @note 仅在 DISPATCHER_RUNNING 下可用；DISPATCHER_PAUSED / STOPPED 返回 EVENT_ERR_INVALID_ARG
  * @note 此函数用于手动控制事件处理流程
- * @note 返回 EVENT_ERR_QUEUE_EMPTY 表示队列中无事件
+ * @note 返回 EVENT_ERR_QUEUE_EMPTY 表示队列中无事件或超时
  */
 event_status_t event_dispatcher_process_one(k_timeout_t timeout);
 

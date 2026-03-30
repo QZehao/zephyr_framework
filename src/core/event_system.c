@@ -17,6 +17,7 @@
 
 #include "event_system.h"
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
 #include <stdatomic.h>
 
@@ -43,8 +44,8 @@ LOG_MODULE_REGISTER(event_system, CONFIG_SYS_LOG_LEVEL);
  */
 typedef struct {
     uint32_t                magic;          /**< 魔术字，用于验证有效性 */
-    bool                    initialized;    /**< 系统是否已初始化 */
-    bool                    running;        /**< 系统是否允许投递/处理事件 */
+    bool                    initialized;      /**< 系统是否已初始化 */
+    atomic_t                running;          /**< 非 0：允许投递（线程与 ISR 可读） */
     struct k_msgq          *event_queue;    /**< 事件队列指针 */
     event_type_entry_t      event_types[MAX_EVENT_TYPES];  /**< 事件类型表 */
     uint32_t                total_events;   /**< 已处理的事件总数 */
@@ -127,6 +128,7 @@ event_status_t event_system_init(void)
     g_event_system.event_queue = &g_event_msgq;
 
     g_event_system.next_subscriber_id = 1;
+    atomic_set(&g_event_system.running, 0);
     g_event_system.initialized = true;
 
     LOG_INF("Event system initialized successfully");
@@ -147,12 +149,12 @@ event_status_t event_system_start(void)
         return EVENT_ERR_INVALID_ARG;
     }
 
-    if (g_event_system.running) {
+    if (atomic_get(&g_event_system.running) != 0) {
         LOG_WRN("Event system already running");
         return EVENT_OK;
     }
 
-    g_event_system.running = true;
+    atomic_set(&g_event_system.running, 1);
     LOG_INF("Event system started");
     return EVENT_OK;
 }
@@ -164,11 +166,11 @@ event_status_t event_system_start(void)
  */
 event_status_t event_system_stop(void)
 {
-    if (!g_event_system.running) {
+    if (atomic_get(&g_event_system.running) == 0) {
         return EVENT_OK;
     }
 
-    g_event_system.running = false;
+    atomic_set(&g_event_system.running, 0);
 
     LOG_INF("Event system stopped");
     return EVENT_OK;
@@ -181,7 +183,7 @@ event_status_t event_system_stop(void)
  */
 bool event_system_is_running(void)
 {
-    return g_event_system.running;
+    return atomic_get(&g_event_system.running) != 0;
 }
 
 /* =============================================================================
@@ -412,7 +414,7 @@ event_status_t event_publish(const event_t *event)
         return EVENT_ERR_INVALID_ARG;
     }
 
-    if (!g_event_system.running) {
+    if (atomic_get(&g_event_system.running) == 0) {
         LOG_WRN("Event system not running, event dropped");
         return EVENT_ERR_INVALID_ARG;
     }
@@ -443,6 +445,10 @@ event_status_t event_publish(const event_t *event)
 event_status_t event_publish_from_isr(const event_t *event)
 {
     if (!g_event_system.initialized || event == NULL) {
+        return EVENT_ERR_INVALID_ARG;
+    }
+
+    if (atomic_get(&g_event_system.running) == 0) {
         return EVENT_ERR_INVALID_ARG;
     }
 
