@@ -72,10 +72,12 @@ config MODULE_MANAGER_RUNTIME_DEPENDENCIES
 	help
 	  When enabled, module_manager_start_all() orders startup by each module's
 	  depends_on list (module names, NULL-terminated). Dependencies must be
-	  running or included in the same start batch. module_manager_stop_all()
-	  stops in reverse dependency order. Modules with missing or cyclic
-	  dependencies fall back to priority-only ordering (start) or reverse
-	  priority (stop). When disabled, behavior matches the original
+	  running or included in the same start batch. If a module is dropped from
+	  the batch due to invalid deps, dependents are re-checked until fixed point
+	  so a module is not started while its dependency is missing from the batch.
+	  module_manager_stop_all() stops in reverse dependency order on the RUNNING
+	  set. Missing edges or cycles fall back to priority-only ordering (start)
+	  or reverse priority (stop). When disabled, behavior matches the original
 	  priority-only start and slot-order stop.
 
 endmenu

@@ -265,7 +265,7 @@ static void sort_start_entries(start_order_entry_t *entries, int n)
 #if IS_ENABLED(CONFIG_MODULE_MANAGER_RUNTIME_DEPENDENCIES)
 
 /**
- * @brief 按 priority 降序（停止时与启动优先级顺序相反）
+ * @brief 按 priority 数值从大到小排序（用于停止顺序的回退：先停低优先级模块）
  */
 static void sort_stop_entries_reverse_priority(start_order_entry_t *entries, int n)
 {
@@ -282,7 +282,12 @@ static void sort_stop_entries_reverse_priority(start_order_entry_t *entries, int
 }
 
 /**
- * @brief 按依赖拓扑排序启动批次；无效项剔除，成环时退回仅 priority
+ * @brief 按依赖拓扑排序启动批次。
+ *
+ * 先反复校验并压缩：每个依赖须已 RUNNING，或仍在本批待启动集合中。若某模块因非法依赖被剔除，
+ * 则仅依赖它的模块在下一轮也会被剔除，直到集合大小不再变化（不动点），避免「依赖已不在本批却仍启动依赖方」。
+ * 随后在剩余集合上建图：有向边 j→i 表示 i 依赖 j（j 必须先于 i 启动），用 Kahn 算法拓扑排序；
+ * 每一步在入度为 0 的节点中取 priority 最小者。若仍有环则退回仅按 priority 排序。
  */
 static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 {
@@ -290,76 +295,88 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 	bool adj[CONFIG_MAX_MODULES][CONFIG_MAX_MODULES];
 	int indegree[CONFIG_MAX_MODULES];
 	uint32_t pick_order[CONFIG_MAX_MODULES];
-	int n2;
+	int n_work;
 
 	if (n <= 1) {
 		return n;
 	}
 
-	for (int i = 0; i < n; i++) {
-		valid[i] = true;
-	}
+	n_work = n;
 
-	k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
+	/* 不动点：剔除后重新校验，直到没有模块因「依赖已不在本批」而被新标记为无效 */
+	for (;;) {
+		k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
 
-	for (int i = 0; i < n; i++) {
-		if (entries[i].depends_on == NULL) {
-			continue;
-		}
-		for (const char *const *p = entries[i].depends_on; *p != NULL; p++) {
-			const uint32_t did = find_module_id_by_name_locked(*p);
-
-			if (did == 0U) {
-				LOG_ERR("Module id=%u: unknown dependency '%s'",
-					(unsigned int)entries[i].id, *p);
-				valid[i] = false;
-				break;
-			}
-			if (did == entries[i].id) {
-				LOG_ERR("Module id=%u: self dependency '%s'",
-					(unsigned int)entries[i].id, *p);
-				valid[i] = false;
-				break;
-			}
-			module_info_t *dep = find_module_by_id_locked(did);
-
-			if (dep == NULL) {
-				valid[i] = false;
-				break;
-			}
-			if (dep->status == MODULE_STATUS_RUNNING) {
+		for (int i = 0; i < n_work; i++) {
+			valid[i] = true;
+			if (entries[i].depends_on == NULL) {
 				continue;
 			}
-			int found = -1;
+			for (const char *const *p = entries[i].depends_on; *p != NULL; p++) {
+				const uint32_t did = find_module_id_by_name_locked(*p);
 
-			for (int k = 0; k < n; k++) {
-				if (entries[k].id == did) {
-					found = k;
+				if (did == 0U) {
+					LOG_ERR("Module id=%u: unknown dependency '%s'",
+						(unsigned int)entries[i].id, *p);
+					valid[i] = false;
+					break;
+				}
+				if (did == entries[i].id) {
+					LOG_ERR("Module id=%u: self dependency '%s'",
+						(unsigned int)entries[i].id, *p);
+					valid[i] = false;
+					break;
+				}
+				module_info_t *dep = find_module_by_id_locked(did);
+
+				if (dep == NULL) {
+					valid[i] = false;
+					break;
+				}
+				if (dep->status == MODULE_STATUS_RUNNING) {
+					continue;
+				}
+				int found = -1;
+
+				for (int k = 0; k < n_work; k++) {
+					if (entries[k].id == did) {
+						found = k;
+						break;
+					}
+				}
+				if (found < 0) {
+					LOG_ERR("Module id=%u: dependency '%s' not in batch or not running",
+						(unsigned int)entries[i].id, *p);
+					valid[i] = false;
 					break;
 				}
 			}
-			if (found < 0) {
-				LOG_ERR("Module id=%u: dependency '%s' not runnable in this batch",
-					(unsigned int)entries[i].id, *p);
-				valid[i] = false;
-				break;
+		}
+
+		k_mutex_unlock(&g_module_mgr.lock);
+
+		int n2 = 0;
+
+		for (int i = 0; i < n_work; i++) {
+			if (valid[i]) {
+				if (n2 != i) {
+					entries[n2] = entries[i];
+				}
+				n2++;
 			}
 		}
-	}
 
-	k_mutex_unlock(&g_module_mgr.lock);
-
-	n2 = 0;
-	for (int i = 0; i < n; i++) {
-		if (valid[i]) {
-			if (n2 != i) {
-				entries[n2] = entries[i];
-			}
-			n2++;
+		if (n2 == n_work) {
+			break;
 		}
+		if (n2 <= 1) {
+			return n2;
+		}
+		n_work = n2;
 	}
-	if (n2 <= 1) {
-		return n2;
+
+	if (n_work <= 1) {
+		return n_work;
 	}
 
 	(void)memset(adj, 0, sizeof(adj));
@@ -367,7 +384,7 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 
 	k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
 
-	for (int i = 0; i < n2; i++) {
+	for (int i = 0; i < n_work; i++) {
 		if (entries[i].depends_on == NULL) {
 			continue;
 		}
@@ -380,14 +397,19 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 			}
 			int j = -1;
 
-			for (int k = 0; k < n2; k++) {
+			for (int k = 0; k < n_work; k++) {
 				if (entries[k].id == did) {
 					j = k;
 					break;
 				}
 			}
+			/* 不动点之后不应出现；若出现则回退，避免 silent 错序 */
 			if (j < 0) {
-				continue;
+				LOG_ERR("Module id=%u: internal: missing edge for dependency '%s'",
+					(unsigned int)entries[i].id, *p != NULL ? *p : "?");
+				k_mutex_unlock(&g_module_mgr.lock);
+				sort_start_entries(entries, n_work);
+				return n_work;
 			}
 			if (!adj[j][i]) {
 				adj[j][i] = true;
@@ -400,14 +422,14 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 
 	bool remaining[CONFIG_MAX_MODULES];
 
-	for (int i = 0; i < n2; i++) {
+	for (int i = 0; i < n_work; i++) {
 		remaining[i] = true;
 	}
 
-	for (int out = 0; out < n2; out++) {
+	for (int out = 0; out < n_work; out++) {
 		int best = -1;
 
-		for (int i = 0; i < n2; i++) {
+		for (int i = 0; i < n_work; i++) {
 			if (!remaining[i] || indegree[i] != 0) {
 				continue;
 			}
@@ -417,12 +439,12 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 		}
 		if (best < 0) {
 			LOG_ERR("Dependency cycle; using priority order for start");
-			sort_start_entries(entries, n2);
-			return n2;
+			sort_start_entries(entries, n_work);
+			return n_work;
 		}
 		pick_order[out] = (uint32_t)best;
 		remaining[best] = false;
-		for (int i = 0; i < n2; i++) {
+		for (int i = 0; i < n_work; i++) {
 			if (adj[best][i]) {
 				indegree[i]--;
 			}
@@ -431,15 +453,16 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 
 	start_order_entry_t tmp[CONFIG_MAX_MODULES];
 
-	for (int i = 0; i < n2; i++) {
+	for (int i = 0; i < n_work; i++) {
 		tmp[i] = entries[(int)pick_order[i]];
 	}
-	(void)memcpy(entries, tmp, sizeof(entries[0]) * (size_t)n2);
-	return n2;
+	(void)memcpy(entries, tmp, sizeof(entries[0]) * (size_t)n_work);
+	return n_work;
 }
 
 /**
- * @brief 停止顺序：依赖拓扑的逆序；成环时退回 priority 降序
+ * @brief 计算停止顺序：先得到与启动相同的拓扑序（依赖先、被依赖后），再整体逆序，
+ *        使被依赖模块后停止。仅在本批 RUNNING 子集上建边；成环时退回 priority 降序。
  */
 static int dependency_order_stop_batch(start_order_entry_t *entries, int n)
 {
@@ -475,6 +498,7 @@ static int dependency_order_stop_batch(start_order_entry_t *entries, int n)
 					break;
 				}
 			}
+			/* 依赖已 RUNNING 但不在本快照：不建边（无法表达顺序），其余边与启动语义一致 */
 			if (j < 0) {
 				continue;
 			}
@@ -1068,6 +1092,7 @@ int module_manager_start_all(void)
 	k_mutex_unlock(&g_module_mgr.lock);
 
 #if IS_ENABLED(CONFIG_MODULE_MANAGER_RUNTIME_DEPENDENCIES)
+	/* depends_on 拓扑 + 不动点剔除；失败段回退见 dependency_order_start_batch */
 	n = dependency_order_start_batch(entries, n);
 #else
 	sort_start_entries(entries, n);
@@ -1122,6 +1147,7 @@ int module_manager_stop_all(void)
 	k_mutex_unlock(&g_module_mgr.lock);
 
 #if IS_ENABLED(CONFIG_MODULE_MANAGER_RUNTIME_DEPENDENCIES)
+	/* 与启动同构的拓扑序再逆序；见 dependency_order_stop_batch */
 	(void)dependency_order_stop_batch(entries, n);
 #endif
 
