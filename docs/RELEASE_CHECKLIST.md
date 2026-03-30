@@ -16,7 +16,7 @@
 - [ ] 确认文档与代码一致
 
 ### 版本管理
-- [ ] 更新版本号（CMakeLists.txt, README.md, Doxyfile）
+- [ ] 更新版本号：编辑根目录 `APP_VERSION` 或运行 `python scripts/bump_version.py X.Y.Z`（同步 `Doxyfile`、`README.md`）
 - [ ] 创建 Git 标签：`git tag -a v1.0.0 -m "Release v1.0.0"`
 - [ ] 推送标签：`git push origin v1.0.0`
 
@@ -62,8 +62,8 @@ gh release create v1.0.0 --generate-notes
 ## 快速发布命令
 
 ```bash
-# 1. 更新版本号
-# 编辑 CMakeLists.txt, README.md, Doxyfile
+# 1. 更新版本号（推荐）
+python scripts/bump_version.py X.Y.Z
 
 # 2. 提交更改
 git add .
@@ -84,8 +84,7 @@ gh release create v1.0.0 --generate-notes
 
 ## 版本号更新位置
 
-1. `CMakeLists.txt`: `PROJECT_VERSION_MAJOR/MINOR/PATCH`
-2. `README.md`: `**版本**：1.0.0`
-3. `Doxyfile`: `PROJECT_NUMBER = "1.0.0"`
-4. `src/app/app_config.h`: `APP_VERSION_*`
-5. `CHANGELOG.md`: 添加新版本条目
+1. 根目录 `APP_VERSION`（**主来源**；`CMakeLists.txt` 从该文件读取 `PROJECT_VERSION_*`）
+2. 或运行 `python scripts/bump_version.py X.Y.Z` 同步 `Doxyfile`、`README.md` 中的展示版本
+3. `src/app/app_config.h`：若仍使用其中的 `APP_VERSION_*` 宏，请与 `APP_VERSION` 一致（或改为仅依赖 CMake 注入的宏）
+4. `CHANGELOG.md`：添加新版本条目

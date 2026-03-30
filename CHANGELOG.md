@@ -4,6 +4,9 @@
 
 ## [未发布]
 
+### 修复
+- 根目录版本文件由 `VERSION` 重命名为 `APP_VERSION`，并在 `find_package(Zephyr)` 之前解析，避免与 Zephyr `version.cmake` 对 `VERSION` 文件的解析冲突（`VERSION_MAJOR must be present`）。
+
 ### 新增
 - 初始项目模板
 - 事件驱动核心系统
@@ -23,6 +26,9 @@
 - 单元测试：`tests/` 补全与主工程一致的源码链接，新增 `test_module_manager`、`test_sys_memory`、`test_sys_timer`；`tests/Kconfig` 复用根目录 Kconfig
 - 文档：根目录 README 更新项目结构、文档索引、单元测试与 Zephyr 版本说明；修正自定义 `BOARD_ROOT` 的启用方式说明
 - CI：新增 `build-tests`（`native_posix` 构建并 `run` ztest）
+- 模板扩展文档：`docs/TEMPLATE_PRODUCT_EXTENSIONS.md`（OTA/NVS/低功耗指引）、`docs/ZEPHYR_VERSION.md`（与 CI/SDK 对齐）
+- 测试：`test_event_dispatcher`、`test_sys_watchdog`、`test_ipc_service`（Thread IPC 烟测）；`tests/prj.conf` 默认开启 IPC 并加大堆
+- 开发体验：`.pre-commit-config.yaml`、`.clang-tidy`；`APP_VERSION` 单一版本源 + `scripts/bump_version.py`；`CMakeLists.txt` 从 `APP_VERSION` 读取工程版本（避免根目录同名 `VERSION` 与 Zephyr `find_package` 冲突）
 
 ---
 

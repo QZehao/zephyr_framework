@@ -27,7 +27,7 @@ enable_testing()
 
 set(APP_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
-# 被测实现（与主应用核心一致；不包含 app_main / 示例业务模块 / IPC）
+# 被测实现（与主应用核心一致；不包含 app_main / 示例业务模块）
 target_sources(app PRIVATE
 	${APP_SRC_DIR}/core/event_system.c
 	${APP_SRC_DIR}/core/event_queue.c
@@ -42,10 +42,22 @@ target_sources(app PRIVATE
 target_sources(app PRIVATE
 	test_event_system.c
 	test_event_queue.c
+	test_event_dispatcher.c
 	test_module_manager.c
 	test_sys_memory.c
 	test_sys_timer.c
+	test_sys_watchdog.c
 )
+
+if(CONFIG_THREAD_IPC_SERVICE)
+	target_sources(app PRIVATE
+		${APP_SRC_DIR}/modules/ipc_service/ipc_service.c
+		test_ipc_service.c
+	)
+	target_include_directories(app PRIVATE
+		${APP_SRC_DIR}/modules/ipc_service
+	)
+endif()
 
 target_include_directories(app PRIVATE
 	${APP_SRC_DIR}

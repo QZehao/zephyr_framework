@@ -109,12 +109,26 @@ event_publish_copy(EVENT_TYPE_MY_EVENT, EVENT_PRIORITY_NORMAL, &data, sizeof(dat
 clang-format -i src/**/*.c src/**/*.h
 ```
 
-### 静态分析
+### pre-commit（可选）
 
 ```bash
-# 使用 clang-tidy
-clang-tidy src/core/event_system.c -- -Isrc/core
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
 ```
+
+配置见仓库根目录 `.pre-commit-config.yaml`（含行尾空白、YAML 检查、clang-format）。
+
+### 静态分析（clang-tidy）
+
+仓库提供 `.clang-tidy`（可按项目收紧或放宽检查项）。需先配置 Zephyr 构建以生成 `compile_commands.json`，例如：
+
+```bash
+west build -b native_posix . -- -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+clang-tidy -p build src/core/event_system.c
+```
+
+无 `compile_commands.json` 时，仅能用 `clang-tidy ... -- -I...` 手动传头，易与 Zephyr 不一致，建议优先用 `-p build`。
 
 ### 命名约定
 

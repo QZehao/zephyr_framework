@@ -41,6 +41,34 @@ endif()
 message(STATUS "ZEPHYR_BASE: $ENV{ZEPHYR_BASE}")
 message(STATUS "ZEPHYR_SDK_INSTALL_DIR: $ENV{ZEPHYR_SDK_INSTALL_DIR}")
 
+# =============================================================================
+# Application version (before find_package(Zephyr))
+#
+# Do NOT use a file named VERSION at repo root: Zephyr's find_package loads
+# cmake/modules/version.cmake which reads VERSION and expects kernel-style fields
+# (VERSION_MAJOR etc.); a semver line like 1.0.0 breaks configuration.
+# =============================================================================
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/APP_VERSION")
+	file(READ "${CMAKE_CURRENT_SOURCE_DIR}/APP_VERSION" PROJECT_VERSION_RAW)
+	string(STRIP "${PROJECT_VERSION_RAW}" PROJECT_VERSION_RAW)
+	if(PROJECT_VERSION_RAW MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+		set(PROJECT_VERSION_MAJOR ${CMAKE_MATCH_1})
+		set(PROJECT_VERSION_MINOR ${CMAKE_MATCH_2})
+		set(PROJECT_VERSION_PATCH ${CMAKE_MATCH_3})
+		set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+	else()
+		message(FATAL_ERROR "APP_VERSION must contain a single line X.Y.Z, got: '${PROJECT_VERSION_RAW}'")
+	endif()
+else()
+	set(PROJECT_VERSION_MAJOR 1)
+	set(PROJECT_VERSION_MINOR 0)
+	set(PROJECT_VERSION_PATCH 0)
+	set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+endif()
+
+message(STATUS "Project Version: ${PROJECT_VERSION}")
+
 # Note: BOARD_ROOT is not needed for standard boards like nucleo_l4r5zi
 # Only use BOARD_ROOT if you have custom boards in the boards/ directory
 # list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boards)
@@ -49,18 +77,7 @@ message(STATUS "ZEPHYR_SDK_INSTALL_DIR: $ENV{ZEPHYR_SDK_INSTALL_DIR}")
 # For freestanding applications, explicitly specify ZEPHYR_BASE
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(zephyr_event_template)
-
-# =============================================================================
-# Version Information
-# =============================================================================
-
-set(PROJECT_VERSION_MAJOR 1)
-set(PROJECT_VERSION_MINOR 0)
-set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
-
-message(STATUS "Project Version: ${PROJECT_VERSION}")
+project(zephyr_event_template VERSION ${PROJECT_VERSION})
 
 # =============================================================================
 # Git Information (Auto-detect)

@@ -18,9 +18,12 @@
 
 ```
 zephyr_template/
+├── APP_VERSION                 # 应用语义化版本（勿用文件名 VERSION，与 Zephyr 冲突）
 ├── CMakeLists.txt              # 构建配置（独立应用需 ZEPHYR_BASE 或 zephyr_config.env）
 ├── Kconfig                     # 应用 Kconfig（含事件/模块/IPC 等）
 ├── prj.conf                    # 默认 Zephyr 配置（可与 prj_*.conf 合并）
+├── .clang-tidy                 # clang-tidy 检查项（可选）
+├── .pre-commit-config.yaml     # pre-commit 钩子（可选）
 ├── prj_example_module_ipc.conf # Thread IPC 示例模块叠加配置示例
 ├── README.md
 ├── LICENSE
@@ -403,7 +406,7 @@ if (leaks > 0) {
 
 ## 单元测试
 
-使用 `tests/` 下的 ztest，与主应用共享 `src/` 实现（不链接 `app_main`、示例业务模块及 Thread IPC 服务源文件）。
+使用 `tests/` 下的 ztest，与主应用共享 `src/` 实现（不链接 `app_main`、示例业务模块）；默认 **开启** `CONFIG_THREAD_IPC_SERVICE` 并编入 `ipc_service` 做烟测，堆大小已加大（见 `tests/prj.conf`）。
 
 ```bash
 west build -b native_posix tests/ --build-dir build_tests
@@ -430,7 +433,7 @@ west build -t run --build-dir build_tests
 
 ---
 
-**版本**：1.0.0  
+**版本**：1.0.0（单一来源：根目录 `APP_VERSION`；发布前可运行 `python scripts/bump_version.py X.Y.Z` 同步 Doxygen/README）  
 **构建类型**：Release/Debug  
 **目标**：通用/Zephyr 支持的开发板
 
@@ -442,6 +445,8 @@ west build -t run --build-dir build_tests
 | [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | 开发流程、测试、调试 |
 | [FREESTANDING_APP.md](docs/FREESTANDING_APP.md) | 独立应用说明 |
 | [VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | 版本与构建信息 |
+| [ZEPHYR_VERSION.md](docs/ZEPHYR_VERSION.md) | Zephyr/SDK 与 CI 对齐 |
+| [TEMPLATE_PRODUCT_EXTENSIONS.md](docs/TEMPLATE_PRODUCT_EXTENSIONS.md) | OTA、NVS、低功耗（可选） |
 | [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | 发布前检查 |
 | [事件系统详细使用说明.md](docs/事件系统详细使用说明.md) | 事件 API 与用法 |
 | [模块系统详细使用说明.md](docs/模块系统详细使用说明.md) | 模块生命周期与注册 |

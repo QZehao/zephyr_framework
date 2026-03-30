@@ -1,19 +1,24 @@
 # 单元测试指南
 
-本目录包含 Zephyr 事件驱动项目模板的单元测试（ztest），与主应用共享 `../src/` 下的实现；**不**编译 `app_main`、示例业务模块及 `ipc_service/` 源文件（测试用 `tests/prj.conf` 关闭 `CONFIG_THREAD_IPC_SERVICE`）。
+本目录包含 Zephyr 事件驱动项目模板的单元测试（ztest），与主应用共享 `../src/` 下的实现；**不**编译 `app_main` 与示例业务模块。
+
+默认在 `tests/prj.conf` 中 **开启** `CONFIG_THREAD_IPC_SERVICE`，并链接 `ipc_service/ipc_service.c` 与 `test_ipc_service.c`（烟测）；若需关闭 IPC 以缩短构建，可将该项改为 `n` 并从 `tests/CMakeLists.txt` 中移除对应 `if(CONFIG_THREAD_IPC_SERVICE)` 块内的源文件引用。
 
 ## 目录结构
 
 ```
 tests/
-├── CMakeLists.txt          # 测试构建：链接 core / services / module_manager + 测试用例
+├── CMakeLists.txt
 ├── Kconfig                 # rsource 复用仓库根目录 Kconfig
-├── prj.conf                # 测试专用 Zephyr 配置
+├── prj.conf
 ├── test_event_system.c
 ├── test_event_queue.c
+├── test_event_dispatcher.c
 ├── test_module_manager.c
 ├── test_sys_memory.c
-└── test_sys_timer.c
+├── test_sys_timer.c
+├── test_sys_watchdog.c
+└── test_ipc_service.c      # 需 CONFIG_THREAD_IPC_SERVICE=y
 ```
 
 ## 运行测试
@@ -25,23 +30,11 @@ tests/
 ### West
 
 ```bash
-# 构建（native_posix）
 west build -b native_posix tests/ --build-dir build_tests
-
-# 运行（退出码 0 表示通过）
 west build -t run --build-dir build_tests
 ```
 
 在 Linux/macOS 上也可直接执行 `build_tests/zephyr/zephyr`。
-
-### CMake（可选）
-
-```bash
-mkdir build_tests && cd build_tests
-cmake -DBOARD=native_posix -GNinja ..
-ninja
-./zephyr/zephyr
-```
 
 ## 编写新测试
 

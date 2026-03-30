@@ -12,6 +12,16 @@
 - **次版本号**：向后兼容的功能新增
 - **修订号**：向后兼容的问题修正
 
+**单一来源**：仓库根目录 `APP_VERSION` 文件（单行 `X.Y.Z`）。`CMakeLists.txt` 在配置阶段读取该文件并定义 `PROJECT_VERSION_*`；更新对外版本时请编辑 `APP_VERSION`，或运行：
+
+**请勿**使用根目录文件名 `VERSION`：Zephyr 的 `find_package(Zephyr)` 会按该文件名解析内核版本字段，导致 `VERSION_MAJOR must be present` 等配置错误。
+
+```bash
+python scripts/bump_version.py 1.0.1
+```
+
+上述脚本会同步 `Doxyfile` 中的 `PROJECT_NUMBER` 与 `README.md` 中的「**版本**」行；提交前请 `git diff` 核对。
+
 ### 2. Git 信息
 
 - **Commit Hash**：当前提交的短哈希
