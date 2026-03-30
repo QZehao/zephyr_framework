@@ -6,10 +6,10 @@
 
 /**
  * @file ipc_service.h
- * @brief Thread-based IPC service (sync / async / future)
+ * @brief 基于专用线程的 IPC 服务（同步 / 异步回调 / future）
  *
- * Requires CONFIG_THREAD_IPC_SERVICE=y. Queues and stacks are embedded in
- * ipc_service_t (no k_malloc). Not related to Zephyr subsys IPC_SERVICE.
+ * 需 CONFIG_THREAD_IPC_SERVICE=y。队列与栈内嵌于 ipc_service_t，不使用 k_malloc。
+ * 注意：与 Zephyr 子系统名 IPC_SERVICE（核间 IPC）无关。
  */
 
 #ifndef ZEPHYR_IPC_SERVICE_H_

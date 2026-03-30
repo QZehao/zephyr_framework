@@ -1,6 +1,8 @@
 /**
  * @file example_module_ipc.c
- * @brief Example: module_manager + Thread IPC Service
+ * @brief 示例：module_manager 生命周期 + Thread IPC Service 集成
+ *
+ * 演示内容：初始化/启动/停止 IPC 服务线程、演示线程内同步调用、可选事件桥发布。
  */
 
 #include "example_module_ipc.h"
@@ -17,6 +19,7 @@
 
 LOG_MODULE_REGISTER(example_module_ipc, CONFIG_SYS_LOG_LEVEL);
 
+/** 模块私有状态：IPC 实例、演示线程及生命周期状态 */
 typedef struct {
 	module_status_t status;
 	ipc_service_t ipc;
@@ -26,10 +29,17 @@ typedef struct {
 
 static example_module_ipc_cb_t g_mod_ipc;
 
+/** 演示线程栈：仅用于 start 后发起一次 ipc_call_sync */
 K_THREAD_STACK_DEFINE(example_module_ipc_demo_stack, 1024);
 
 static void demo_thread_fn(void *p1, void *p2, void *p3);
 
+/**
+ * IPC 服务处理函数（运行于 IPC worker 线程）
+ *
+ * 此处将 *out_data 指向入参 data，即“原样回显”调用方缓冲区指针；
+ * 调用方在 ipc_call_sync 返回前须保持该缓冲区有效。
+ */
 static int mod_ipc_service_func(ipc_request_id_t request_id,
 				const void *data,
 				size_t data_size,
@@ -44,6 +54,7 @@ static int mod_ipc_service_func(ipc_request_id_t request_id,
 	*out_data_size = data_size;
 
 #if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_EVENT_BRIDGE)
+	/* 将本次处理结果发布到事件总线，供其他模块订阅（与返回值 ret 一致） */
 	(void)thread_ipc_event_publish_result(EXAMPLE_MODULE_IPC_EVENT_SOURCE_ID,
 					      request_id, ret,
 					      EVENT_PRIORITY_NORMAL);
@@ -52,6 +63,7 @@ static int mod_ipc_service_func(ipc_request_id_t request_id,
 	return ret;
 }
 
+/** 演示：延迟后发起同步 IPC，验证请求/响应通路 */
 static void demo_thread_fn(void *p1, void *p2, void *p3)
 {
 	ARG_UNUSED(p1);
@@ -81,6 +93,7 @@ int example_module_ipc_init(void *config)
 
 	memset(&g_mod_ipc, 0, sizeof(g_mod_ipc));
 
+	/* 参数须与 Kconfig 中队列/栈大小一致，否则 ipc_service_init 返回 -EINVAL */
 	int ret = ipc_service_init(&g_mod_ipc.ipc, "mod_ipc_svc", mod_ipc_service_func,
 				   CONFIG_THREAD_IPC_SERVICE_STACK_SIZE,
 				   CONFIG_THREAD_IPC_SERVICE_PRIORITY,
@@ -93,6 +106,7 @@ int example_module_ipc_init(void *config)
 	}
 
 #if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_EVENT_BRIDGE)
+	/* 注册 EVENT_TYPE_THREAD_IPC_RESPONSE（幂等，可重复调用） */
 	(void)thread_ipc_event_register_types();
 #endif
 
@@ -103,11 +117,13 @@ int example_module_ipc_init(void *config)
 
 int example_module_ipc_start(void)
 {
+	/* 仅允许从“已初始化”或“已停止”进入运行 */
 	if (g_mod_ipc.status != MODULE_STATUS_INITIALIZED &&
 	    g_mod_ipc.status != MODULE_STATUS_STOPPED) {
 		return -EINVAL;
 	}
 
+	/* stop 后需重新 init（队列/线程元数据由 init 重置） */
 	if (g_mod_ipc.status == MODULE_STATUS_STOPPED) {
 		int ret = ipc_service_init(&g_mod_ipc.ipc, "mod_ipc_svc",
 					   mod_ipc_service_func,
@@ -131,6 +147,7 @@ int example_module_ipc_start(void)
 		return ret;
 	}
 
+	/* 优先级 8 为演示固定值；生产代码建议与业务线程策略统一或做成 Kconfig */
 	k_thread_create(&g_mod_ipc.demo_thread, example_module_ipc_demo_stack,
 			K_THREAD_STACK_SIZEOF(example_module_ipc_demo_stack),
 			demo_thread_fn, NULL, NULL, NULL, 8, 0, K_NO_WAIT);
@@ -150,6 +167,7 @@ int example_module_ipc_stop(void)
 		return 0;
 	}
 
+	/* 先汇合演示线程，避免其仍向已停止的 IPC 投递请求 */
 	if (g_mod_ipc.demo_thread_valid) {
 		k_thread_join(&g_mod_ipc.demo_thread, K_FOREVER);
 		g_mod_ipc.demo_thread_valid = false;
@@ -165,6 +183,7 @@ int example_module_ipc_stop(void)
 int example_module_ipc_shutdown(void)
 {
 	(void)example_module_ipc_stop();
+	/* 标记未初始化；若需再次使用须重新走 init */
 	g_mod_ipc.status = MODULE_STATUS_UNINITIALIZED;
 	return 0;
 }
@@ -184,7 +203,7 @@ int example_module_ipc_control(int cmd, void *arg)
 {
 	ARG_UNUSED(cmd);
 	ARG_UNUSED(arg);
-	return -1; /* not supported */
+	return -1; /* 本示例未实现扩展控制命令 */
 }
 
 int example_module_ipc_demo_call_sync(const char *msg, size_t len)

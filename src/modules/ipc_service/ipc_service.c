@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * @file ipc_service.c
+ * @brief 基于专用线程 + 双消息队列的 IPC：worker 执行 service_func，dispatcher 投递响应
+ *
+ * 设计要点：无堆分配；pending 表与 future 空闲链表受 pending_lock 保护；停止时向两队列投递哑包以唤醒阻塞的 k_msgq_get。
+ */
+
 #include "ipc_service.h"
 
 #include <zephyr/logging/log.h>
@@ -14,6 +21,7 @@
 
 LOG_MODULE_REGISTER(thread_ipc_svc, CONFIG_THREAD_IPC_SERVICE_LOG_LEVEL);
 
+/** 全局单调递增请求 ID（跳过 0，避免与未初始化混淆） */
 static atomic_t s_request_id_counter;
 
 ipc_request_id_t ipc_generate_request_id(void)
@@ -111,6 +119,7 @@ static bool future_belongs_to_service(const ipc_service_t *service,
 	return false;
 }
 
+/** Worker：从请求队列取消息，调用用户 service_func，将结果写入响应队列 */
 static void service_thread_func(void *p1, void *p2, void *p3)
 {
 	ipc_service_t *service = (ipc_service_t *)p1;
@@ -129,6 +138,7 @@ static void service_thread_func(void *p1, void *p2, void *p3)
 			continue;
 		}
 
+		/* shutdown 后先收到哑包再退出，避免在已置位时仍调用 service_func */
 		if (service->shutdown) {
 			break;
 		}
@@ -160,6 +170,9 @@ static void service_thread_func(void *p1, void *p2, void *p3)
 	LOG_INF("IPC service '%s' worker stopped", service->name);
 }
 
+/**
+ * Dispatcher：根据 request_id 查找 pending，同步路径 k_sem_give、异步路径直接回调（持锁策略见内联注释）
+ */
 static void response_dispatcher_thread(void *p1, void *p2, void *p3)
 {
 	ipc_service_t *service = (ipc_service_t *)p1;
@@ -192,6 +205,7 @@ static void response_dispatcher_thread(void *p1, void *p2, void *p3)
 			entry->response_data_size = response_msg.data_size;
 
 			if (entry->callback != NULL) {
+				/* 先复制回调参数并释放槽位，再在锁外调用用户回调，避免死锁 */
 				ipc_async_callback_t cb = entry->callback;
 				void *ud = entry->callback_user_data;
 				ipc_request_id_t rid = entry->request_id;
@@ -329,6 +343,7 @@ int ipc_service_stop(ipc_service_t *service)
 
 	service->shutdown = true;
 
+	/* 非阻塞投递哑消息，唤醒可能阻塞在 k_msgq_get 的 worker/dispatcher */
 	ipc_request_msg_t dummy_request;
 
 	memset(&dummy_request, 0, sizeof(dummy_request));
