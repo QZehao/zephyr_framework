@@ -40,3 +40,5 @@ docs/api/
 
 .qwen/
 .vscode/
+
+release/

@@ -48,14 +48,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# 如果没有指定版本号，尝试从 git 获取
-if [ -z "$VERSION" ]; then
+# 读取 APP_VERSION 文件
+APP_VERSION="unknown"
+if [ -f "$PROJECT_ROOT/APP_VERSION" ]; then
+    APP_VERSION=$(cat "$PROJECT_ROOT/APP_VERSION" | tr -d '[:space:]')
+fi
+
+# 如果没有指定版本号，优先使用 APP_VERSION，然后尝试从 git 获取
+if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ]; then
+    VERSION="$APP_VERSION"
     if command -v git &> /dev/null; then
-        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "unknown")
-    else
-        VERSION="unknown"
+        GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || true)
+        if [ -n "$GIT_VERSION" ]; then
+            VERSION="$GIT_VERSION"
+        fi
     fi
 fi
+
+BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S")
+BUILD_HOST=$(hostname)
 
 echo "版本号：$VERSION"
 echo "构建目录：$BUILD_DIR"
@@ -90,17 +101,45 @@ fi
 
 # 创建版本信息文件
 echo "正在创建版本信息..."
-cat > "$OUTPUT_DIR/version.txt" << EOF
-Zephyr Event-Driven Project Template
-Version: $VERSION
-Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-Build Host: $(hostname)
 
-Files:
-$(ls -la "$OUTPUT_DIR"/*.bin "$OUTPUT_DIR"/*.elf "$OUTPUT_DIR"/*.hex 2>/dev/null || echo "  No binary files")
+# 获取文件大小
+get_file_size() {
+    if [ -f "$1" ]; then
+        size=$(stat -c%s "$1" 2>/dev/null || stat -f%z "$1" 2>/dev/null || echo "0")
+        echo "$size"
+    else
+        echo "0"
+    fi
+}
+
+BIN_SIZE=$(get_file_size "$OUTPUT_DIR/zephyr_${VERSION}.bin")
+ELF_SIZE=$(get_file_size "$OUTPUT_DIR/zephyr_${VERSION}.elf")
+HEX_SIZE=$(get_file_size "$OUTPUT_DIR/zephyr_${VERSION}.hex")
+MAP_SIZE=$(get_file_size "$OUTPUT_DIR/zephyr_${VERSION}.map")
+
+cat > "$OUTPUT_DIR/release_info.txt" << EOF
+================================================================================
+Zephyr Event-Driven Project Template - Release Package
+================================================================================
+
+版本信息
+--------
+  APP 版本：   $APP_VERSION
+  Git 版本：   $VERSION
+  编译时间：   $BUILD_DATE
+  编译主机：   $BUILD_HOST
+
+文件列表
+--------
+  zephyr_${VERSION}.bin  ($(printf "%'d" $BIN_SIZE) bytes)
+  zephyr_${VERSION}.elf  ($(printf "%'d" $ELF_SIZE) bytes)
+  zephyr_${VERSION}.hex  ($(printf "%'d" $HEX_SIZE) bytes)
+  zephyr_${VERSION}.map  ($(printf "%'d" $MAP_SIZE) bytes)
+
+================================================================================
 EOF
 
-echo "  ✓ version.txt"
+echo "  ✓ release_info.txt"
 
 # 复制 README 和许可证
 cp "$PROJECT_ROOT/README.md" "$OUTPUT_DIR/" 2>/dev/null && echo "  ✓ README.md"

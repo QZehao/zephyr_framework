@@ -73,10 +73,10 @@ Zephyr Event-Driven Project Template - Release Package
 
 文件列表
 --------
-$(Get-ChildItem -Path $OutputDir -Include *.bin,*.elf,*.hex,*.map -File | ForEach-Object { "  $($_.Name)  ($('{0:N0}' -f $_.Length) bytes)" })
+$(Get-ChildItem -Path $OutputDir -Include *.bin,*.elf,*.hex,*.map -File | ForEach-Object { "  $($_.Name)  $([math]::Format('{0:N0}', $_.Length)) bytes" })
 
 ================================================================================
-@endContent
+"@
 
 $versionContent | Out-File -FilePath (Join-Path $OutputDir "release_info.txt") -Encoding UTF8
 Write-Host "  ✓ release_info.txt"
