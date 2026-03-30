@@ -83,6 +83,12 @@ typedef struct {
      * 运行时依赖：指向以 NULL 结尾的字符串数组，每项为其它模块的 interface->name。
      * 仅在 Kconfig CONFIG_MODULE_MANAGER_RUNTIME_DEPENDENCIES 启用时参与排序；
      * 未启用或未使用时可置 NULL。
+     *
+     * 关于 MODULE_MANAGER_DEPENDS_LIST_MAX / CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX：
+     * - 中文：表示「单个模块」在 depends_on 里最多列出多少个直接依赖名（不含末尾 NULL），
+     *   管理器遍历时有上限以防未正确终止；不是全系统模块个数，也不是依赖链深度。
+     * - EN: Upper bound on direct dependency names per module (excluding the trailing
+     *   NULL); iterate guard only. Not total module count, not dependency depth.
      */
     const char *const *depends_on;
     int (*init)(void *config);          /**< 初始化函数指针 */

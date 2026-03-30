@@ -264,6 +264,17 @@ static void sort_start_entries(start_order_entry_t *entries, int n)
 
 #if IS_ENABLED(CONFIG_MODULE_MANAGER_RUNTIME_DEPENDENCIES)
 
+/*
+ * CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX（Kconfig: MODULE_MANAGER_DEPENDS_LIST_MAX）
+ * 中文：单模块 depends_on[] 中最多扫描多少个依赖名字符串指针（不含末尾 NULL），
+ *       防止缺少 NULL 终止时无限循环；不是 MAX_MODULES，也不是依赖图深度。
+ * EN: Max pointers scanned per module's depends_on[] (iterate guard); not total
+ *     module count nor dependency chain depth.
+ */
+#ifndef CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX
+#define CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX 16
+#endif
+
 /**
  * @brief 按 priority 数值从大到小排序（用于停止顺序的回退：先停低优先级模块）
  */
@@ -312,18 +323,30 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 			if (entries[i].depends_on == NULL) {
 				continue;
 			}
-			for (const char *const *p = entries[i].depends_on; *p != NULL; p++) {
-				const uint32_t did = find_module_id_by_name_locked(*p);
+			/* 用下标 + 上限，避免缺少 NULL 终止时死循环 */
+			for (unsigned int di = 0U;; di++) {
+				if (di >= (unsigned int)CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX) {
+					LOG_ERR("Module id=%u: depends_on exceeds max or not NULL-terminated",
+						(unsigned int)entries[i].id);
+					valid[i] = false;
+					break;
+				}
+				const char *const depn = entries[i].depends_on[di];
+
+				if (depn == NULL) {
+					break;
+				}
+				const uint32_t did = find_module_id_by_name_locked(depn);
 
 				if (did == 0U) {
 					LOG_ERR("Module id=%u: unknown dependency '%s'",
-						(unsigned int)entries[i].id, *p);
+						(unsigned int)entries[i].id, depn);
 					valid[i] = false;
 					break;
 				}
 				if (did == entries[i].id) {
 					LOG_ERR("Module id=%u: self dependency '%s'",
-						(unsigned int)entries[i].id, *p);
+						(unsigned int)entries[i].id, depn);
 					valid[i] = false;
 					break;
 				}
@@ -346,7 +369,7 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 				}
 				if (found < 0) {
 					LOG_ERR("Module id=%u: dependency '%s' not in batch or not running",
-						(unsigned int)entries[i].id, *p);
+						(unsigned int)entries[i].id, depn);
 					valid[i] = false;
 					break;
 				}
@@ -388,8 +411,20 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 		if (entries[i].depends_on == NULL) {
 			continue;
 		}
-		for (const char *const *p = entries[i].depends_on; *p != NULL; p++) {
-			const uint32_t did = find_module_id_by_name_locked(*p);
+		for (unsigned int di = 0U;; di++) {
+			if (di >= (unsigned int)CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX) {
+				LOG_ERR("Module id=%u: depends_on exceeds max or not NULL-terminated",
+					(unsigned int)entries[i].id);
+				k_mutex_unlock(&g_module_mgr.lock);
+				sort_start_entries(entries, n_work);
+				return n_work;
+			}
+			const char *const depn = entries[i].depends_on[di];
+
+			if (depn == NULL) {
+				break;
+			}
+			const uint32_t did = find_module_id_by_name_locked(depn);
 			module_info_t *const dep = find_module_by_id_locked(did);
 
 			if (dep != NULL && dep->status == MODULE_STATUS_RUNNING) {
@@ -406,7 +441,7 @@ static int dependency_order_start_batch(start_order_entry_t *entries, int n)
 			/* 不动点之后不应出现；若出现则回退，避免 silent 错序 */
 			if (j < 0) {
 				LOG_ERR("Module id=%u: internal: missing edge for dependency '%s'",
-					(unsigned int)entries[i].id, *p != NULL ? *p : "?");
+					(unsigned int)entries[i].id, depn);
 				k_mutex_unlock(&g_module_mgr.lock);
 				sort_start_entries(entries, n_work);
 				return n_work;
@@ -483,8 +518,18 @@ static int dependency_order_stop_batch(start_order_entry_t *entries, int n)
 		if (entries[i].depends_on == NULL) {
 			continue;
 		}
-		for (const char *const *p = entries[i].depends_on; *p != NULL; p++) {
-			const uint32_t did = find_module_id_by_name_locked(*p);
+		for (unsigned int di = 0U;; di++) {
+			if (di >= (unsigned int)CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX) {
+				LOG_WRN("Module id=%u: depends_on exceeds max or not NULL-terminated",
+					(unsigned int)entries[i].id);
+				break;
+			}
+			const char *const depn = entries[i].depends_on[di];
+
+			if (depn == NULL) {
+				break;
+			}
+			const uint32_t did = find_module_id_by_name_locked(depn);
 			module_info_t *const dep = find_module_by_id_locked(did);
 
 			if (dep == NULL || dep->status != MODULE_STATUS_RUNNING) {
@@ -498,8 +543,10 @@ static int dependency_order_stop_batch(start_order_entry_t *entries, int n)
 					break;
 				}
 			}
-			/* 依赖已 RUNNING 但不在本快照：不建边（无法表达顺序），其余边与启动语义一致 */
+			/* 依赖在 RUNNING 但不在本快照：不建边，停止序可能弱于依赖语义 */
 			if (j < 0) {
+				LOG_WRN("Module id=%u: dependency '%s' not in stop snapshot (RUNNING but not collected)",
+					(unsigned int)entries[i].id, depn);
 				continue;
 			}
 			if (!adj[j][i]) {
@@ -1101,8 +1148,12 @@ int module_manager_start_all(void)
 	int started = 0;
 
 	for (int i = 0; i < n; i++) {
-		if (module_manager_start_module(entries[i].id) == 0) {
+		const int ret = module_manager_start_module(entries[i].id);
+
+		if (ret == 0) {
 			started++;
+		} else if (IS_ENABLED(CONFIG_MODULE_MANAGER_START_ALL_ABORT_ON_FAILURE)) {
+			break;
 		}
 	}
 

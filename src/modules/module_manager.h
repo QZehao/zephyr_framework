@@ -46,6 +46,16 @@ extern "C" {
 #define CONFIG_MODULE_INIT_TIMEOUT_MS 1000
 #endif
 
+/**
+ * @note MODULE_MANAGER_DEPENDS_LIST_MAX / CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX（Kconfig）
+ *
+ * 中文：每个模块的 depends_on 数组里，最多有多少个「直接依赖」模块名（不含最后的 NULL）；
+ *       管理器按此上限遍历，避免未 NULL 终止时死循环。不是系统内模块总数，也不是依赖深度。
+ *
+ * EN: Per-module cap on dependency name entries in depends_on[] (excluding NULL);
+ *     iterate guard. Not MAX_MODULES (system-wide slot count), not A→B→C depth.
+ */
+
 /* =============================================================================
  * 类型定义 (Type Definitions)
  * ============================================================================= */
@@ -219,6 +229,8 @@ int module_manager_stop_module(uint32_t module_id);
  * 若启用 CONFIG_MODULE_MANAGER_RUNTIME_DEPENDENCIES：先对 depends_on 做不动点校验
  * （非法依赖被剔除后，依赖方也会逐轮剔除），再拓扑排序，同层按 priority；
  * 成环或内部不一致时回退为仅按 priority。
+ * 若启用 CONFIG_MODULE_MANAGER_START_ALL_ABORT_ON_FAILURE：任一模块 start 失败则不再
+ * 启动后续模块（利于依赖语义）。
  * 
  * @return 成功启动的模块数量
  */

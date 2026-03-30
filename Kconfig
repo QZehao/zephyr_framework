@@ -80,6 +80,34 @@ config MODULE_MANAGER_RUNTIME_DEPENDENCIES
 	  or reverse priority (stop). When disabled, behavior matches the original
 	  priority-only start and slot-order stop.
 
+config MODULE_MANAGER_DEPENDS_LIST_MAX
+	int "Max dependency names per module (iterate guard)"
+	depends on MODULE_MANAGER_RUNTIME_DEPENDENCIES
+	default 16
+	range 4 64
+	help
+	  English:
+	    Maximum number of dependency-name pointers scanned for a single module's
+	    depends_on[] array (each entry is another module's interface->name; the
+	    list must end with NULL). This is an iterate guard so a missing NULL
+	    terminator cannot loop forever. It is NOT the total number of modules in
+	    the system (see MAX_MODULES), and NOT the depth of a dependency chain
+	    (e.g. A->B->C is depth 2, but this option does not measure that).
+	  中文:
+	    单个模块的 depends_on 指针数组里，最多扫描多少个「依赖模块名字符串」
+	    （最后一项之后必须是 NULL）。用于防止未正确 NULL 终止时死循环。
+	    不是全系统已注册模块的总数（见 MAX_MODULES），也不是依赖链路的深度
+	    （例如 A 依赖 B、B 依赖 C 的层数与本项无关）。
+
+config MODULE_MANAGER_START_ALL_ABORT_ON_FAILURE
+	bool "Abort start_all after first start failure"
+	depends on MODULE_MANAGER
+	default n
+	help
+	  When enabled, module_manager_start_all() stops after the first
+	  module_manager_start_module() returns non-zero. Recommended when using
+	  runtime dependencies so dependents are not started after a failed dependency.
+
 endmenu
 
 menu "System Services Configuration"
