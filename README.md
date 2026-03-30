@@ -74,7 +74,7 @@ zephyr_template/
 - Python 3.8+
 - West（Zephyr 构建工具）
 
-CI（`.github/workflows/ci.yml`）当前使用 Zephyr **3.6.0** 构建镜像；本地建议使用相同或兼容的 Zephyr 版本，以减少配置差异。
+CI（@c .github/workflows/ci.yml）当前使用 Zephyr **3.6.0** 构建镜像；本地建议使用相同或兼容的 Zephyr 版本，以减少配置差异。
 
 ### 项目类型：独立应用程序 (Freestanding Application)
 
@@ -356,7 +356,7 @@ DECLARE_MODULE_INTERFACE(my_module);
 module_manager_register(&my_module_interface, &config, &module_id);
 ```
 
-多模块依赖、`depends_on` 写法与 Kconfig 开关说明见 **[docs/模块系统详细使用说明.md](docs/模块系统详细使用说明.md)** 中的「运行时依赖」与「配置选项」；多依赖示例源码为 `src/modules/example_module_multi_dep.c`。
+多模块依赖、`depends_on` 写法与 Kconfig 开关说明见 **docs/模块系统详细使用说明.md** 中的「运行时依赖」与「配置选项」；多依赖示例源码为 `src/modules/example_module_multi_dep.c`。
 
 ## 事件流程
 
@@ -421,7 +421,7 @@ west build -b native_posix tests/ --build-dir build_tests
 west build -t run --build-dir build_tests
 ```
 
-需设置 `ZEPHYR_BASE` 或提供根目录 `zephyr_config.env`。详见 [tests/README.md](tests/README.md)。
+需设置 `ZEPHYR_BASE` 或提供根目录 `zephyr_config.env`。详见 tests/README.md。
 
 ## 许可证
 
@@ -449,17 +449,17 @@ west build -t run --build-dir build_tests
 
 | 文档 | 说明 |
 |------|------|
-| [SETUP_GUIDE.md](docs/SETUP_GUIDE.md) | 环境与路径配置 |
-| [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | 开发流程、测试、调试 |
-| [FREESTANDING_APP.md](docs/FREESTANDING_APP.md) | 独立应用说明 |
-| [VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | 版本与构建信息 |
-| [ZEPHYR_VERSION.md](docs/ZEPHYR_VERSION.md) | Zephyr/SDK 与 CI 对齐 |
-| [TEMPLATE_PRODUCT_EXTENSIONS.md](docs/TEMPLATE_PRODUCT_EXTENSIONS.md) | OTA、NVS、低功耗（可选） |
-| [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | 发布前检查 |
-| [项目配置项说明.md](docs/项目配置项说明.md) | **Kconfig 与应用配置项集中说明** |
-| [事件系统详细使用说明.md](docs/事件系统详细使用说明.md) | 事件 API 与用法 |
-| [模块系统详细使用说明.md](docs/模块系统详细使用说明.md) | 模块生命周期、注册与可选运行时依赖 |
-| [Thread_IPC_Service模块使用说明.md](docs/Thread_IPC_Service模块使用说明.md) | Thread IPC 服务 |
-| [模块开发集成Thread_IPC指南.md](docs/模块开发集成Thread_IPC指南.md) | 模块集成 IPC |
-| [tests/README.md](tests/README.md) | 单元测试说明 |
-| [LICENSE](LICENSE) | Apache 2.0 全文 |
+| SETUP_GUIDE.md | 环境与路径配置 |
+| DEVELOPER_GUIDE.md | 开发流程、测试、调试 |
+| FREESTANDING_APP.md | 独立应用说明 |
+| VERSION_MANAGEMENT.md | 版本与构建信息 |
+| ZEPHYR_VERSION.md | Zephyr/SDK 与 CI 对齐 |
+| TEMPLATE_PRODUCT_EXTENSIONS.md | OTA、NVS、低功耗（可选） |
+| RELEASE_CHECKLIST.md | 发布前检查 |
+| 项目配置项说明.md | **Kconfig 与应用配置项集中说明** |
+| 事件系统详细使用说明.md | 事件 API 与用法 |
+| 模块系统详细使用说明.md | 模块生命周期、注册与可选运行时依赖 |
+| Thread_IPC_Service模块使用说明.md | Thread IPC 服务 |
+| 模块开发集成Thread_IPC指南.md | 模块集成 IPC |
+| tests/README.md | 单元测试说明 |
+| LICENSE | Apache 2.0 全文 |

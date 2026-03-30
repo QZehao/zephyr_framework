@@ -36,6 +36,7 @@ temp/
 
 # Documentation
 docs/_build/
+docs/api/
 
 .qwen/
 .vscode/

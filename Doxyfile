@@ -29,7 +29,12 @@ RECURSIVE              = YES
 # 排除的目录和文件
 EXCLUDE                = build \
                          .git \
-                         docs/api
+                         docs/api \
+                         docs/事件系统详细使用说明.md \
+                         docs/模块系统详细使用说明.md \
+                         docs/项目配置项说明.md \
+                         docs/模块开发集成 Thread_IPC 指南.md \
+                         docs/Thread_IPC_Service 模块使用说明.md
 
 EXCLUDE_SYMLINKS       = NO
 
@@ -39,7 +44,7 @@ EXCLUDE_PATTERNS       = *.c \
                          */example_*.h
 
 # 排除符号
-EXCLUDE_SYMBOLS        = 
+EXCLUDE_SYMBOLS        =
 
 # 示例文件目录
 EXAMPLE_PATH           = src/modules
@@ -89,15 +94,14 @@ GENERATE_SQLITE3       = NO
 # HTML 选项
 # ===========================================================================
 
-HTML_HEADER            = 
-HTML_FOOTER            = 
-HTML_STYLESHEET        = 
-HTML_EXTRA_STYLESHEET  = 
-HTML_EXTRA_FILES       = 
+HTML_HEADER            =
+HTML_FOOTER            =
+HTML_STYLESHEET        =
+HTML_EXTRA_STYLESHEET  =
+HTML_EXTRA_FILES       =
 HTML_COLORSTYLE_HUE    = 220
 HTML_COLORSTYLE_SAT    = 100
 HTML_COLORSTYLE_GAMMA  = 80
-HTML_TIMESTAMP         = YES
 HTML_DYNAMIC_MENUS     = YES
 HTML_DYNAMIC_SECTIONS  = NO
 HTML_CODE_FOLDING      = YES
@@ -129,12 +133,6 @@ HIDE_UNDOC_MEMBERS     = NO
 HIDE_UNDOC_CLASSES     = NO
 HIDE_UNDOC_RELATIONS   = YES
 
-# 隐藏依赖关系
-HIDE_DEPENDENCIES      = NO
-
-# 隐藏包含关系
-HIDE_INCLUDE_GRAPH     = NO
-HIDE_DIRECT_DEP_GRAPH  = NO
 
 # 隐藏导航栏
 HIDE_SCOPE_NAMES       = NO
@@ -175,9 +173,6 @@ TEMPLATE_RELATIONS     = NO
 # 显示目录
 SHOW_FILES             = YES
 
-# 显示文件成员
-SHOW_FILE_MEMBER       = YES
-
 # 显示文件成员列表
 SHOW_FILES             = YES
 
@@ -207,7 +202,7 @@ GENERATE_BUGLIST       = YES
 GENERATE_DEPRECATEDLIST= YES
 
 # 启用所有文档
-ENABLED_SECTIONS       = 
+ENABLED_SECTIONS       =
 
 # 最大初始化行数
 MAX_INITIALIZER_LINES  = 30
@@ -218,8 +213,6 @@ SHOW_USED_FILES        = YES
 # 显示文件引用
 SHOW_FILES             = YES
 
-# 显示文件成员
-SHOW_FILE_MEMBER       = YES
 
 # ===========================================================================
 # 预处理器设置
@@ -235,10 +228,10 @@ EXPAND_ONLY_PREDEF     = YES
 SEARCH_INCLUDES        = YES
 
 # 包含路径
-INCLUDE_PATH           = 
+INCLUDE_PATH           =
 
 # 包含文件模式
-INCLUDE_FILE_PATTERNS  = 
+INCLUDE_FILE_PATTERNS  =
 
 # 预定义宏
 PREDEFINED             = __ZEPHYR__=1 \
@@ -253,7 +246,7 @@ PREDEFINED             = __ZEPHYR__=1 \
                          ARG_UNUSED(x)=(void)x
 
 # 展开宏定义
-EXPAND_AS_DEFINED      = 
+EXPAND_AS_DEFINED      =
 
 # 跳过函数宏
 SKIP_FUNCTION_MACROS   = YES
@@ -272,13 +265,13 @@ SERVER_BASED_SEARCH    = NO
 EXTERNAL_SEARCH        = NO
 
 # 搜索外部二进制文件
-SEARCHENGINE_URL       = 
+SEARCHENGINE_URL       =
 
 # 外部搜索索引文件
-EXTERNAL_SEARCH_ID     = 
+EXTERNAL_SEARCH_ID     =
 
 # 额外搜索索引
-EXTRA_SEARCH_MAPPINGS  = 
+EXTRA_SEARCH_MAPPINGS  =
 
 # ===========================================================================
 # 运行警告
@@ -288,22 +281,17 @@ EXTRA_SEARCH_MAPPINGS  =
 WARN_IF_UNDOCUMENTED   = YES
 
 # 警告文档错误
-WARN_IF_DOC_ERROR      = YES
+WARN_IF_DOC_ERROR      = NO
 
 # 警告未文档化的参数
 WARN_IF_INCOMPLETE_DOC = YES
 
-# 警告未使用的参数
-WARN_IF_UNDOCUMENTED_PARAM = YES
-
-# 警告 NoParam 命令
-WARN_IF_NO_PARAM_COMMENTS = YES
 
 # 警告格式错误
 WARN_FORMAT            = "$file:$line: $text"
 
 # 警告日志文件
-WARN_LOGFILE           = 
+WARN_LOGFILE           =
 
 # 警告错误限制
 WARN_AS_ERROR          = NO
@@ -325,7 +313,7 @@ WARN_IF_UNDOCUMENTED   = YES
 TAB_SIZE               = 4
 
 # 别名
-ALIASES                = 
+ALIASES                =
 
 # 优化输出
 OPTIMIZE_OUTPUT_FOR_C  = YES
@@ -335,7 +323,7 @@ OPTIMIZE_OUTPUT_VHDL   = NO
 OPTIMIZE_OUTPUT_SLICE  = NO
 
 # 扩展支持
-EXTENSION_MAPPING      = 
+EXTENSION_MAPPING      =
 
 # Markdown 支持
 MARKDOWN_SUPPORT       = YES
@@ -350,25 +338,25 @@ USE_PDFLATEX           = NO
 HAVE_DOT               = NO
 
 # Dot 路径
-DOT_PATH               = 
+DOT_PATH               =
 
 # Dot 文件依赖
-DOTFILE_DIRS           = 
+DOTFILE_DIRS           =
 
 # MSC 文件依赖
-MSCFILE_DIRS           = 
+MSCFILE_DIRS           =
 
 # Dia 文件依赖
-DIAFILE_DIRS           = 
+DIAFILE_DIRS           =
 
 # PlantUML 路径
-PLANTUML_JAR_PATH      = 
+PLANTUML_JAR_PATH      =
 
 # PlantUML 配置文件
-PLANTUML_CFG_FILE      = 
+PLANTUML_CFG_FILE      =
 
 # PlantUML 包含文件
-PLANTUML_INCLUDE_PATH  = 
+PLANTUML_INCLUDE_PATH  =
 
 # Dot 图清理
 DOT_CLEANUP            = YES
