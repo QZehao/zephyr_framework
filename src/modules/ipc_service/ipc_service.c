@@ -177,7 +177,8 @@ static ipc_future_t *allocate_future(ipc_service_t *service)
  */
 static void release_future(ipc_service_t *service, ipc_future_t *future)
 {
-	future->completed = false;
+	future->request_id = 0U;
+	atomic_set(&future->completed, 0);
 	future->result = 0;
 	future->data = NULL;
 	future->data_size = 0;
@@ -200,6 +201,26 @@ static bool future_belongs_to_service(const ipc_service_t *service,
 			return true;
 		}
 	}
+	return false;
+}
+
+/**
+ * @brief 检查 future 是否已在空闲链表中
+ *
+ * @note 调用前必须持有 pending_lock
+ */
+static bool future_is_in_free_list(const ipc_service_t *service,
+				   const ipc_future_t *future)
+{
+	const ipc_future_t *it = service->free_futures;
+
+	while (it != NULL) {
+		if (it == future) {
+			return true;
+		}
+		it = it->next;
+	}
+
 	return false;
 }
 
@@ -343,7 +364,7 @@ static void response_dispatcher_thread(void *p1, void *p2, void *p3)
 				entry->future->result = entry->result;
 				entry->future->data = entry->response_data;
 				entry->future->data_size = entry->response_data_size;
-				entry->future->completed = true;
+				atomic_set(&entry->future->completed, 1);
 				k_sem_give(&entry->future->semaphore);
 				entry->future = NULL;
 				release_pending_entry(entry);
@@ -395,6 +416,7 @@ int ipc_service_init(ipc_service_t *service,
 	service->priority = priority;
 	service->running = false;
 	service->shutdown = false;
+	k_mutex_init(&service->state_lock);
 
 	/* 初始化请求队列 */
 	k_msgq_init(&service->request_queue, (char *)service->request_queue_buf,
@@ -418,7 +440,7 @@ int ipc_service_init(ipc_service_t *service,
 	service->free_futures = NULL;
 	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
 		service->futures[i].request_id = 0;
-		service->futures[i].completed = false;
+		atomic_set(&service->futures[i].completed, 0);
 		service->futures[i].next = service->free_futures;
 		k_sem_init(&service->futures[i].semaphore, 0, 1);
 		service->free_futures = &service->futures[i];
@@ -438,7 +460,10 @@ int ipc_service_start(ipc_service_t *service)
 		return -EINVAL;
 	}
 
+	k_mutex_lock(&service->state_lock, K_FOREVER);
+
 	if (service->running) {
+		k_mutex_unlock(&service->state_lock);
 		return -EALREADY;
 	}
 
@@ -463,6 +488,7 @@ int ipc_service_start(ipc_service_t *service)
 #endif
 
 	service->running = true;
+	k_mutex_unlock(&service->state_lock);
 
 	LOG_INF("IPC service '%s' started", service->name);
 
@@ -478,11 +504,13 @@ int ipc_service_stop(ipc_service_t *service)
 		return -EINVAL;
 	}
 
+	k_mutex_lock(&service->state_lock, K_FOREVER);
 	if (!service->running) {
+		k_mutex_unlock(&service->state_lock);
 		return 0;
 	}
-
 	service->shutdown = true;
+	k_mutex_unlock(&service->state_lock);
 
 	/* 非阻塞投递哑消息，唤醒可能阻塞在 k_msgq_get 的 worker/dispatcher */
 	ipc_request_msg_t dummy_request;
@@ -499,7 +527,9 @@ int ipc_service_stop(ipc_service_t *service)
 	k_thread_join(&service->thread, K_FOREVER);
 	k_thread_join(&service->response_thread, K_FOREVER);
 
+	k_mutex_lock(&service->state_lock, K_FOREVER);
 	service->running = false;
+	k_mutex_unlock(&service->state_lock);
 
 	LOG_INF("IPC service '%s' stopped", service->name);
 
@@ -681,7 +711,7 @@ int ipc_call_future(ipc_service_t *service,
 
 	/* 初始化 future 状态 */
 	future->request_id = request_id;
-	future->completed = false;
+	atomic_set(&future->completed, 0);
 	future->result = 0;
 	future->data = NULL;
 	future->data_size = 0;
@@ -777,7 +807,7 @@ bool ipc_future_is_ready(ipc_future_t *future)
 		return false;
 	}
 
-	return future->completed;
+	return atomic_get(&future->completed) != 0;
 }
 
 /**
@@ -795,6 +825,22 @@ int ipc_future_release(ipc_service_t *service, ipc_future_t *future)
 	}
 
 	k_mutex_lock(&service->pending_lock, K_FOREVER);
+
+	/* 防止重复释放（重复入空闲链表） */
+	if (future_is_in_free_list(service, future)) {
+		k_mutex_unlock(&service->pending_lock);
+		return -EALREADY;
+	}
+
+	/* 仍被 pending 请求引用时不可释放 */
+	for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
+		if (service->pending_requests[i].in_use &&
+		    service->pending_requests[i].future == future) {
+			k_mutex_unlock(&service->pending_lock);
+			return -EBUSY;
+		}
+	}
+
 	release_future(service, future);
 	k_mutex_unlock(&service->pending_lock);
 
@@ -847,7 +893,7 @@ int ipc_service_cancel(ipc_service_t *service, ipc_request_id_t request_id)
 			entry->future->result = -ECANCELED;
 			entry->future->data = NULL;
 			entry->future->data_size = 0;
-			entry->future->completed = true;
+			atomic_set(&entry->future->completed, 1);
 			k_sem_give(&entry->future->semaphore);
 			entry->future = NULL;
 			release_pending_entry(entry);

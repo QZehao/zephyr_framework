@@ -32,6 +32,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/atomic.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -103,7 +104,7 @@ typedef struct ipc_future {
 	int result;                       /**< 服务函数返回值 */
 	const void *data;                 /**< 输出数据指针 */
 	size_t data_size;                 /**< 输出数据大小 */
-	bool completed;                   /**< 是否已完成 */
+	atomic_t completed;               /**< 是否已完成（原子变量） */
 	struct ipc_future *next;          /**< 空闲链表下一节点 */
 } ipc_future_t;
 
@@ -192,6 +193,7 @@ typedef struct ipc_service {
 	ipc_future_t futures[CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS];
 	ipc_future_t *free_futures;                                 /**< 空闲 Future 链表头 */
 
+	struct k_mutex state_lock;                                  /**< 保护 running/shutdown 的互斥锁 */
 	bool running;                                               /**< 服务是否正在运行 */
 	volatile bool shutdown;                                     /**< 服务是否正在关闭 */
 } ipc_service_t;
@@ -338,9 +340,10 @@ bool ipc_future_is_ready(ipc_future_t *future);
  * 
  * @param service 服务实例指针
  * @param future Future 对象指针
- * @return 0 成功，负值错误码失败
+ * @return 0 成功；-EBUSY 仍被 pending 请求引用；-EALREADY 已释放；其余为负值错误码
  * 
  * @note 使用后必须释放 future 以回收资源
+ * @note 仅可释放未被 pending 请求占用的 future
  */
 int ipc_future_release(ipc_service_t *service, ipc_future_t *future);
 
@@ -359,7 +362,7 @@ size_t ipc_service_get_pending_count(ipc_service_t *service);
  * @param request_id 请求 ID
  * @return 0 成功，-ENOENT 未找到请求
  * 
- * @note 只能取消尚未处理的请求
+ * @note 仅当请求仍在 pending 表中时可取消；已完成并出表后不可取消
  */
 int ipc_service_cancel(ipc_service_t *service, ipc_request_id_t request_id);
 
