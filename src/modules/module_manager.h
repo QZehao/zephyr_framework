@@ -12,7 +12,8 @@
  * - 模块状态回调
  *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef MODULE_MANAGER_H

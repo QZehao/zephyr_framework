@@ -1,11 +1,12 @@
 /**
  * @file app_version.h
  * @brief Application Version Information Header
- * 
+ *
  * Software version management with build time and git information.
- * 
+ *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef APP_VERSION_H

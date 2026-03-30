@@ -11,7 +11,8 @@
  * - 水位线监控
  *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef EVENT_QUEUE_H

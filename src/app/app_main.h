@@ -1,11 +1,12 @@
 /**
  * @file app_main.h
  * @brief Application Main Header
- * 
+ *
  * Main application entry point and initialization.
- * 
+ *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef APP_MAIN_H

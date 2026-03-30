@@ -5,7 +5,8 @@
  * Memory pool management with allocation tracking and statistics.
  * 
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef SYS_MEMORY_H

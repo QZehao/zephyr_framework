@@ -5,7 +5,8 @@
  * Hardware/software watchdog for system reliability and fault recovery.
  * 
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef SYS_WATCHDOG_H

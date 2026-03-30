@@ -14,7 +14,8 @@
  * UNINITIALIZED -> INITIALIZING -> INITIALIZED -> RUNNING -> STOPPED
  *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef MODULE_BASE_H

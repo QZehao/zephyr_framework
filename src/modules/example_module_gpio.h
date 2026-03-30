@@ -5,7 +5,8 @@
  * 演示如何使用 Zephyr GPIO API 控制 LED 和读取按键。
  * 
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef EXAMPLE_MODULE_GPIO_H

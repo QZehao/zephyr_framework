@@ -11,7 +11,8 @@
  * start_all 才会在拓扑序上把本模块排在 A、B 之后。
  *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef EXAMPLE_MODULE_MULTI_DEP_H

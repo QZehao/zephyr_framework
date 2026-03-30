@@ -1,11 +1,12 @@
 /**
  * @file app_config.h
  * @brief Application Configuration Header
- * 
+ *
  * Centralized application configuration and feature flags.
- * 
+ *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef APP_CONFIG_H

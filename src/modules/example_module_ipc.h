@@ -5,7 +5,8 @@
  * 由 Kconfig CONFIG_EXAMPLE_MODULE_THREAD_IPC 控制是否编译与注册。
  *
  * @copyright Copyright (c) 2026
- * @license SPDX-License-Identifier: Apache-2.0
+ * @par License
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef EXAMPLE_MODULE_IPC_H
