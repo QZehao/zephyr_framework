@@ -54,6 +54,8 @@ typedef uint8_t event_type_t;
 #define EVENT_TYPE_GENERIC        1U
 #define EVENT_TYPE_SENSOR_DATA    10U
 #define EVENT_TYPE_SENSOR_CONFIG  11U
+/** Thread IPC Service 结果事件（与 CONFIG_THREAD_IPC_SERVICE_EVENT_BRIDGE 配合） */
+#define EVENT_TYPE_THREAD_IPC_RESPONSE 20U
 
 /**
  * @brief Event priority levels

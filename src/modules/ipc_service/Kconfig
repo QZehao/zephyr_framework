@@ -67,4 +67,12 @@ config THREAD_IPC_SERVICE_EXAMPLE
     help
       Example SYS_INIT + demo thread (sync/async/future).
 
+config THREAD_IPC_SERVICE_EVENT_BRIDGE
+    bool "Bridge: publish IPC results to event system"
+    default n
+    depends on THREAD_IPC_SERVICE && EVENT_SYSTEM
+    help
+      Provides ipc_service_event.h/c: register event type THREAD_IPC_EVENT_TYPE_RESPONSE
+      and thread_ipc_event_publish_result() for use inside ipc_service_func_t.
+
 endif # THREAD_IPC_SERVICE

@@ -223,6 +223,13 @@ if(CONFIG_THREAD_IPC_SERVICE_EXAMPLE)
     )
 endif()
 
+if(CONFIG_THREAD_IPC_SERVICE_EVENT_BRIDGE)
+    target_sources(app PRIVATE
+        src/modules/ipc_service/ipc_service_event.c
+        src/modules/ipc_service/ipc_service_event.h
+    )
+endif()
+
 # =============================================================================
 # Compiler Definitions
 # =============================================================================
