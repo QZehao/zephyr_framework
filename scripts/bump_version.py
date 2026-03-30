@@ -47,8 +47,11 @@ def patch_doxyfile(path: Path, version: str) -> None:
 def patch_readme(path: Path, version: str) -> None:
     text = path.read_text(encoding="utf-8")
     text, n = re.subn(
-        r"^(\*\*版本\*\*：)\s*[\d.]+\s*$",
-        rf"\g<1>{version}",
+        # README.md 中“版本”行通常形如：
+        # **版本**：1.0.0（…其它说明…）
+        # 这里只替换其中的 X.Y.Z，不要求整行只包含版本号。
+        r"^(\*\*版本\*\*：)\s*([\d]+\.[\d]+\.[\d]+)(.*)$",
+        rf"\g<1>{version}\g<3>",
         text,
         count=1,
         flags=re.MULTILINE,
