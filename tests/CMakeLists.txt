@@ -1,54 +1,59 @@
 # 测试 CMakeLists.txt
-# 用于构建和运行单元测试
+# 用于构建和运行单元测试（与主应用共享 src/ 下的实现）
 
 cmake_minimum_required(VERSION 3.20.0)
 
-# 查找 Zephyr
+# 与主工程一致：支持从仓库根目录的 zephyr_config.env 加载 ZEPHYR_BASE
+if(NOT DEFINED ENV{ZEPHYR_BASE})
+	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../zephyr_config.env")
+		message(STATUS "Loading Zephyr configuration from ../zephyr_config.env...")
+		file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../zephyr_config.env" CONFIG_LINES)
+		foreach(LINE ${CONFIG_LINES})
+			if(NOT LINE MATCHES "^#" AND NOT LINE MATCHES "^$")
+				string(REGEX MATCH "^([^=]+)=(.*)$" MATCH ${LINE})
+				if(MATCH)
+					set(ENV{${CMAKE_MATCH_1}} "${CMAKE_MATCH_2}")
+				endif()
+			endif()
+		endforeach()
+	endif()
+endif()
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(zephyr_template_tests)
 
-# 启用测试
 enable_testing()
 
-# =============================================================================
-# 测试文件
-# =============================================================================
+set(APP_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
-# 事件系统测试
+# 被测实现（与主应用核心一致；不包含 app_main / 示例业务模块 / IPC）
 target_sources(app PRIVATE
-    test_event_system.c
-    test_event_queue.c
+	${APP_SRC_DIR}/core/event_system.c
+	${APP_SRC_DIR}/core/event_queue.c
+	${APP_SRC_DIR}/core/event_dispatcher.c
+	${APP_SRC_DIR}/services/sys_log.c
+	${APP_SRC_DIR}/services/sys_memory.c
+	${APP_SRC_DIR}/services/sys_watchdog.c
+	${APP_SRC_DIR}/services/sys_timer.c
+	${APP_SRC_DIR}/modules/module_manager.c
 )
 
-# 模块管理器测试
 target_sources(app PRIVATE
-    test_module_manager.c
+	test_event_system.c
+	test_event_queue.c
+	test_module_manager.c
+	test_sys_memory.c
+	test_sys_timer.c
 )
-
-# 系统服务测试
-target_sources(app PRIVATE
-    test_sys_memory.c
-    test_sys_timer.c
-)
-
-# =============================================================================
-# 包含目录
-# =============================================================================
 
 target_include_directories(app PRIVATE
-    ${CMAKE_SOURCE_DIR}/../src
-    ${CMAKE_SOURCE_DIR}/../src/core
-    ${CMAKE_SOURCE_DIR}/../src/services
-    ${CMAKE_SOURCE_DIR}/../src/modules
+	${APP_SRC_DIR}
+	${APP_SRC_DIR}/core
+	${APP_SRC_DIR}/services
+	${APP_SRC_DIR}/modules
 )
 
-# =============================================================================
-# 编译定义
-# =============================================================================
-
 target_compile_definitions(app PRIVATE
-    UNIT_TEST=1
-    CONFIG_EVENT_QUEUE_SIZE=32
-    CONFIG_MAX_MODULES=8
+	UNIT_TEST=1
 )

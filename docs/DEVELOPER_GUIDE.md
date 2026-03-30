@@ -105,11 +105,8 @@ event_publish_copy(EVENT_TYPE_MY_EVENT, EVENT_PRIORITY_NORMAL, &data, sizeof(dat
 ### 格式化代码
 
 ```bash
-# 使用 clang-format
+# 使用 clang-format（仓库根目录 .clang-format）
 clang-format -i src/**/*.c src/**/*.h
-
-# 或使用脚本
-scripts/format_code.sh
 ```
 
 ### 静态分析
@@ -138,12 +135,17 @@ clang-tidy src/core/event_system.c -- -Isrc/core
 ### 运行单元测试
 
 ```bash
-# 构建测试
-west build -b native_posix tests/
+# 构建（native_posix）
+west build -b native_posix tests/ --build-dir build_tests
 
-# 运行测试
-west test
+# 运行 ztest 可执行文件（Linux/macOS）
+./build_tests/zephyr/zephyr
+
+# 或一步完成
+west build -t run --build-dir build_tests
 ```
+
+需已设置 `ZEPHYR_BASE` 或存在仓库根目录的 `zephyr_config.env`。
 
 ### 添加新测试
 

@@ -20,6 +20,9 @@
 ### 改进
 - 完善中文文档
 - 优化项目结构
+- 单元测试：`tests/` 补全与主工程一致的源码链接，新增 `test_module_manager`、`test_sys_memory`、`test_sys_timer`；`tests/Kconfig` 复用根目录 Kconfig
+- 文档：根目录 README 更新项目结构、文档索引、单元测试与 Zephyr 版本说明；修正自定义 `BOARD_ROOT` 的启用方式说明
+- CI：新增 `build-tests`（`native_posix` 构建并 `run` ztest）
 
 ---
 

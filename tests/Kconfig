@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# 单元测试应用复用仓库根目录 Kconfig（事件系统、模块管理、IPC 等选项）。
+
+rsource "../Kconfig"

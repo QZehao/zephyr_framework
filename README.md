@@ -12,46 +12,53 @@
 - **线程安全**：完整的线程安全操作和正确的同步机制
 - **Shell 命令**：内置调试和监控的 Shell 命令
 - **版本管理**：完整的软件版本跟踪，包含 Git 信息和编译时间
+- **Thread IPC（应用内）**：可选的工作线程 + 分发线程、请求/响应队列，及与事件系统的桥接（见 `docs/Thread_IPC_Service模块使用说明.md`）
 
 ## 项目结构
 
 ```
 zephyr_template/
-├── CMakeLists.txt          # 构建配置
-├── Kconfig                 # Kconfig 选项
-├── prj.conf                # Zephyr 项目配置
-├── README.md               # 本文件
-├── LICENSE                 # Apache 2.0 许可证
-├── .gitignore
-├── west.yml                # West 清单（可选）
-├── zephyr_config.env       # 本地路径配置
-├── zephyr_config.env.template  # 配置模板
+├── CMakeLists.txt              # 构建配置（独立应用需 ZEPHYR_BASE 或 zephyr_config.env）
+├── Kconfig                     # 应用 Kconfig（含事件/模块/IPC 等）
+├── prj.conf                    # 默认 Zephyr 配置（可与 prj_*.conf 合并）
+├── prj_example_module_ipc.conf # Thread IPC 示例模块叠加配置示例
+├── README.md
+├── LICENSE
+├── west.yml                    # 可选 West 清单
+├── zephyr_config.env           # 本地路径（由 template 复制生成，勿提交密钥）
+├── zephyr_config.env.template
 ├── boards/
-│   └── overlay.dts         # 设备树覆盖
-├── scripts/
-│   ├── setup_env.bat       # Windows CMD 环境设置
-│   ├── setup_env.ps1       # Windows PowerShell 环境设置
-│   └── setup_env.sh        # Linux/macOS 环境设置
-├── docs/
-│   └── SETUP_GUIDE.md      # 详细配置指南
+│   └── overlay.dts             # 通用设备树覆盖
+├── scripts/                    # 环境脚本、打包、串口工具等
+├── tests/                      # ztest 单元测试（native_posix）
+│   ├── CMakeLists.txt
+│   ├── Kconfig                 # rsource 复用根目录 Kconfig
+│   ├── prj.conf
+│   └── test_*.c
+├── docs/                       # 说明文档（见下文「文档索引」）
 └── src/
-    ├── core/               # 核心事件系统
-    │   ├── event_system.c/h       # 主事件系统
-    │   ├── event_queue.c/h        # 事件队列管理
-    │   └── event_dispatcher.c/h   # 事件分发器
-    ├── services/           # 系统服务
-    │   ├── sys_log.c/h            # 日志服务
-    │   ├── sys_memory.c/h         # 内存管理
-    │   ├── sys_watchdog.c/h       # 看门狗服务
-    │   └── sys_timer.c/h          # 定时器服务
-    ├── modules/            # 业务模块
-    │   ├── module_base.h          # 模块接口基础
-    │   ├── module_manager.c/h     # 模块管理器
-    │   ├── example_module_a.c/h   # 示例传感器模块
-    │   └── example_module_b.c/h   # 示例通信模块
-    └── app/                # 应用层
-        ├── app_main.c/h           # 主应用程序
-        └── app_config.h           # 应用配置
+    ├── core/
+    │   ├── event_system.c/h
+    │   ├── event_queue.c/h
+    │   └── event_dispatcher.c/h
+    ├── services/
+    │   ├── sys_log.c/h
+    │   ├── sys_memory.c/h
+    │   ├── sys_watchdog.c/h
+    │   └── sys_timer.c/h
+    ├── modules/
+    │   ├── module_base.h
+    │   ├── module_manager.c/h
+    │   ├── ipc_service/         # Thread IPC 服务实现（Kconfig: THREAD_IPC_SERVICE）
+    │   ├── example_module_a.c/h
+    │   ├── example_module_b.c/h
+    │   ├── example_module_gpio.c/h
+    │   ├── example_module_uart.c/h
+    │   └── example_module_ipc.c/h
+    └── app/
+        ├── app_main.c/h
+        ├── app_config.h
+        └── app_version.c/h
 ```
 
 ## 快速开始
@@ -62,6 +69,8 @@ zephyr_template/
 - CMake（3.20.0 或更高版本）
 - Python 3.8+
 - West（Zephyr 构建工具）
+
+CI（`.github/workflows/ci.yml`）当前使用 Zephyr **3.6.0** 构建镜像；本地建议使用相同或兼容的 Zephyr 版本，以减少配置差异。
 
 ### 项目类型：独立应用程序 (Freestanding Application)
 
@@ -132,8 +141,8 @@ west build -b <your_board> .
 # 构建 native POSIX（用于测试）
 west build -b native_posix .
 
-# 使用特定配置文件
-west build -b <your_board> -DCONF_FILE=prj.conf .
+# 使用特定配置文件（可合并多个）
+west build -b <your_board> -DCONF_FILE="prj.conf;prj_example_module_ipc.conf" .
 
 # 清理并重新构建
 west build -t pristine
@@ -173,7 +182,8 @@ boards/
 **构建命令**：
 
 ```bash
-# BOARD_ROOT 已在 CMakeLists.txt 中自动配置
+# 在根目录 CMakeLists.txt 中取消注释 BOARD_ROOT 后，可将自定义板放在 boards/ 下
+# list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boards)
 west build -b vendor/board_name .
 ```
 
@@ -391,6 +401,17 @@ if (leaks > 0) {
 }
 ```
 
+## 单元测试
+
+使用 `tests/` 下的 ztest，与主应用共享 `src/` 实现（不链接 `app_main`、示例业务模块及 Thread IPC 服务源文件）。
+
+```bash
+west build -b native_posix tests/ --build-dir build_tests
+west build -t run --build-dir build_tests
+```
+
+需设置 `ZEPHYR_BASE` 或提供根目录 `zephyr_config.env`。详见 [tests/README.md](tests/README.md)。
+
 ## 许可证
 
 本项目采用 Apache License 2.0 许可证 - 详见 LICENSE 文件。
@@ -413,7 +434,18 @@ if (leaks > 0) {
 **构建类型**：Release/Debug  
 **目标**：通用/Zephyr 支持的开发板
 
-## 相关文档
+## 文档索引
 
-- [配置指南](docs/SETUP_GUIDE.md) - 详细的配置和环境设置说明
-- [许可证](LICENSE) - Apache 2.0 许可证全文
+| 文档 | 说明 |
+|------|------|
+| [SETUP_GUIDE.md](docs/SETUP_GUIDE.md) | 环境与路径配置 |
+| [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | 开发流程、测试、调试 |
+| [FREESTANDING_APP.md](docs/FREESTANDING_APP.md) | 独立应用说明 |
+| [VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | 版本与构建信息 |
+| [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | 发布前检查 |
+| [事件系统详细使用说明.md](docs/事件系统详细使用说明.md) | 事件 API 与用法 |
+| [模块系统详细使用说明.md](docs/模块系统详细使用说明.md) | 模块生命周期与注册 |
+| [Thread_IPC_Service模块使用说明.md](docs/Thread_IPC_Service模块使用说明.md) | Thread IPC 服务 |
+| [模块开发集成Thread_IPC指南.md](docs/模块开发集成Thread_IPC指南.md) | 模块集成 IPC |
+| [tests/README.md](tests/README.md) | 单元测试说明 |
+| [LICENSE](LICENSE) | Apache 2.0 全文 |

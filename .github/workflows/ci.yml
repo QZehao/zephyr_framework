@@ -88,6 +88,40 @@ jobs:
           path: build_native/zephyr/zephyr.elf
           retention-days: 7
 
+  build-tests:
+    name: Unit Tests (native_posix)
+    runs-on: ubuntu-22.04
+    needs: code-quality
+    container:
+      image: gcr.io/zephyr-project/zephyr-build:v${{ env.ZEPHYR_VERSION }}
+      options: --user root
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          apt-get update
+          apt-get install -y cmake ninja-build python3-pip
+
+      - name: 安装 West
+        run: pip3 install west
+
+      - name: 初始化 West
+        run: west init -l .
+
+      - name: 更新模块
+        run: west update
+
+      - name: 导出 Zephyr CMake 包
+        run: west zephyr-export
+
+      - name: 构建并运行单元测试
+        run: |
+          west build -b native_posix tests/ --build-dir build_tests -p always
+          west build -t run --build-dir build_tests
+
   build-arm:
     name: Build (ARM Cortex-M)
     runs-on: ubuntu-22.04
@@ -175,7 +209,7 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-22.04
-    needs: [build-native, build-arm]
+    needs: [build-native, build-arm, build-tests]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: 检出代码
