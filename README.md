@@ -456,6 +456,7 @@ west build -t run --build-dir build_tests
 | [ZEPHYR_VERSION.md](docs/ZEPHYR_VERSION.md) | Zephyr/SDK 与 CI 对齐 |
 | [TEMPLATE_PRODUCT_EXTENSIONS.md](docs/TEMPLATE_PRODUCT_EXTENSIONS.md) | OTA、NVS、低功耗（可选） |
 | [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | 发布前检查 |
+| [项目配置项说明.md](docs/项目配置项说明.md) | **Kconfig 与应用配置项集中说明** |
 | [事件系统详细使用说明.md](docs/事件系统详细使用说明.md) | 事件 API 与用法 |
 | [模块系统详细使用说明.md](docs/模块系统详细使用说明.md) | 模块生命周期、注册与可选运行时依赖 |
 | [Thread_IPC_Service模块使用说明.md](docs/Thread_IPC_Service模块使用说明.md) | Thread IPC 服务 |

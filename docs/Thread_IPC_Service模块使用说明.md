@@ -91,6 +91,8 @@ Zephyr 在 **Inter Processor Communication** 菜单下有 **`CONFIG_IPC_SERVICE`
 
 在 **menuconfig** 中路径：**Thread IPC service (in-app)**（根 `Kconfig` 通过 `rsource "src/modules/ipc_service/Kconfig"` 引入）。
 
+**全项目配置项集中说明**（含本节各宏的 `CONFIG_*` 释义与依赖）：见 **[项目配置项说明.md](项目配置项说明.md) §4**。
+
 | Kconfig 符号 | 类型 | 默认值 | 含义 |
 |--------------|------|--------|------|
 | `THREAD_IPC_SERVICE` | bool | n | 总开关 → `CONFIG_THREAD_IPC_SERVICE` |
@@ -102,6 +104,7 @@ Zephyr 在 **Inter Processor Communication** 菜单下有 **`CONFIG_IPC_SERVICE`
 | `THREAD_IPC_SERVICE_LOG_LEVEL` | int | 3 | 模块日志级别（0–4） |
 | `THREAD_IPC_SERVICE_EXAMPLE` | bool | n | 是否编译内置示例 |
 | `THREAD_IPC_SERVICE_EVENT_BRIDGE` | bool | n | 编译 `ipc_service_event.c`：向事件总线发布 IPC 结果（依赖 `EVENT_SYSTEM`） |
+| `EXAMPLE_MODULE_THREAD_IPC` | bool | n | 编译 `example_module_ipc` 并与 `module_manager` 集成（依赖 `THREAD_IPC_SERVICE` + `MODULE_MANAGER`） |
 
 `prj.conf` 示例（与仓库当前工程一致；**事件桥 / 事件系统依赖 `k_malloc`，须保留非零堆**）：
 
