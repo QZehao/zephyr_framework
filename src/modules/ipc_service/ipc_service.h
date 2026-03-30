@@ -6,10 +6,25 @@
 
 /**
  * @file ipc_service.h
- * @brief 基于专用线程的 IPC 服务（同步 / 异步回调 / future）
+ * @brief 基于专用线程的 IPC 服务框架（支持同步/异步回调/Future 模式）
  *
- * 需 CONFIG_THREAD_IPC_SERVICE=y。队列与栈内嵌于 ipc_service_t，不使用 k_malloc。
- * 注意：与 Zephyr 子系统名 IPC_SERVICE（核间 IPC）无关。
+ * 设计特点：
+ * - 使用专用工作线程处理服务请求
+ * - 使用专用分发线程投递响应到调用者
+ * - 双消息队列设计（请求队列 + 响应队列）
+ * - 无堆内存分配（队列和栈嵌入结构体）
+ * - 支持三种调用模式：SYNC（阻塞）、ASYNC（回调）、FUTURE（未来值）
+ *
+ * 配置要求：CONFIG_THREAD_IPC_SERVICE=y
+ *
+ * 注意：与 Zephyr 子系统 IPC_SERVICE（核间 IPC）无关
+ *
+ * 典型使用流程：
+ * 1. 定义服务函数 ipc_service_func_t
+ * 2. 调用 ipc_service_init() 初始化服务
+ * 3. 调用 ipc_service_start() 启动服务
+ * 4. 使用 ipc_call_sync/async/future 调用服务
+ * 5. 调用 ipc_service_stop() 停止服务
  */
 
 #ifndef ZEPHYR_IPC_SERVICE_H_
@@ -28,91 +43,174 @@
 extern "C" {
 #endif
 
+/**
+ * @brief 请求 ID 类型
+ * @note 用于唯一标识每次 IPC 请求
+ */
 typedef uint32_t ipc_request_id_t;
 
+/**
+ * @brief IPC 服务函数类型
+ * 
+ * 服务提供者实现此函数来处理请求。
+ * 
+ * @param request_id 请求 ID（由框架自动生成）
+ * @param data 输入数据指针
+ * @param data_size 输入数据大小
+ * @param out_data 输出数据指针（由服务函数设置）
+ * @param out_data_size 输出数据大小（由服务函数设置）
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 服务函数在工作线程上下文中执行
+ * @note out_data 可以是输入数据的指针，或新分配的内存
+ */
 typedef int (*ipc_service_func_t)(ipc_request_id_t request_id,
 				  const void *data,
 				  size_t data_size,
 				  void **out_data,
 				  size_t *out_data_size);
 
+/**
+ * @brief 异步回调函数类型
+ * 
+ * 异步调用完成时由框架调用此回调。
+ * 
+ * @param request_id 请求 ID
+ * @param result 服务函数返回值
+ * @param data 输出数据指针
+ * @param data_size 输出数据大小
+ * @param user_data 用户自定义数据
+ * 
+ * @note 回调在分发器线程上下文中执行
+ * @note 避免在回调中执行长时间阻塞操作
+ */
 typedef void (*ipc_async_callback_t)(ipc_request_id_t request_id,
 				     int result,
 				     const void *data,
 				     size_t data_size,
 				     void *user_data);
 
+/**
+ * @brief Future 结构体
+ * 
+ * 用于 FUTURE 模式，存储异步操作的结果。
+ * 
+ * @note 由框架内部管理，用户不应直接修改
+ */
 typedef struct ipc_future {
-	ipc_request_id_t request_id;
-	struct k_sem semaphore;
-	int result;
-	const void *data;
-	size_t data_size;
-	bool completed;
-	struct ipc_future *next;
+	ipc_request_id_t request_id;      /**< 关联的请求 ID */
+	struct k_sem semaphore;           /**< 完成信号量 */
+	int result;                       /**< 服务函数返回值 */
+	const void *data;                 /**< 输出数据指针 */
+	size_t data_size;                 /**< 输出数据大小 */
+	bool completed;                   /**< 是否已完成 */
+	struct ipc_future *next;          /**< 空闲链表下一节点 */
 } ipc_future_t;
 
+/**
+ * @brief 待处理请求结构体
+ * 
+ * 跟踪每个待处理请求的状态。
+ * 
+ * @note 由框架内部管理
+ */
 typedef struct ipc_pending_request {
-	ipc_request_id_t request_id;
-	struct k_thread *caller_thread;
-	ipc_async_callback_t callback;
-	void *callback_user_data;
-	ipc_future_t *future;
-	struct k_sem response_sem;
-	int result;
-	const void *response_data;
-	size_t response_data_size;
-	bool in_use;
+	ipc_request_id_t request_id;          /**< 请求 ID */
+	struct k_thread *caller_thread;       /**< 调用者线程 */
+	ipc_async_callback_t callback;        /**< 异步回调函数（ASYNC 模式） */
+	void *callback_user_data;             /**< 回调用户数据 */
+	ipc_future_t *future;                 /**< 关联的 future（FUTURE 模式） */
+	struct k_sem response_sem;            /**< 响应信号量（SYNC 模式） */
+	int result;                           /**< 服务函数返回值 */
+	const void *response_data;            /**< 响应数据指针 */
+	size_t response_data_size;            /**< 响应数据大小 */
+	bool in_use;                          /**< 槽位是否在使用中 */
 } ipc_pending_request_t;
 
+/**
+ * @brief 请求消息结构（内部使用）
+ * 
+ * 通过请求队列传递的消息格式。
+ */
 typedef struct ipc_request_msg {
-	ipc_request_id_t request_id;
-	const void *data;
-	size_t data_size;
-	ipc_async_callback_t callback;
-	void *callback_user_data;
-	struct k_thread *caller_thread;
+	ipc_request_id_t request_id;          /**< 请求 ID */
+	const void *data;                     /**< 输入数据 */
+	size_t data_size;                     /**< 输入数据大小 */
+	ipc_async_callback_t callback;        /**< 回调函数 */
+	void *callback_user_data;             /**< 回调用户数据 */
+	struct k_thread *caller_thread;       /**< 调用者线程 */
 } ipc_request_msg_t;
 
+/**
+ * @brief 响应消息结构（内部使用）
+ * 
+ * 通过响应队列传递的消息格式。
+ */
 typedef struct ipc_response_msg {
-	ipc_request_id_t request_id;
-	int result;
-	const void *data;
-	size_t data_size;
-	struct k_thread *caller_thread;
+	ipc_request_id_t request_id;          /**< 请求 ID */
+	int result;                           /**< 服务函数返回值 */
+	const void *data;                     /**< 输出数据 */
+	size_t data_size;                     /**< 输出数据大小 */
+	struct k_thread *caller_thread;       /**< 调用者线程 */
 } ipc_response_msg_t;
 
 /**
- * @brief IPC service instance (queues + stacks embedded; no heap)
+ * @brief IPC 服务实例结构
+ * 
+ * 包含 IPC 服务的所有内部状态和资源。
+ * 队列和线程栈嵌入结构体，不使用动态内存分配。
+ * 
+ * @note 用户应通过 API 操作此结构，不应直接访问内部成员
  */
 typedef struct ipc_service {
-	const char *name;
-	struct k_thread thread;
-	struct k_thread response_thread;
-	struct k_msgq request_queue;
-	struct k_msgq response_queue;
+	const char *name;                                           /**< 服务名称 */
+	struct k_thread thread;                                     /**< 工作线程控制块 */
+	struct k_thread response_thread;                            /**< 响应分发线程控制块 */
+	struct k_msgq request_queue;                                /**< 请求消息队列 */
+	struct k_msgq response_queue;                               /**< 响应消息队列 */
 
+	/* 请求队列缓冲区 */
 	uint8_t request_queue_buf[CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE *
 				  sizeof(ipc_request_msg_t)];
+	/* 响应队列缓冲区 */
 	uint8_t response_queue_buf[CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE *
 				   sizeof(ipc_response_msg_t)];
 
+	/* 工作线程栈 */
 	K_KERNEL_STACK_MEMBER(worker_stack, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE);
+	/* 分发线程栈 */
 	K_KERNEL_STACK_MEMBER(dispatcher_stack, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE);
 
-	int priority;
+	int priority;                                               /**< 线程优先级 */
 
-	ipc_service_func_t service_func;
+	ipc_service_func_t service_func;                            /**< 服务处理函数 */
 
+	/* 待处理请求表 */
 	ipc_pending_request_t pending_requests[CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS];
-	struct k_mutex pending_lock;
+	struct k_mutex pending_lock;                                /**< 保护待处理请求表的互斥锁 */
+	/* Future 对象池 */
 	ipc_future_t futures[CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS];
-	ipc_future_t *free_futures;
+	ipc_future_t *free_futures;                                 /**< 空闲 Future 链表头 */
 
-	bool running;
-	volatile bool shutdown;
+	bool running;                                               /**< 服务是否正在运行 */
+	volatile bool shutdown;                                     /**< 服务是否正在关闭 */
 } ipc_service_t;
 
+/**
+ * @brief 初始化 IPC 服务
+ * 
+ * @param service 服务实例指针
+ * @param name 服务名称
+ * @param service_func 服务处理函数
+ * @param stack_size 工作线程栈大小
+ * @param priority 线程优先级
+ * @param request_queue_size 请求队列大小
+ * @param response_queue_size 响应队列大小
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 此函数只初始化资源，不启动线程
+ * @note 必须在使用服务前调用
+ */
 int ipc_service_init(ipc_service_t *service,
 		     const char *name,
 		     ipc_service_func_t service_func,
@@ -121,10 +219,45 @@ int ipc_service_init(ipc_service_t *service,
 		     size_t request_queue_size,
 		     size_t response_queue_size);
 
+/**
+ * @brief 启动 IPC 服务
+ * 
+ * 创建工作线程和响应分发线程。
+ * 
+ * @param service 服务实例指针
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 启动后才能处理请求
+ */
 int ipc_service_start(ipc_service_t *service);
 
+/**
+ * @brief 停止 IPC 服务
+ * 
+ * 停止工作线程和响应分发线程。
+ * 
+ * @param service 服务实例指针
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 停止后不再处理新请求
+ */
 int ipc_service_stop(ipc_service_t *service);
 
+/**
+ * @brief 同步调用 IPC 服务
+ * 
+ * 发送请求并阻塞等待响应。
+ * 
+ * @param service 服务实例指针
+ * @param data 输入数据
+ * @param data_size 输入数据大小
+ * @param out_data 输出数据指针
+ * @param out_data_size 输出数据大小
+ * @param timeout 超时时间
+ * @return 服务函数返回值，或负值错误码
+ * 
+ * @note 调用线程将阻塞直到收到响应或超时
+ */
 int ipc_call_sync(ipc_service_t *service,
 		  const void *data,
 		  size_t data_size,
@@ -132,6 +265,22 @@ int ipc_call_sync(ipc_service_t *service,
 		  size_t *out_data_size,
 		  k_timeout_t timeout);
 
+/**
+ * @brief 异步调用 IPC 服务
+ * 
+ * 发送请求并立即返回，结果通过回调通知。
+ * 
+ * @param service 服务实例指针
+ * @param data 输入数据
+ * @param data_size 输入数据大小
+ * @param callback 回调函数
+ * @param user_data 回调用户数据
+ * @param out_request_id 输出：请求 ID
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 调用线程立即返回，不阻塞
+ * @note 回调在分发器线程中执行
+ */
 int ipc_call_async(ipc_service_t *service,
 		   const void *data,
 		   size_t data_size,
@@ -139,25 +288,88 @@ int ipc_call_async(ipc_service_t *service,
 		   void *user_data,
 		   ipc_request_id_t *out_request_id);
 
+/**
+ * @brief Future 模式调用 IPC 服务
+ * 
+ * 发送请求并返回 future 对象，用于后续获取结果。
+ * 
+ * @param service 服务实例指针
+ * @param data 输入数据
+ * @param data_size 输入数据大小
+ * @param out_future 输出：future 对象指针
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 调用线程立即返回，不阻塞
+ * @note 使用 ipc_future_wait 或 ipc_future_is_ready 获取结果
+ */
 int ipc_call_future(ipc_service_t *service,
 		    const void *data,
 		    size_t data_size,
 		    ipc_future_t **out_future);
 
+/**
+ * @brief 等待 Future 结果
+ * 
+ * @param future Future 对象指针
+ * @param out_result 输出：服务函数返回值
+ * @param out_data 输出：输出数据指针
+ * @param out_data_size 输出：输出数据大小
+ * @param timeout 超时时间
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 阻塞直到 future 完成或超时
+ */
 int ipc_future_wait(ipc_future_t *future,
 		    int *out_result,
 		    const void **out_data,
 		    size_t *out_data_size,
 		    k_timeout_t timeout);
 
+/**
+ * @brief 检查 Future 是否就绪
+ * 
+ * @param future Future 对象指针
+ * @return true 已就绪，false 未完成
+ */
 bool ipc_future_is_ready(ipc_future_t *future);
 
+/**
+ * @brief 释放 Future 对象
+ * 
+ * @param service 服务实例指针
+ * @param future Future 对象指针
+ * @return 0 成功，负值错误码失败
+ * 
+ * @note 使用后必须释放 future 以回收资源
+ */
 int ipc_future_release(ipc_service_t *service, ipc_future_t *future);
 
+/**
+ * @brief 获取待处理请求数量
+ * 
+ * @param service 服务实例指针
+ * @return 待处理请求数量
+ */
 size_t ipc_service_get_pending_count(ipc_service_t *service);
 
+/**
+ * @brief 取消待处理请求
+ * 
+ * @param service 服务实例指针
+ * @param request_id 请求 ID
+ * @return 0 成功，-ENOENT 未找到请求
+ * 
+ * @note 只能取消尚未处理的请求
+ */
 int ipc_service_cancel(ipc_service_t *service, ipc_request_id_t request_id);
 
+/**
+ * @brief 生成请求 ID（内部使用）
+ * 
+ * @return 唯一的请求 ID
+ * 
+ * @note 请求 ID 单调递增，跳过 0 值
+ */
 ipc_request_id_t ipc_generate_request_id(void);
 
 #ifdef __cplusplus
