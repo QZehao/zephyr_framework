@@ -170,15 +170,12 @@ static int cmd_app_help(const struct shell* shell, size_t argc, char** argv) {
     return 0;
 }
 
-SHELL_STATIC_SUBCMD_SET_CREATE(
-    sub_app,
-    SHELL_CMD(status, NULL, "Show application status", cmd_app_status),
-    SHELL_CMD(modules, NULL, "Show registered modules", cmd_app_modules),
-    SHELL_CMD(events, NULL, "Show event statistics", cmd_app_events),
-    SHELL_CMD(memory, NULL, "Show memory statistics", cmd_app_memory),
-    SHELL_CMD(log, NULL, "Dump log buffer [level]", cmd_app_log),
-    SHELL_CMD(help, NULL, "Show application help", cmd_app_help),
-    SHELL_SUBCMD_SET_END);
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_app, SHELL_CMD(status, NULL, "Show application status", cmd_app_status),
+                               SHELL_CMD(modules, NULL, "Show registered modules", cmd_app_modules),
+                               SHELL_CMD(events, NULL, "Show event statistics", cmd_app_events),
+                               SHELL_CMD(memory, NULL, "Show memory statistics", cmd_app_memory),
+                               SHELL_CMD(log, NULL, "Dump log buffer [level]", cmd_app_log),
+                               SHELL_CMD(help, NULL, "Show application help", cmd_app_help), SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(app, &sub_app, "Application commands", NULL);
 

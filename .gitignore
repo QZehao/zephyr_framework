@@ -48,7 +48,7 @@ docs/_build/
 docs/api/
 
 .qwen/
-.vscode/
+.vscode/*
 .cache/
 
 release/

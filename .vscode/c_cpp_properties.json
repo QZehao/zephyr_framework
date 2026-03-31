@@ -5,6 +5,9 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/build/zephyr/include/generated/zephyr/",
+                "D:/Code/1-github-code/zephyrproject/zephyr/include",
+                "D:/Code/3-Project/zephyr_template/build/zephyr/include/generated",
+                "build/zephyr/include/generated/zephyr"
             ],
             "defines": [
                 "_DEBUG",
