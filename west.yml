@@ -23,12 +23,11 @@ manifest:
   projects:
     - name: zephyr
       path: zephyr
-      # Update this path to your Zephyr installation
+      # 与 .github/workflows/ci.yml 中 ZEPHYR_VERSION / zephyr-build 镜像一致，便于 west init -l 可复现构建
+      # url: https://github.com/zephyrproject-rtos/zephyr
       url: file://D:/Code/1-github-code/zephyrproject/zephyr
-      # 建议改为与 CI / 本地验证一致的 tag，例如 v3.6.0，避免 main 漂移
-      revision: main
-      # Disable import for freestanding applications
-      # import: true
+      revision: v3.6.0
+      # 独立应用通常不需要 import: true；若需拉取 Zephyr 的 west 子项目再按需打开
 
   self:
     # This application is located in the manifest repository itself

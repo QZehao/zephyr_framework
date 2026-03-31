@@ -65,6 +65,21 @@ zephyr_template/
         └── app_version.c/h
 ```
 
+## 从本模板初始化新项目（检查清单）
+
+复制或 fork 本仓库后，建议按顺序完成下列项，便于在任意产品上落地（更细的说明见 **[docs/开发者入门指南.md](docs/开发者入门指南.md#从模板复制后的检查清单)**）。
+
+| 步骤 | 内容 |
+|------|------|
+| 1 | **west.yml**：将 `revision` 与团队 Zephyr 版本对齐（默认 **v3.6.0**，与 CI 一致）；私有镜像可改 `url`。 |
+| 2 | **zephyr_config.env**：由 `zephyr_config.env.template` 复制并填写路径；**勿提交**（已在 `.gitignore` 中忽略）。 |
+| 3 | **CMake**：根目录 `CMakeLists.txt` 中 `project(...)` 名称改为你的产品工程名。 |
+| 4 | **版本与说明**：按需修改 `APP_VERSION`、README 标题与产品描述。 |
+| 5 | **板型与 CI**：`prj.conf`、`.github/workflows/ci.yml` 中 ARM 矩阵 `board` 与目标硬件一致或按需裁剪。 |
+| 6 | **示例代码**：`src/modules/example_*` 可删除或替换；同步 `CMakeLists.txt` 与 `app_main.c` 注册逻辑。 |
+
+> **文档与 CI 的板型示例**：入门文档中可能出现 `nucleo_l4r5zi` 等示例板名；CI 当前固定为若干 Nucleo/Disco 板。**以你手头的 `BOARD` 与 CI 矩阵为准**；若遇 RAM/链接问题，见 **[docs/设备树与内存配置手册.md](docs/设备树与内存配置手册.md)**。
+
 ## 快速开始
 
 ### 前提条件
@@ -74,7 +89,7 @@ zephyr_template/
 - Python 3.8+
 - West（Zephyr 构建工具）
 
-CI（@c .github/workflows/ci.yml）当前使用 Zephyr **3.6.0** 构建镜像；本地建议使用相同或兼容的 Zephyr 版本，以减少配置差异。
+CI（`.github/workflows/ci.yml`）当前使用 Zephyr **3.6.0** 构建镜像；本地建议使用相同或兼容的 Zephyr 版本，以减少配置差异。
 
 ### 项目类型：独立应用程序 (Freestanding Application)
 

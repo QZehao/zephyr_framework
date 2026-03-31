@@ -25,24 +25,25 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 安装 clang-format
+      - name: 安装依赖（ShellCheck、Python）
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-format-14
+          sudo apt-get install -y shellcheck python3-pip
 
-      - name: 检查代码格式
+      - name: ShellCheck（scripts/*.sh）
         run: |
-          if [ -f .clang-format ]; then
-            find src -name "*.c" -o -name "*.h" | xargs clang-format-14 --style=file --dry-run --Werror
-          else
-            echo "未找到 .clang-format 文件，跳过格式检查"
+          mapfile -t sh_files < <(find scripts -name "*.sh" -type f | sort)
+          if [ ${#sh_files[@]} -eq 0 ]; then
+            echo "未找到 shell 脚本，跳过"
+            exit 0
           fi
+          shellcheck "${sh_files[@]}"
 
-      - name: 检查 Shell 脚本
+      - name: pre-commit（含 clang-format / YAML / 空白等，见 .pre-commit-config.yaml）
         run: |
-          if command -v shellcheck &> /dev/null; then
-            find scripts -name "*.sh" | xargs shellcheck || true
-          fi
+          python3 -m pip install --user pre-commit
+          export PATH="$HOME/.local/bin:$PATH"
+          pre-commit run --all-files
 
   # ===========================================================================
   # 构建任务

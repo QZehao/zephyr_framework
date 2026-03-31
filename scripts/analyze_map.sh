@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck shell=bash
 # =============================================================================
 # Zephyr Map 文件分析脚本 (Linux/macOS Bash)
 # =============================================================================
@@ -46,10 +47,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# 查找 map 文件
+# 查找 map 文件（目录下取最近修改的 .map；此处用 ls 简写，忽略 SC2012）
 if [ -z "$MAP_FILE" ]; then
     RELEASE_DIR="$PROJECT_ROOT/release"
     if [ -d "$RELEASE_DIR" ]; then
+        # shellcheck disable=SC2012
         MAP_FILE=$(ls -t "$RELEASE_DIR"/*.map 2>/dev/null | head -n 1)
     fi
 fi

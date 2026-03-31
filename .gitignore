@@ -1,3 +1,12 @@
+# 本地路径配置（由 zephyr_config.env.template 复制；勿提交真实密钥）
+zephyr_config.env
+
+# 常见密钥与证书（勿提交；按需增删）
+*.pem
+*.p12
+id_rsa
+id_ed25519
+
 # Zephyr build directory
 build/
 

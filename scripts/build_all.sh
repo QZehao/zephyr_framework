@@ -79,21 +79,27 @@ for board in "${BOARDS[@]}"; do
         BUILD_DIR="$OUTPUT_DIR/$BUILD_DIR"
     fi
     
-    # 构建命令
-    BUILD_CMD="west build -b $board --build-dir $BUILD_DIR"
-    
     if [ "$CLEAN_BUILD" = true ]; then
-        BUILD_CMD="$BUILD_CMD --clean"
+        echo "命令：west build -b $board --build-dir $BUILD_DIR -p always"
+    else
+        echo "命令：west build -b $board --build-dir $BUILD_DIR"
     fi
-    
-    echo "命令：$BUILD_CMD"
     echo ""
-    
-    cd "$PROJECT_ROOT"
-    
-    if $BUILD_CMD; then
+
+    cd "$PROJECT_ROOT" || exit 1
+
+    set +e
+    if [ "$CLEAN_BUILD" = true ]; then
+        west build -b "$board" --build-dir "$BUILD_DIR" -p always
+    else
+        west build -b "$board" --build-dir "$BUILD_DIR"
+    fi
+    build_status=$?
+    set -e
+
+    if [ "$build_status" -eq 0 ]; then
         echo "✓ 构建成功：$board"
-        ((SUCCESS_COUNT++))
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
         
         # 复制构建产物
         if [ -n "$OUTPUT_DIR" ]; then
@@ -110,7 +116,7 @@ for board in "${BOARDS[@]}"; do
         fi
     else
         echo "✗ 构建失败：$board"
-        ((FAIL_COUNT++))
+        FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
 done
 

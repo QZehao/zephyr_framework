@@ -51,7 +51,7 @@ done
 # 读取 APP_VERSION 文件
 APP_VERSION="unknown"
 if [ -f "$PROJECT_ROOT/APP_VERSION" ]; then
-    APP_VERSION=$(cat "$PROJECT_ROOT/APP_VERSION" | tr -d '[:space:]')
+    APP_VERSION=$(tr -d '[:space:]' < "$PROJECT_ROOT/APP_VERSION")
 fi
 
 # 如果没有指定版本号，优先使用 APP_VERSION，然后尝试从 git 获取

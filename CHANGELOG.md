@@ -5,6 +5,7 @@
 ## [未发布]
 
 ### 修复
+- `west.yml`：默认使用 **`https://github.com/zephyrproject-rtos/zephyr`** 与 **`v3.6.0`**（与 CI 一致），替代不可移植的本地 `file://` 路径；`scripts/build_all.sh` 在 `set -e` 下正确统计失败次数；`scripts/package_release.sh` 去掉无意义的 `cat | tr`。
 - 根目录版本文件由 `VERSION` 重命名为 `APP_VERSION`，并在 `find_package(Zephyr)` 之前解析，避免与 Zephyr `version.cmake` 对 `VERSION` 文件的解析冲突（`VERSION_MAJOR must be present`）。
 
 ### 新增
@@ -21,6 +22,7 @@
 - 环境设置脚本
 
 ### 改进
+- 模板落地：根目录 **README**、**docs/开发者入门指南**、**docs/文档索引** 增加「从模板初始化」检查清单；**`.gitignore`** 忽略 **`zephyr_config.env`** 并补充常见密钥文件名；**`.github/pull_request_template.md`**、**ISSUE_TEMPLATE**；**CI** 增加 **ShellCheck** 与 **`pre-commit run --all-files`**（与 **`.pre-commit-config.yaml`** 对齐）；**docs/参与贡献与代码规范**、**docs/单元测试与持续集成说明** 同步 CI 说明。
 - 完善中文文档
 - 优化项目结构
 - 单元测试：`tests/` 补全与主工程一致的源码链接，新增 `test_module_manager`、`test_sys_memory`、`test_sys_timer`；`tests/Kconfig` 复用根目录 Kconfig
