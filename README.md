@@ -465,5 +465,9 @@ west build -t run --build-dir build_tests
 | [docs/版本管理.md](docs/版本管理.md) | 版本号与构建信息 |
 | [docs/Zephyr版本与CI说明.md](docs/Zephyr版本与CI说明.md) | 与 CI 镜像版本对齐 |
 | [docs/发布检查清单.md](docs/发布检查清单.md) | 发布前检查 |
-| [tests/README.md](tests/README.md) | 单元测试说明 |
+| [docs/常见问题与故障排除.md](docs/常见问题与故障排除.md) | 构建与环境排错 |
+| [docs/烧录与调试快速指南.md](docs/烧录与调试快速指南.md) | 烧录、串口、调试 |
+| [docs/脚本与工具说明.md](docs/脚本与工具说明.md) | `scripts/` 脚本说明 |
+| [docs/单元测试与持续集成说明.md](docs/单元测试与持续集成说明.md) | ztest 与 CI 概览 |
+| [tests/README.md](tests/README.md) | 单元测试（详细） |
 | [LICENSE](LICENSE) | Apache 2.0 全文 |

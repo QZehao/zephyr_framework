@@ -36,7 +36,11 @@ EXCLUDE                = build \
                          docs/Thread_IPC模块集成指南.md \
                          docs/Thread_IPC服务使用说明.md \
                          docs/设备树与内存配置手册.md \
-                         docs/文档索引.md
+                         docs/文档索引.md \
+                         docs/常见问题与故障排除.md \
+                         docs/烧录与调试快速指南.md \
+                         docs/脚本与工具说明.md \
+                         docs/单元测试与持续集成说明.md
 
 EXCLUDE_SYMLINKS       = NO
 

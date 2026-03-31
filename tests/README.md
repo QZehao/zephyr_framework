@@ -2,6 +2,8 @@
 
 本目录包含 Zephyr 事件驱动项目模板的单元测试（ztest），与主应用共享 `../src/` 下的实现；**不**编译 `app_main` 与示例业务模块。
 
+**仓库级概览**（与 CI 的关系、与主应用差异）：见 **[docs/单元测试与持续集成说明.md](../docs/单元测试与持续集成说明.md)**。
+
 默认在 `tests/prj.conf` 中 **开启** `CONFIG_THREAD_IPC_SERVICE`，并链接 `ipc_service/ipc_service.c` 与 `test_ipc_service.c`（烟测）；若需关闭 IPC 以缩短构建，可将该项改为 `n` 并从 `tests/CMakeLists.txt` 中移除对应 `if(CONFIG_THREAD_IPC_SERVICE)` 块内的源文件引用。
 
 ## 目录结构
