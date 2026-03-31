@@ -435,6 +435,8 @@ west build -t run --build-dir build_tests
 4. 运行测试
 5. 提交 Pull Request
 
+更完整的流程与代码规范见 **[docs/参与贡献与代码规范.md](docs/参与贡献与代码规范.md)**。
+
 ## 支持
 
 如有问题和功能请求，请在项目仓库中提交 Issue。
@@ -451,7 +453,7 @@ west build -t run --build-dir build_tests
 
 | 文档 | 说明 |
 |------|------|
-| [docs/文档索引.md](docs/文档索引.md) | **总入口**：三条学习路径、全部手册列表 |
+| [docs/文档索引.md](docs/文档索引.md) | **总入口**：学习路径、全部手册列表 |
 | [docs/环境搭建与配置指南.md](docs/环境搭建与配置指南.md) | 工具链、路径、验证构建 |
 | [docs/独立应用构建说明.md](docs/独立应用构建说明.md) | 独立应用、`ZEPHYR_BASE`、overlay |
 | [docs/开发者入门指南.md](docs/开发者入门指南.md) | 日常开发、测试、调试 |
@@ -469,5 +471,8 @@ west build -t run --build-dir build_tests
 | [docs/烧录与调试快速指南.md](docs/烧录与调试快速指南.md) | 烧录、串口、调试 |
 | [docs/脚本与工具说明.md](docs/脚本与工具说明.md) | `scripts/` 脚本说明 |
 | [docs/单元测试与持续集成说明.md](docs/单元测试与持续集成说明.md) | ztest 与 CI 概览 |
+| [docs/系统服务使用说明.md](docs/系统服务使用说明.md) | sys_log / sys_memory / sys_timer / sys_watchdog |
+| [docs/参与贡献与代码规范.md](docs/参与贡献与代码规范.md) | PR、代码风格与 CI |
+| [docs/安全与密钥管理说明.md](docs/安全与密钥管理说明.md) | 密钥、Secret、OTA 签名注意 |
 | [tests/README.md](tests/README.md) | 单元测试（详细） |
 | [LICENSE](LICENSE) | Apache 2.0 全文 |

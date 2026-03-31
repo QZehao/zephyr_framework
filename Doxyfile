@@ -40,7 +40,10 @@ EXCLUDE                = build \
                          docs/常见问题与故障排除.md \
                          docs/烧录与调试快速指南.md \
                          docs/脚本与工具说明.md \
-                         docs/单元测试与持续集成说明.md
+                         docs/单元测试与持续集成说明.md \
+                         docs/系统服务使用说明.md \
+                         docs/参与贡献与代码规范.md \
+                         docs/安全与密钥管理说明.md
 
 EXCLUDE_SYMLINKS       = NO
 
