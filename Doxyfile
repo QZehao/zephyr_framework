@@ -43,7 +43,8 @@ EXCLUDE                = build \
                          docs/单元测试与持续集成说明.md \
                          docs/系统服务使用说明.md \
                          docs/参与贡献与代码规范.md \
-                         docs/安全与密钥管理说明.md
+                         docs/安全与密钥管理说明.md \
+                         docs/Zephyr应用开发与服务指南.md
 
 EXCLUDE_SYMLINKS       = NO
 

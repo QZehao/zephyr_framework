@@ -457,6 +457,7 @@ west build -t run --build-dir build_tests
 | [docs/环境搭建与配置指南.md](docs/环境搭建与配置指南.md) | 工具链、路径、验证构建 |
 | [docs/独立应用构建说明.md](docs/独立应用构建说明.md) | 独立应用、`ZEPHYR_BASE`、overlay |
 | [docs/开发者入门指南.md](docs/开发者入门指南.md) | 日常开发、测试、调试 |
+| [docs/Zephyr应用开发与服务指南.md](docs/Zephyr应用开发与服务指南.md) | Zephyr 通用技术与服务开发纲要 |
 | [docs/设备树与内存配置手册.md](docs/设备树与内存配置手册.md) | Devicetree、SRAM、`app.overlay` |
 | [docs/项目配置项说明.md](docs/项目配置项说明.md) | **Kconfig 与应用配置项集中说明** |
 | [docs/事件系统详细使用说明.md](docs/事件系统详细使用说明.md) | 事件 API 与用法 |
