@@ -12,7 +12,17 @@
 #include "event_system.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
+
+#if !DT_NODE_EXISTS(DT_ALIAS(led0))
+#error "example_module_gpio requires devicetree alias led0"
+#endif
+
+static const struct gpio_dt_spec s_led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0));
+#if DT_NODE_EXISTS(DT_ALIAS(sw0))
+static const struct gpio_dt_spec s_sw0 = GPIO_DT_SPEC_GET(DT_ALIAS(sw0));
+#endif
 
 LOG_MODULE_REGISTER(example_module_gpio, CONFIG_SYS_LOG_LEVEL);
 
@@ -22,15 +32,6 @@ LOG_MODULE_REGISTER(example_module_gpio, CONFIG_SYS_LOG_LEVEL);
 
 #define GPIO_THREAD_PRIORITY    5
 #define GPIO_THREAD_STACK_SIZE  1024
-
-/* 默认引脚定义（可根据开发板修改）*/
-#ifndef LED0_GPIO_SPEC
-#define LED0_GPIO_SPEC      {0}
-#endif
-
-#ifndef SW0_GPIO_SPEC
-#define SW0_GPIO_SPEC       {0}
-#endif
 
 /* =============================================================================
  * 内部数据结构
@@ -84,6 +85,17 @@ int example_module_gpio_init(void *config)
         g_module_gpio.config.enable_button = true;
     }
 
+#if !DT_NODE_EXISTS(DT_ALIAS(sw0))
+    g_module_gpio.config.enable_button = false;
+#endif
+
+    g_module_gpio.led = &s_led0;
+#if DT_NODE_EXISTS(DT_ALIAS(sw0))
+    g_module_gpio.button = &s_sw0;
+#else
+    g_module_gpio.button = NULL;
+#endif
+
     g_module_gpio.status = MODULE_STATUS_INITIALIZED;
 
     /* 注册事件类型 */
@@ -102,22 +114,21 @@ int example_module_gpio_start(void)
         return -1;
     }
 
-    /* 获取 LED 设备 */
-    g_module_gpio.led = DEVICE_DT_GET(DT_ALIAS(led0));
-    if (!device_is_ready(g_module_gpio.led->port)) {
-        LOG_WRN("LED 设备未就绪");
+    if (!gpio_is_ready_dt(g_module_gpio.led)) {
+        LOG_WRN("LED GPIO 未就绪");
     } else {
         gpio_pin_configure_dt(g_module_gpio.led, GPIO_OUTPUT_ACTIVE);
         g_module_gpio.led_state = true;
     }
 
-    /* 获取按键设备 */
-    if (g_module_gpio.config.enable_button) {
-        g_module_gpio.button = DEVICE_DT_GET(DT_ALIAS(sw0));
-        if (device_is_ready(g_module_gpio.button->port)) {
+    if (g_module_gpio.config.enable_button && g_module_gpio.button != NULL) {
+        if (!gpio_is_ready_dt(g_module_gpio.button)) {
+            LOG_WRN("按键 GPIO 未就绪");
+        } else {
             gpio_pin_configure_dt(g_module_gpio.button, GPIO_INPUT | GPIO_PULL_UP);
             gpio_pin_interrupt_configure_dt(g_module_gpio.button, GPIO_INT_EDGE_BOTH);
-            gpio_init_callback(&g_module_gpio.button_cb, button_isr, BIT(g_module_gpio.button->pin));
+            gpio_init_callback(&g_module_gpio.button_cb, button_isr,
+                               BIT(g_module_gpio.button->pin));
             gpio_add_callback(g_module_gpio.button->port, &g_module_gpio.button_cb);
         }
     }
@@ -211,7 +222,7 @@ int example_module_gpio_control(int cmd, void *arg)
 
 int example_module_gpio_set_led(bool on)
 {
-    if (!device_is_ready(g_module_gpio.led->port)) {
+    if (g_module_gpio.led == NULL || !gpio_is_ready_dt(g_module_gpio.led)) {
         return -1;
     }
 
@@ -229,7 +240,7 @@ bool example_module_gpio_toggle_led(void)
 
 bool example_module_gpio_get_button(void)
 {
-    if (!device_is_ready(g_module_gpio.button->port)) {
+    if (g_module_gpio.button == NULL || !gpio_is_ready_dt(g_module_gpio.button)) {
         return false;
     }
 
@@ -267,8 +278,8 @@ static void gpio_thread_func(void *p1, void *p2, void *p3)
         }
 
         /* 检测按键 */
-        if (g_module_gpio.config.enable_button &&
-            device_is_ready(g_module_gpio.button->port)) {
+        if (g_module_gpio.config.enable_button && g_module_gpio.button != NULL &&
+            gpio_is_ready_dt(g_module_gpio.button)) {
             bool pressed = example_module_gpio_get_button();
             if (pressed && !g_module_gpio.button_pressed) {
                 /* 按键按下事件 */

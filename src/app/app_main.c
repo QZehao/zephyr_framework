@@ -18,6 +18,7 @@
 #include "sys_watchdog.h"
 #include "sys_timer.h"
 #include "module_manager.h"
+#include "event_dispatcher.h"
 #include "example_module_a.h"
 #include "example_module_b.h"
 
@@ -27,6 +28,14 @@
 
 #if IS_ENABLED(CONFIG_EXAMPLE_MODULE_MULTI_DEP)
 #include "example_module_multi_dep.h"
+#endif
+
+#if IS_ENABLED(CONFIG_EXAMPLE_MODULE_GPIO)
+#include "example_module_gpio.h"
+#endif
+
+#if IS_ENABLED(CONFIG_EXAMPLE_MODULE_UART)
+#include "example_module_uart.h"
 #endif
 
 #include <zephyr/kernel.h>
@@ -111,6 +120,17 @@ static int cmd_app_events(const struct shell *shell, size_t argc, char **argv)
     shell_print(shell, "  Total Events: %d", total_events);
     shell_print(shell, "  Queue Depth: %d", queue_depth);
     shell_print(shell, "  Dropped: %d", dropped_events);
+
+#if APP_CONFIG_ENABLE_STATS
+    dispatcher_stats_t dstats;
+    event_dispatcher_get_stats(&dstats);
+    shell_print(shell, "Dispatcher Statistics:");
+    shell_print(shell, "  Processed: %llu", (unsigned long long)dstats.events_processed);
+    shell_print(shell, "  Dropped: %llu", (unsigned long long)dstats.events_dropped);
+    shell_print(shell, "  Max latency (us): %u", dstats.max_latency_us);
+    shell_print(shell, "  Avg latency (us): %u", dstats.avg_latency_us);
+    shell_print(shell, "  Processing errors: %u", dstats.processing_errors);
+#endif
     
     return 0;
 }
@@ -127,6 +147,10 @@ static int cmd_app_memory(const struct shell *shell, size_t argc, char **argv)
 
 static int cmd_app_log(const struct shell *shell, size_t argc, char **argv)
 {
+#if !APP_CONFIG_ENABLE_LOG_DUMP
+    shell_print(shell, "Log dump disabled (set APP_CONFIG_ENABLE_LOG_DUMP=1 in app_config.h)");
+    return 0;
+#else
     if (argc > 1) {
         int level = atoi(argv[1]);
         sys_log_dump((sys_log_level_t)level);
@@ -135,6 +159,7 @@ static int cmd_app_log(const struct shell *shell, size_t argc, char **argv)
     }
     
     return 0;
+#endif
 }
 
 static int cmd_app_help(const struct shell *shell, size_t argc, char **argv)
@@ -193,7 +218,7 @@ int app_init(const app_config_t *config)
 #if APP_CONFIG_ENABLE_LOGGING
     sys_log_config_t log_config = {
         .default_level = (sys_log_level_t)g_app.config.log_level,
-        .destinations = SYS_LOG_DEST_CONSOLE,
+        .destinations = SYS_LOG_DEST_CONSOLE | SYS_LOG_DEST_MEMORY,
         .enable_timestamp = true,
         .enable_colors = true,
         .enable_module_name = true,
@@ -228,7 +253,7 @@ int app_init(const app_config_t *config)
         .stack_size = CONFIG_EVENT_DISPATCHER_STACK_SIZE,
         .priority = CONFIG_EVENT_DISPATCHER_PRIORITY,
         .thread_name = "event_disp",
-        .enable_stats = true,
+        .enable_stats = APP_CONFIG_ENABLE_STATS,
         .max_events_per_cycle = 100
     };
     if (event_dispatcher_init(&dispatcher_config) != EVENT_OK) {
@@ -443,6 +468,33 @@ static int app_register_modules(void)
                                 &module_id) == 0) {
         registered++;
         LOG_INF("Registered example_module_ipc (id=%d)", module_id);
+    }
+#endif
+
+#if IS_ENABLED(CONFIG_EXAMPLE_MODULE_GPIO)
+    example_module_gpio_config_t gpio_cfg = {
+        .led_pin = "LED0",
+        .button_pin = "SW0",
+        .blink_interval_ms = 500,
+        .enable_button = true,
+    };
+
+    if (module_manager_register(example_module_gpio_get_interface(),
+                                &gpio_cfg,
+                                &module_id) == 0) {
+        registered++;
+        LOG_INF("Registered example_module_gpio (id=%d)", module_id);
+    }
+#endif
+
+#if IS_ENABLED(CONFIG_EXAMPLE_MODULE_UART)
+    example_module_uart_config_t uart_cfg = { 0 };
+
+    if (module_manager_register(example_module_uart_get_interface(),
+                                &uart_cfg,
+                                &module_id) == 0) {
+        registered++;
+        LOG_INF("Registered example_module_uart (id=%d)", module_id);
     }
 #endif
 

@@ -20,6 +20,7 @@ tests/
 ├── test_sys_memory.c
 ├── test_sys_timer.c
 ├── test_sys_watchdog.c
+├── test_sys_log.c
 └── test_ipc_service.c      # 需 CONFIG_THREAD_IPC_SERVICE=y
 ```
 

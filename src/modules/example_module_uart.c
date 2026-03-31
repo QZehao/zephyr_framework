@@ -12,7 +12,10 @@
 #include "event_system.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/sys/util.h>
 #include <string.h>
 
 LOG_MODULE_REGISTER(example_module_uart, CONFIG_SYS_LOG_LEVEL);
@@ -106,9 +109,19 @@ int example_module_uart_start(void)
     }
 
     /* 获取 UART 设备 */
-    g_module_uart.dev = device_get_binding(g_module_uart.config.device_name);
+#if IS_ENABLED(CONFIG_EXAMPLE_MODULE_UART_USE_ZEPHYR_CONSOLE)
+#if DT_HAS_CHOSEN(zephyr_console)
+    g_module_uart.dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+#else
+    LOG_ERR("devicetree 未选择 zephyr_console");
+    g_module_uart.status = MODULE_STATUS_ERROR;
+    return -1;
+#endif
+#else
+    g_module_uart.dev = device_get_binding(CONFIG_EXAMPLE_MODULE_UART_DEVICE_NAME);
+#endif
     if (g_module_uart.dev == NULL) {
-        LOG_ERR("找不到 UART 设备：%s", g_module_uart.config.device_name);
+        LOG_ERR("找不到 UART 设备");
         g_module_uart.status = MODULE_STATUS_ERROR;
         return -1;
     }
@@ -140,9 +153,9 @@ int example_module_uart_start(void)
     k_thread_name_set(&g_module_uart.rx_thread, "mod_uart_rx");
     k_thread_start(&g_module_uart.rx_thread);
 
-    LOG_INF("UART 模块已启动：%s @ %dbps", 
-            g_module_uart.config.device_name,
-            g_module_uart.config.baudrate);
+    LOG_INF("UART 模块已启动：%s @ %dbps",
+	    g_module_uart.dev->name,
+	    g_module_uart.config.baudrate);
     return 0;
 }
 

@@ -47,6 +47,7 @@ target_sources(app PRIVATE
 	test_sys_memory.c
 	test_sys_timer.c
 	test_sys_watchdog.c
+	test_sys_log.c
 )
 
 if(CONFIG_THREAD_IPC_SERVICE)

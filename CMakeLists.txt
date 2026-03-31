@@ -261,6 +261,20 @@ if(CONFIG_EXAMPLE_MODULE_MULTI_DEP)
     )
 endif()
 
+if(CONFIG_EXAMPLE_MODULE_GPIO)
+    target_sources(app PRIVATE
+        src/modules/example_module_gpio.c
+        src/modules/example_module_gpio.h
+    )
+endif()
+
+if(CONFIG_EXAMPLE_MODULE_UART)
+    target_sources(app PRIVATE
+        src/modules/example_module_uart.c
+        src/modules/example_module_uart.h
+    )
+endif()
+
 # =============================================================================
 # Compiler Definitions
 # =============================================================================

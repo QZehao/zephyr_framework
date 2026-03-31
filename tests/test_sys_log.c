@@ -1,0 +1,68 @@
+/**
+ * @file test_sys_log.c
+ * @brief Unit tests for sys_log (destination mask, memory ring)
+ */
+
+#include <zephyr/ztest.h>
+#include "sys_log.h"
+
+ZTEST_SUITE(sys_log_tests, NULL, NULL, NULL, NULL, NULL);
+
+ZTEST(sys_log_tests, test_console_and_memory_ring)
+{
+	sys_log_config_t cfg = {
+		.default_level = SYS_LOG_LEVEL_INF,
+		.destinations = SYS_LOG_DEST_CONSOLE | SYS_LOG_DEST_MEMORY,
+		.enable_timestamp = false,
+		.enable_colors = false,
+		.enable_module_name = false,
+		.memory_buffer_size = CONFIG_SYS_MEMORY_POOL_SIZE,
+	};
+
+	zassert_equal(sys_log_init(&cfg), 0, "sys_log_init failed");
+	sys_log_clear_buffer();
+
+	sys_log_print(SYS_LOG_LEVEL_INF, "test", "hello");
+	zassert_true(sys_log_get_count() >= 1U, "memory ring should record lines");
+}
+
+ZTEST(sys_log_tests, test_memory_destination_off)
+{
+	sys_log_config_t cfg = {
+		.default_level = SYS_LOG_LEVEL_INF,
+		.destinations = SYS_LOG_DEST_CONSOLE,
+		.enable_timestamp = false,
+		.enable_colors = false,
+		.enable_module_name = false,
+		.memory_buffer_size = CONFIG_SYS_MEMORY_POOL_SIZE,
+	};
+
+	zassert_equal(sys_log_init(&cfg), 0, "sys_log_init failed");
+	sys_log_clear_buffer();
+
+	sys_log_print(SYS_LOG_LEVEL_INF, "test", "no ring");
+	zassert_equal(sys_log_get_count(), 0U, "memory disabled: ring count should stay 0");
+}
+
+ZTEST(sys_log_tests, test_set_destination_memory_toggle)
+{
+	sys_log_config_t cfg = {
+		.default_level = SYS_LOG_LEVEL_INF,
+		.destinations = SYS_LOG_DEST_CONSOLE | SYS_LOG_DEST_MEMORY,
+		.enable_timestamp = false,
+		.enable_colors = false,
+		.enable_module_name = false,
+		.memory_buffer_size = CONFIG_SYS_MEMORY_POOL_SIZE,
+	};
+
+	zassert_equal(sys_log_init(&cfg), 0, "sys_log_init failed");
+	sys_log_clear_buffer();
+
+	sys_log_set_destination(SYS_LOG_DEST_MEMORY, false);
+	sys_log_print(SYS_LOG_LEVEL_INF, "test", "skip ring");
+	zassert_equal(sys_log_get_count(), 0U, "memory off");
+
+	sys_log_set_destination(SYS_LOG_DEST_MEMORY, true);
+	sys_log_print(SYS_LOG_LEVEL_INF, "test", "with ring");
+	zassert_true(sys_log_get_count() >= 1U, "memory on");
+}

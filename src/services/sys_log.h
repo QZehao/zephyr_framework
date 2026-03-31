@@ -35,16 +35,16 @@ typedef enum {
 } sys_log_level_t;
 
 /* =============================================================================
- * Log Destination
+ * Log destination (bitmask; OR together)
  * ============================================================================= */
 
-typedef enum {
-    SYS_LOG_DEST_CONSOLE = 0,
-    SYS_LOG_DEST_MEMORY = 1,
-    SYS_LOG_DEST_RTTL    = 2,  /* RTT (if available) */
-    SYS_LOG_DEST_UART    = 3,
-    SYS_LOG_DEST_ALL     = 0xFF
-} sys_log_dest_t;
+typedef uint32_t sys_log_dest_mask_t;
+
+#define SYS_LOG_DEST_CONSOLE (1U << 0)
+#define SYS_LOG_DEST_MEMORY  (1U << 1)
+#define SYS_LOG_DEST_RTT     (1U << 2) /* SEGGER RTT when CONFIG_SEGGER_RTT */
+#define SYS_LOG_DEST_UART    (1U << 3) /* Same printk path as console on typical boards */
+#define SYS_LOG_DEST_ALL     0xFFu
 
 /* =============================================================================
  * Log Entry Structure
@@ -65,7 +65,7 @@ typedef struct {
 
 typedef struct {
     sys_log_level_t default_level;
-    sys_log_dest_t destinations;
+    sys_log_dest_mask_t destinations;
     bool enable_timestamp;
     bool enable_colors;
     bool enable_module_name;
@@ -98,11 +98,11 @@ void sys_log_set_level(const char *module, sys_log_level_t level);
 sys_log_level_t sys_log_get_level(const char *module);
 
 /**
- * @brief Enable/disable log destination
- * @param dest Destination to configure
+ * @brief Enable/disable log destination(s)
+ * @param dest Bitmask (one or more SYS_LOG_DEST_* bits, or SYS_LOG_DEST_ALL)
  * @param enable true to enable, false to disable
  */
-void sys_log_set_destination(sys_log_dest_t dest, bool enable);
+void sys_log_set_destination(sys_log_dest_mask_t dest, bool enable);
 
 /**
  * @brief Log a message
@@ -151,13 +151,13 @@ uint32_t sys_log_get_entries(sys_log_entry_t *entries, uint32_t count,
 void sys_log_clear_buffer(void);
 
 /**
- * @brief Get number of logged messages
- * @return Total message count
+ * @brief Get number of messages stored in the memory ring (since init)
+ * @return Total message count recorded in ring buffer
  */
 uint32_t sys_log_get_count(void);
 
 /**
- * @brief Dump logs to console
+ * @brief Dump logs to console (requires CONSOLE and/or UART destination enabled)
  * @param level_filter Minimum level to display
  */
 void sys_log_dump(sys_log_level_t level_filter);

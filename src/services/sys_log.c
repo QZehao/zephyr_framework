@@ -12,9 +12,14 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
+#include <zephyr/sys/util.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+
+#if defined(CONFIG_SEGGER_RTT)
+#include <SEGGER_RTT.h>
+#endif
 
 LOG_MODULE_REGISTER(sys_log, CONFIG_SYS_LOG_LEVEL);
 
@@ -88,13 +93,31 @@ static const char *level_to_color(sys_log_level_t level)
     }
 }
 
-static void add_entry(sys_log_level_t level, const char *module, const char *msg)
+static void apply_destinations_mask(uint32_t mask)
+{
+    memset(g_sys_log.destinations_enabled, 0, sizeof(g_sys_log.destinations_enabled));
+
+    if (mask == 0U) {
+        mask = SYS_LOG_DEST_CONSOLE | SYS_LOG_DEST_MEMORY;
+    }
+    if (mask == SYS_LOG_DEST_ALL || mask == 0xFFu) {
+        mask = (1U << 0) | (1U << 1) | (1U << 2) | (1U << 3);
+    }
+    for (int i = 0; i < 4; i++) {
+        if (mask & (1U << i)) {
+            g_sys_log.destinations_enabled[i] = true;
+        }
+    }
+}
+
+static void add_entry(sys_log_level_t level, const char *module, const char *msg,
+		      uint32_t timestamp)
 {
     k_mutex_lock(&g_sys_log.lock, K_FOREVER);
 
     sys_log_entry_t *entry = &g_sys_log.buffer[g_sys_log.write_idx];
     
-    entry->timestamp = k_uptime_get_32();
+    entry->timestamp = timestamp;
     entry->level = level;
     entry->module = module;
     strncpy(entry->message, msg, SYS_LOG_MSG_MAX_LEN - 1);
@@ -114,10 +137,10 @@ static void add_entry(sys_log_level_t level, const char *module, const char *msg
     k_mutex_unlock(&g_sys_log.lock);
 }
 
-static void output_to_console(sys_log_level_t level, const char *module, 
-                              const char *msg, uint32_t timestamp)
+static void output_to_printk(sys_log_level_t level, const char *module, 
+			      const char *msg, uint32_t timestamp)
 {
-    if (!g_sys_log.destinations_enabled[SYS_LOG_DEST_CONSOLE]) {
+    if (!g_sys_log.destinations_enabled[0] && !g_sys_log.destinations_enabled[3]) {
         return;
     }
 
@@ -135,6 +158,39 @@ static void output_to_console(sys_log_level_t level, const char *module,
     printk("%s%s%s\n", color, msg, reset);
 }
 
+#if defined(CONFIG_SEGGER_RTT)
+static void output_to_rtt(sys_log_level_t level, const char *module,
+			  const char *msg, uint32_t timestamp)
+{
+    ARG_UNUSED(level);
+
+    if (!g_sys_log.destinations_enabled[2]) {
+        return;
+    }
+
+    char buf[SYS_LOG_MSG_MAX_LEN + 96];
+    int n = snprintf(buf, sizeof(buf), "[%08u][%s] %s\n",
+		     timestamp, module != NULL ? module : "-", msg);
+    if (n > 0) {
+        SEGGER_RTT_Write(0, buf, (unsigned)MIN((size_t)n, sizeof(buf)));
+    }
+}
+#endif
+
+static void emit_log_line(sys_log_level_t level, const char *module, const char *msg,
+			  uint32_t timestamp)
+{
+    if (g_sys_log.destinations_enabled[1]) {
+        add_entry(level, module, msg, timestamp);
+    }
+
+    output_to_printk(level, module, msg, timestamp);
+
+#if defined(CONFIG_SEGGER_RTT)
+    output_to_rtt(level, module, msg, timestamp);
+#endif
+}
+
 /* =============================================================================
  * API Implementation
  * ============================================================================= */
@@ -150,7 +206,7 @@ int sys_log_init(const sys_log_config_t *config)
         g_sys_log.config = *config;
     } else {
         g_sys_log.config.default_level = SYS_LOG_LEVEL_INF;
-        g_sys_log.config.destinations = SYS_LOG_DEST_CONSOLE;
+        g_sys_log.config.destinations = SYS_LOG_DEST_CONSOLE | SYS_LOG_DEST_MEMORY;
         g_sys_log.config.enable_timestamp = true;
         g_sys_log.config.enable_colors = true;
         g_sys_log.config.enable_module_name = true;
@@ -166,8 +222,7 @@ int sys_log_init(const sys_log_config_t *config)
 
     k_mutex_init(&g_sys_log.lock);
 
-    /* Enable default destination */
-    g_sys_log.destinations_enabled[SYS_LOG_DEST_CONSOLE] = true;
+    apply_destinations_mask(g_sys_log.config.destinations);
 
     /* Initialize module levels */
     for (int i = 0; i < 16; i++) {
@@ -194,10 +249,18 @@ sys_log_level_t sys_log_get_level(const char *module)
     return g_sys_log.config.default_level;
 }
 
-void sys_log_set_destination(sys_log_dest_t dest, bool enable)
+void sys_log_set_destination(sys_log_dest_mask_t dest, bool enable)
 {
-    if (dest < 4) {
-        g_sys_log.destinations_enabled[dest] = enable;
+    if (dest == SYS_LOG_DEST_ALL) {
+        for (int i = 0; i < 4; i++) {
+            g_sys_log.destinations_enabled[i] = enable;
+        }
+        return;
+    }
+    for (int i = 0; i < 4; i++) {
+        if (dest & (1U << i)) {
+            g_sys_log.destinations_enabled[i] = enable;
+        }
     }
 }
 
@@ -215,11 +278,8 @@ void sys_log_print(sys_log_level_t level, const char *module,
     vsnprintf(msg, sizeof(msg), format, args);
     va_end(args);
 
-    /* Add to memory buffer */
-    add_entry(level, module, msg);
-
-    /* Output to console */
-    output_to_console(level, module, msg, k_uptime_get_32());
+    uint32_t ts = k_uptime_get_32();
+    emit_log_line(level, module, msg, ts);
 }
 
 void sys_log_print_ts(sys_log_level_t level, const char *module,
@@ -236,12 +296,8 @@ void sys_log_print_ts(sys_log_level_t level, const char *module,
     vsnprintf(msg, sizeof(msg), format, args);
     va_end(args);
 
-    /* Add to memory buffer with timestamp */
-    add_entry(level, module, msg);
-
-    /* Output to console with timestamp */
     uint32_t ts = k_uptime_get_32();
-    output_to_console(level, module, msg, ts);
+    emit_log_line(level, module, msg, ts);
 }
 
 void sys_log_hexdump(sys_log_level_t level, const char *module,
@@ -339,6 +395,10 @@ uint32_t sys_log_get_count(void)
 
 void sys_log_dump(sys_log_level_t level_filter)
 {
+    if (!g_sys_log.destinations_enabled[0] && !g_sys_log.destinations_enabled[3]) {
+        return;
+    }
+
     sys_log_entry_t entries[32];
     uint32_t retrieved;
 

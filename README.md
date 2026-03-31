@@ -25,6 +25,7 @@ zephyr_template/
 ├── .clang-tidy                 # clang-tidy 检查项（可选）
 ├── .pre-commit-config.yaml     # pre-commit 钩子（可选）
 ├── prj_example_module_ipc.conf # Thread IPC 示例模块叠加配置示例
+├── prj_example_gpio_uart.conf  # GPIO / UART 示例模块叠加配置（可选）
 ├── README.md
 ├── LICENSE
 ├── west.yml                    # 可选 West 清单
@@ -252,7 +253,7 @@ module_manager_register(&my_module_interface, &config, &module_id);
 
 | 服务 | 描述 |
 |------|------|
-| `sys_log` | 统一日志，支持多级和多目标 |
+| `sys_log` | 统一日志：分级、内存环、控制台 printk；可选 UART 位与控制台共用输出路径；启用 `CONFIG_SEGGER_RTT` 时可写 RTT |
 | `sys_memory` | 内存池管理，带分配跟踪 |
 | `sys_watchdog` | 硬件/软件看门狗，提高可靠性 |
 | `sys_timer` | 高分辨率单次和周期定时器 |

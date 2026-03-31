@@ -122,6 +122,35 @@ config EXAMPLE_MODULE_MULTI_DEP
 	    编译并注册多依赖示例模块，depends_on 指向 example_module_a 与 example_module_b。
 	    若需拓扑排序生效，请开启 CONFIG_MODULE_MANAGER_RUNTIME_DEPENDENCIES，并确保 A/B 已注册。
 
+config EXAMPLE_MODULE_GPIO
+	bool "Example: GPIO module (LED + optional user button sw0)"
+	depends on MODULE_MANAGER
+	default n
+	help
+	  Builds example_module_gpio. Requires devicetree alias led0; optional sw0 for button.
+	  See boards overlay and docs/模块系统详细使用说明.md.
+
+config EXAMPLE_MODULE_UART
+	bool "Example: UART module (poll TX + IRQ RX ring)"
+	depends on MODULE_MANAGER
+	default n
+	help
+	  Builds example_module_uart. Default binding is chosen zephyr_console UART;
+	  may share the same port as Shell/LOG — see help on EXAMPLE_MODULE_UART_USE_ZEPHYR_CONSOLE.
+
+config EXAMPLE_MODULE_UART_USE_ZEPHYR_CONSOLE
+	bool "Bind UART example to chosen zephyr_console device"
+	depends on EXAMPLE_MODULE_UART
+	default y
+	help
+	  When enabled, the module uses DEVICE_DT_GET(DT_CHOSEN(zephyr_console)).
+	  When disabled, device_get_binding(CONFIG_EXAMPLE_MODULE_UART_DEVICE_NAME) is used.
+
+config EXAMPLE_MODULE_UART_DEVICE_NAME
+	string "UART device name (when USE_ZEPHYR_CONSOLE is disabled)"
+	depends on EXAMPLE_MODULE_UART
+	default "UART_0"
+
 endmenu
 
 menu "System Services Configuration"

@@ -5,48 +5,36 @@
 
 /*
  * Sample device tree overlay for zephyr_template
- * 
+ *
  * This file can be used to customize the device tree for your specific board.
- * Add or modify nodes as needed for your hardware configuration.
+ * GPIO 示例模块需要板级 DTS 提供 led0（必选）与 sw0（可选）等别名，勿在此引用
+ * 不存在的节点标签。若你的板使用其它按键节点，可在本文件或板级 overlay 中增加：
+ *   / { aliases { sw0 = &your_button; }; };
  */
 
-/ {
-    /* Example: Add an LED alias */
-    aliases {
-        led0 = &led0;
-    };
-
-    /* Example: Add a button alias */
-    aliases {
-        button0 = &button0;
-    };
-};
-
-/* Example: Configure GPIO LEDs */
 &gpio0 {
-    status = "okay";
+	status = "okay";
 };
 
-/* Example: Configure UART console */
 &uart0 {
-    status = "okay";
-    current-speed = <115200>;
+	status = "okay";
+	current-speed = <115200>;
 };
 
-/* 
+/*
  * Example: Add a sample sensor node
  * Uncomment and modify for your hardware
  */
 /*
 &i2c0 {
-    status = "okay";
-    
-    sensor_example: sensor@40 {
-        compatible = "vendor,sensor-model";
-        reg = <0x40>;
-        interrupt-parent = <&gpio0>;
-        interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
-    };
+	status = "okay";
+
+	sensor_example: sensor@40 {
+		compatible = "vendor,sensor-model";
+		reg = <0x40>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
+	};
 };
 */
 
@@ -55,13 +43,13 @@
  */
 /*
 &spi0 {
-    status = "okay";
-    cs-gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
-    
-    device_example: device@0 {
-        compatible = "vendor,device-model";
-        reg = <0>;
-        spi-max-frequency = <10000000>;
-    };
+	status = "okay";
+	cs-gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
+
+	device_example: device@0 {
+		compatible = "vendor,device-model";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
 };
 */

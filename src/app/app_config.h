@@ -35,7 +35,9 @@ extern "C" {
 
 /* Debug features */
 #define APP_CONFIG_ENABLE_SHELL       1
+/** Shell `app events` 是否附带 event_dispatcher 统计；并设置分发器 enable_stats */
 #define APP_CONFIG_ENABLE_STATS       1
+/** Shell `app log` 是否允许 sys_log_dump（为 0 时命令提示已禁用） */
 #define APP_CONFIG_ENABLE_LOG_DUMP    1
 
 /* =============================================================================
