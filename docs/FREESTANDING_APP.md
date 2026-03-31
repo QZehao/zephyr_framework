@@ -1,168 +1,166 @@
-# Freestanding Zephyr Application Setup
+# 独立（Freestanding）Zephyr 应用配置说明
 
-This document explains how this project is configured as a **freestanding Zephyr application**.
+本文说明本工程如何作为 **独立 Zephyr 应用（freestanding application）** 进行配置与构建。
 
-## What is a Freestanding Application?
+## 什么是独立应用？
 
-A freestanding Zephyr application is located **outside** of a Zephyr workspace. The application and Zephyr source code are in separate directories:
+**独立应用**指源码放在 **Zephyr 工作区之外** 的应用：应用目录与 Zephyr 源码目录相互独立，例如：
 
 ```
 <home>/
-├── zephyrproject/              # Zephyr workspace
+├── zephyrproject/              # Zephyr 工作区
 │   ├── .west/
-│   ├── zephyr/                 # Zephyr source (ZEPHYR_BASE)
+│   ├── zephyr/                 # Zephyr 源码（ZEPHYR_BASE）
 │   ├── modules/
 │   └── ...
-└── zephyr_template/            # Application directory
+└── zephyr_template/            # 本应用目录
     ├── CMakeLists.txt
     ├── prj.conf
     ├── src/
     └── ...
 ```
 
-This is different from:
-- **Repository applications**: Located inside the Zephyr repository
-- **Workspace applications**: Located in a west workspace but outside the Zephyr repository
+与下列形态不同：
 
-## Configuration
+- **仓库内应用**：位于 Zephyr 仓库内部的应用目录。
+- **工作区内应用**：在 west 工作区内，但不在 `zephyr/` 仓库目录下的应用。
 
-### Setting ZEPHYR_BASE
+## 环境配置
 
-The build system needs to know where Zephyr is installed. This is done via the `ZEPHYR_BASE` environment variable.
+### 设置 ZEPHYR_BASE
 
-**Method 1: Using zephyr_config.env (Recommended)**
+构建系统需要知道 Zephyr 的安装位置，通常通过环境变量 **`ZEPHYR_BASE`** 指定。
 
-This project includes a `zephyr_config.env` file that automatically sets the required environment variables:
+**方式一：使用 `zephyr_config.env`（推荐）**
+
+本仓库提供 **`zephyr_config.env`**，可在构建前写入所需变量（示例路径请按本机修改）：
 
 ```bash
 ZEPHYR_BASE=D:/Code/1-github-code/zephyrproject/zephyr
 ZEPHYR_SDK_INSTALL_DIR=D:/Code/1-github-code/zephyr-sdk-0.17.2
 ```
 
-Edit this file to match your local installation paths.
+将 **`zephyr_config.env.template`** 复制为 **`zephyr_config.env`** 后编辑即可。本工程 **`CMakeLists.txt`** 会在未设置 **`ZEPHYR_BASE`** 时尝试读取该文件（与官方 freestanding 流程一致）。
 
-**Method 2: Environment Variables**
+**方式二：系统环境变量**
 
-Set the environment variables directly:
+直接在终端或系统中设置：
 
 ```bash
 # Windows (PowerShell)
 $env:ZEPHYR_BASE="D:/zephyrproject/zephyr"
 $env:ZEPHYR_SDK_INSTALL_DIR="C:/zephyr-sdk"
 
-# Linux/macOS
+# Linux / macOS
 export ZEPHYR_BASE=/path/to/zephyr
 export ZEPHYR_SDK_INSTALL_DIR=/path/to/zephyr-sdk
 ```
 
-**Method 3: CMake Command Line**
+**方式三：CMake 命令行**
 
-Pass the variable directly to CMake:
+将变量传给 CMake / west：
 
 ```bash
-west build -b <board> -DZEPHYR_BASE=/path/to/zephyr
+west build -b <board> . -- -DZEPHYR_BASE=/path/to/zephyr
 ```
 
-## Building
+## 构建
 
-### Standard Build
+### 常规构建
 
 ```bash
-# Configure and build
+# 配置并编译（在应用根目录执行）
 west build -b <board> .
 
-# Or using CMake directly
+# 或直接使用 CMake
 cmake -B build -GNinja -DBOARD=<board>
 cmake --build build
 ```
 
-### Build with Custom Configuration
+### 指定配置文件
 
 ```bash
-# Use a specific configuration file
-west build -b <board> -DCONF_FILE=prj.conf .
+# 使用指定 Kconfig 片段
+west build -b <board> . -DCONF_FILE=prj.conf
 
-# Use additional configuration files
-west build -b <board> -DEXTRA_CONF_FILE="extra.conf" .
+# 合并多个片段
+west build -b <board> . -- -DCONF_FILE="prj.conf;prj_extra.conf"
 ```
 
-### Clean Build
+### 清理构建
 
 ```bash
-# Clean (preserves .config)
+# 清理产物（通常保留部分 CMake 缓存）
 west build -t clean
 
-# Pristine (removes everything)
+# 完全清理构建目录（pristine）
 west build -t pristine
 ```
 
-## Custom Board Support
+修改 **`prj.conf`**、**`app.overlay`** 等后，若行为异常，建议使用 **`west build ... -p always`** 或 **`pristine`** 后重编。
 
-This project supports custom boards without modifying the Zephyr source tree.
+## 自定义开发板（可选）
 
-### BOARD_ROOT Configuration
+在不修改 Zephyr 上游树的前提下，可在本仓库内增加自定义板。
 
-The `CMakeLists.txt` automatically sets `BOARD_ROOT` to include the `boards/` directory:
+### BOARD_ROOT
+
+在 **`find_package(Zephyr)` 之前** 于 **`CMakeLists.txt`** 中设置 **`BOARD_ROOT`**，指向包含板定义文件的目录。本仓库默认将 **`BOARD_ROOT`** 相关行**注释掉**（使用 Zephyr 自带的 `nucleo_*` 等板时不需要）：
 
 ```cmake
-list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boards)
+# 仅在 boards/ 下放置自定义板时取消注释：
+# list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boards)
 ```
 
-This allows you to add custom board definitions in the `boards/` directory.
-
-### Board Directory Structure
+取消注释后，可将自定义板放在 **`boards/<厂商>/<板名>/`** 下，结构与 Zephyr 文档 **[Custom Board](https://docs.zephyrproject.org/latest/hardware/porting/board_porting.html)** 一致，通常包含：
 
 ```
 boards/
 └── vendor/
     └── board_name/
-        ├── board_name_defconfig      # Default configuration
-        ├── board_name.dts            # Device tree source
-        ├── board_name.yaml           # Board documentation
-        ├── board.cmake               # Board-specific CMake
-        ├── Kconfig.defconfig         # Default Kconfig values
-        ├── Kconfig.board             # Board Kconfig options
-        └── board.h                   # Board header file
+        ├── board_name_defconfig
+        ├── board_name.dts
+        ├── board_name.yaml
+        ├── board.cmake
+        ├── Kconfig.defconfig
+        ├── Kconfig.board
+        └── board.h
 ```
 
-### Building with Custom Boards
+构建示例：
 
 ```bash
-# Build with custom board
 west build -b vendor/board_name .
-
-# The BOARD_ROOT is automatically configured
 ```
 
-### Device Tree Overlays
+### Devicetree Overlay
 
-This project includes several overlay options:
+Zephyr 自动合并的 overlay 须为 **`.overlay`** 后缀，并由 **`configuration_files.cmake`** 按目录与板名解析（详见 **[Zephyr设备树与内存配置手册.md](Zephyr设备树与内存配置手册.md)**）。常见用法：
 
-1. **Generic overlay**: `boards/overlay.dts`
-   - Applied to all boards by default
+| 文件 | 说明 |
+|------|------|
+| 应用根目录 **`app.overlay`** | 未命中板级专用 overlay 时的回退；本仓库用于扩展 SRAM 等 |
+| **`boards/<board>.overlay`** | 仅构建该 `board` 时参与合并 |
+| **`boards/<board>_<suffix>.overlay`** | 与 **`-DFILE_SUFFIX=<suffix>`** 联用 |
 
-2. **Board-specific overlay**: `boards/<board_name>.overlay`
-   - Applied only when building for that specific board
+注意：**`boards/overlay.dts`** 等 **非 `.overlay`** 文件**不会**被上述逻辑自动当作 overlay，除非通过 **`DTC_OVERLAY_FILE`** 显式指定。
 
-3. **FILE_SUFFIX overlays**: `boards/<board_name>_<suffix>.overlay`
-   - Used when building with `-DFILE_SUFFIX=<suffix>`
+示例：
 
-Example:
 ```bash
-# Use variant overlay
-west build -b nucleo_l4r5zi -DFILE_SUFFIX=mouse .
+west build -b nucleo_l4r5zi . -DFILE_SUFFIX=mouse
 ```
 
-## SOC Support (Optional)
+## 自定义 SoC（可选）
 
-For custom SOC definitions, use `SOC_ROOT`:
+若需自定义 SoC 描述，可在 **`find_package(Zephyr)` 之前** 设置 **`SOC_ROOT`**：
 
 ```cmake
-# In CMakeLists.txt, before find_package(Zephyr)
 list(APPEND SOC_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/soc)
 ```
 
-SOC directory structure:
+目录结构可参考 Zephyr 文档中的 SoC 移植说明，例如：
+
 ```
 soc/
 └── vendor/
@@ -172,96 +170,87 @@ soc/
         └── Kconfig.defconfig
 ```
 
-## Device Tree Support (Optional)
+## 自定义 DTS / 绑定（可选）
 
-For custom device tree definitions, use `DTS_ROOT`:
+若需额外设备树或绑定搜索路径，可设置 **`DTS_ROOT`**：
 
 ```cmake
-# In CMakeLists.txt, before find_package(Zephyr)
 list(APPEND DTS_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/dts)
 ```
 
-DTS directory structure:
-```
-dts/
-├── include/
-├── dts/common/
-├── dts/arm/
-├── dts/
-└── dts/bindings/
-```
+典型目录可包含 `dts/include`、`dts/bindings` 等，与 Zephyr 文档一致。
 
-## West Configuration
+## West 与清单文件
 
-This project includes an optional `west.yml` manifest file. This is **optional** for freestanding applications.
+本仓库是否包含 **`west.yml`** 均可；**独立应用**常见做法是只设置 **`ZEPHYR_BASE`** 后构建。
 
-### Option 1: Without west.yml (Recommended)
+### 方式一：不使用 west.yml（常见）
 
-Simply set `ZEPHYR_BASE` and build:
+配合脚本或手动设置环境变量后：
 
 ```bash
-# Set environment
-source scripts/setup_env.sh  # or setup_env.bat
+# Linux / macOS
+source scripts/setup_env.sh
 
-# Build
+# Windows：使用 scripts/setup_env.bat 或手动设置
+
 west build -b <board> .
 ```
 
-### Option 2: With west.yml
+### 方式二：使用 west.yml
 
-Create a local west workspace:
+若在本应用目录初始化独立 west 工作区：
 
 ```bash
-# Initialize workspace
 west init -l .
-
-# Update repositories
 west update
-
-# Build
 west build -b <board> .
 ```
 
-## Troubleshooting
+具体以团队工作流为准。
 
-### ZEPHYR_BASE Not Found
+## 故障排除
 
-```
+### 提示 `ZEPHYR_BASE` 未设置
+
+```text
 FATAL_ERROR: ZEPHYR_BASE not set and zephyr_config.env not found.
 ```
 
-**Solution**: 
-1. Copy `zephyr_config.env.template` to `zephyr_config.env`
-2. Edit the paths in `zephyr_config.env`
-3. Or set `ZEPHYR_BASE` environment variable directly
+**处理**：
 
-### Board Not Found
+1. 复制 **`zephyr_config.env.template`** 为 **`zephyr_config.env`**，填入本机 **`ZEPHYR_BASE`**、**`ZEPHYR_SDK_INSTALL_DIR`**。  
+2. 或在环境中手动 **`export` / `$env:`** 设置 **`ZEPHYR_BASE`**。
 
-```
+### 找不到开发板
+
+```text
 error: Board 'vendor/board_name' not found
 ```
 
-**Solution**:
-1. Check that the board directory exists: `boards/vendor/board_name/`
-2. Verify required files exist: `.defconfig`, `.dts`, `.yaml`
-3. Ensure `BOARD_ROOT` is set correctly
+**处理**：
 
-### Build Directory Issues
+1. 确认 **`boards/vendor/board_name/`** 存在且结构完整。  
+2. 若使用自定义板，确认 **`CMakeLists.txt`** 中已 **`list(APPEND BOARD_ROOT ...)`** 并指向正确目录。  
+3. 检查 **`board_name_defconfig`**、**`board_name.dts`**、**`board_name.yaml`** 等是否齐全。
 
-```
+### 构建目录与板型不匹配
+
+```text
 error: Build directory is not configured for this board
 ```
 
-**Solution**:
+**处理**：
+
 ```bash
-# Clean and rebuild
 west build -t pristine
 west build -b <board> .
 ```
 
-## References
+## 参考链接
 
-- [Zephyr Application Development Guide](https://docs.zephyrproject.org/latest/application/index.html)
-- [Freestanding Applications](https://docs.zephyrproject.org/latest/application/index.html#zephyr-freestanding-app)
-- [Custom Board Definitions](https://docs.zephyrproject.org/latest/application/index.html#custom-board-definition)
-- [Important Build Variables](https://docs.zephyrproject.org/latest/application/index.html#important-build-vars)
+- [Zephyr Application Development](https://docs.zephyrproject.org/latest/application/index.html)  
+- [Freestanding Applications](https://docs.zephyrproject.org/latest/application/index.html#zephyr-freestanding-app)  
+- [Custom Board Definitions](https://docs.zephyrproject.org/latest/application/index.html#custom-board-definition)  
+- [Important Build Variables](https://docs.zephyrproject.org/latest/application/index.html#important-build-vars)  
+- 本仓库：**[Zephyr设备树与内存配置手册.md](Zephyr设备树与内存配置手册.md)**  
