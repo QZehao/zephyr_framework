@@ -18,7 +18,7 @@
 - [故障排除](#故障排除)
 - [示例代码说明](#示例代码说明)
 
-**模块开发（module_manager）**：另见 [模块开发集成Thread_IPC指南.md](./模块开发集成Thread_IPC指南.md)。
+**模块开发（module_manager）**：另见 **[Thread_IPC模块集成指南.md](./Thread_IPC模块集成指南.md)**。
 
 ---
 

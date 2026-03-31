@@ -33,8 +33,10 @@ EXCLUDE                = build \
                          docs/事件系统详细使用说明.md \
                          docs/模块系统详细使用说明.md \
                          docs/项目配置项说明.md \
-                         docs/模块开发集成 Thread_IPC 指南.md \
-                         docs/Thread_IPC_Service 模块使用说明.md
+                         docs/Thread_IPC模块集成指南.md \
+                         docs/Thread_IPC服务使用说明.md \
+                         docs/设备树与内存配置手册.md \
+                         docs/文档索引.md
 
 EXCLUDE_SYMLINKS       = NO
 

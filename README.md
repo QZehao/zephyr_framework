@@ -12,7 +12,7 @@
 - **线程安全**：完整的线程安全操作和正确的同步机制
 - **Shell 命令**：内置调试和监控的 Shell 命令
 - **版本管理**：完整的软件版本跟踪，包含 Git 信息和编译时间
-- **Thread IPC（应用内）**：可选的工作线程 + 分发线程、请求/响应队列，及与事件系统的桥接（见 `docs/Thread_IPC_Service模块使用说明.md`）
+- **Thread IPC（应用内）**：可选的工作线程 + 分发线程、请求/响应队列，及与事件系统的桥接（见 `docs/Thread_IPC服务使用说明.md`）
 
 ## 项目结构
 
@@ -38,7 +38,7 @@ zephyr_template/
 │   ├── Kconfig                 # rsource 复用根目录 Kconfig
 │   ├── prj.conf
 │   └── test_*.c
-├── docs/                       # 说明文档（见下文「文档索引」）
+├── docs/                       # 说明文档（总目录见 docs/文档索引.md）
 └── src/
     ├── core/
     │   ├── event_system.c/h
@@ -447,19 +447,23 @@ west build -t run --build-dir build_tests
 
 ## 文档索引
 
+**总目录（推荐阅读顺序、名词表、旧文件名对照）**：[docs/文档索引.md](docs/文档索引.md)
+
 | 文档 | 说明 |
 |------|------|
-| SETUP_GUIDE.md | 环境与路径配置 |
-| DEVELOPER_GUIDE.md | 开发流程、测试、调试 |
-| FREESTANDING_APP.md | 独立应用说明 |
-| VERSION_MANAGEMENT.md | 版本与构建信息 |
-| ZEPHYR_VERSION.md | Zephyr/SDK 与 CI 对齐 |
-| TEMPLATE_PRODUCT_EXTENSIONS.md | OTA、NVS、低功耗（可选） |
-| RELEASE_CHECKLIST.md | 发布前检查 |
-| 项目配置项说明.md | **Kconfig 与应用配置项集中说明** |
-| 事件系统详细使用说明.md | 事件 API 与用法 |
-| 模块系统详细使用说明.md | 模块生命周期、注册与可选运行时依赖 |
-| Thread_IPC_Service模块使用说明.md | Thread IPC 服务 |
-| 模块开发集成Thread_IPC指南.md | 模块集成 IPC |
-| tests/README.md | 单元测试说明 |
-| LICENSE | Apache 2.0 全文 |
+| [docs/文档索引.md](docs/文档索引.md) | **总入口**：三条学习路径、全部手册列表 |
+| [docs/环境搭建与配置指南.md](docs/环境搭建与配置指南.md) | 工具链、路径、验证构建 |
+| [docs/独立应用构建说明.md](docs/独立应用构建说明.md) | 独立应用、`ZEPHYR_BASE`、overlay |
+| [docs/开发者入门指南.md](docs/开发者入门指南.md) | 日常开发、测试、调试 |
+| [docs/设备树与内存配置手册.md](docs/设备树与内存配置手册.md) | Devicetree、SRAM、`app.overlay` |
+| [docs/项目配置项说明.md](docs/项目配置项说明.md) | **Kconfig 与应用配置项集中说明** |
+| [docs/事件系统详细使用说明.md](docs/事件系统详细使用说明.md) | 事件 API 与用法 |
+| [docs/模块系统详细使用说明.md](docs/模块系统详细使用说明.md) | 模块生命周期、运行时依赖 |
+| [docs/Thread_IPC服务使用说明.md](docs/Thread_IPC服务使用说明.md) | Thread IPC 服务 |
+| [docs/Thread_IPC模块集成指南.md](docs/Thread_IPC模块集成指南.md) | 在模块中集成 IPC |
+| [docs/OTA与存储扩展指南.md](docs/OTA与存储扩展指南.md) | OTA、NVS、低功耗（可选） |
+| [docs/版本管理.md](docs/版本管理.md) | 版本号与构建信息 |
+| [docs/Zephyr版本与CI说明.md](docs/Zephyr版本与CI说明.md) | 与 CI 镜像版本对齐 |
+| [docs/发布检查清单.md](docs/发布检查清单.md) | 发布前检查 |
+| [tests/README.md](tests/README.md) | 单元测试说明 |
+| [LICENSE](LICENSE) | Apache 2.0 全文 |

@@ -1,6 +1,8 @@
-# Zephyr 与 SDK 版本对齐
+# Zephyr 版本与 CI 说明
 
 为减少「本地能编、CI 失败」或反之的差异，建议将 **本地环境** 与 **持续集成** 对齐到同一主线。
+
+**相关文档**：[文档索引.md](文档索引.md) · [版本管理.md](版本管理.md)（`APP_VERSION` 与固件展示）。
 
 ## CI 使用的 Zephyr 版本
 
@@ -24,4 +26,4 @@ GitHub Actions（`.github/workflows/ci.yml`）中：
 
 ## 应用版本（固件版本号）
 
-固件展示用版本号与 **仓库 `APP_VERSION` 文件**、CMake、`Doxyfile`、README 的同步方式见 [VERSION_MANAGEMENT.md](VERSION_MANAGEMENT.md) 与脚本 `scripts/bump_version.py`。
+固件展示用版本号与 **仓库 `APP_VERSION` 文件**、CMake、`Doxyfile`、README 的同步方式见 **[版本管理.md](版本管理.md)** 与脚本 `scripts/bump_version.py`。
