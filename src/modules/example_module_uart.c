@@ -62,7 +62,7 @@ static uint8_t                  g_tx_buffer_static[256];
  * ============================================================================= */
 
 static void uart_rx_thread(void* p1, void* p2, void* p3);
-static int  uart_irq_callback(const struct device* dev, void* user_data);
+static void uart_irq_callback(const struct device* dev, void* user_data);
 
 /* =============================================================================
  * 模块接口实现
@@ -131,7 +131,7 @@ int example_module_uart_start(void) {
 
     /* 配置中断接收 */
     if (g_module_uart.config.enable_interrupt &&
-        uart_irq_callback_set(g_module_uart.dev, uart_irq_callback, &g_module_uart) == 0) {
+        uart_irq_callback_user_data_set(g_module_uart.dev, uart_irq_callback, &g_module_uart) == 0) {
         uart_irq_rx_enable(g_module_uart.dev);
     }
 
@@ -191,10 +191,7 @@ int example_module_uart_control(int cmd, void* arg) {
         if (arg == NULL)
             return -1;
         {
-            struct {
-                const void* data;
-                size_t      len;
-            }* tx_req = (typeof(tx_req)) arg;
+            const example_module_uart_tx_req_t* tx_req = (const example_module_uart_tx_req_t*) arg;
             return example_module_uart_send(tx_req->data, tx_req->len);
         }
 
@@ -327,7 +324,7 @@ static void uart_rx_thread(void* p1, void* p2, void* p3) {
     }
 }
 
-static int uart_irq_callback(const struct device* dev, void* user_data) {
+static void uart_irq_callback(const struct device* dev, void* user_data) {
     ARG_UNUSED(dev);
     example_module_uart_cb_t* cb = (example_module_uart_cb_t*) user_data;
 
@@ -347,12 +344,10 @@ static int uart_irq_callback(const struct device* dev, void* user_data) {
             /* 发送完成 */
         }
 
-        while (uart_irq_err_check(cb->dev)) {
+        if (uart_err_check(cb->dev) != 0) {
             cb->error_count++;
         }
     }
-
-    return 0;
 }
 
 /* =============================================================================

@@ -42,6 +42,7 @@ int             example_module_uart_shutdown(void);
 void            example_module_uart_on_event(const event_t* event, void* user_data);
 module_status_t example_module_uart_get_status(void);
 int             example_module_uart_control(int cmd, void* arg);
+const module_interface_t* example_module_uart_get_interface(void);
 
 /* =============================================================================
  * 模块特定 API
@@ -105,6 +106,12 @@ void example_module_uart_get_stats(uint32_t* tx_count, uint32_t* rx_count, uint3
 #define UART_CMD_GET_RX_COUNT       2
 #define UART_CMD_CLEAR_RX           3
 #define UART_CMD_GET_STATS          4
+
+/** UART_CMD_SEND 时传入的 arg 指向本结构 */
+typedef struct {
+    const void* data;
+    size_t      len;
+} example_module_uart_tx_req_t;
 
 #ifdef __cplusplus
 }

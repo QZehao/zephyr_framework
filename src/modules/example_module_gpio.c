@@ -19,9 +19,9 @@
 #error "example_module_gpio requires devicetree alias led0"
 #endif
 
-static const struct gpio_dt_spec s_led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0));
+static const struct gpio_dt_spec s_led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 #if DT_NODE_EXISTS(DT_ALIAS(sw0))
-static const struct gpio_dt_spec s_sw0 = GPIO_DT_SPEC_GET(DT_ALIAS(sw0));
+static const struct gpio_dt_spec s_sw0 = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 #endif
 
 LOG_MODULE_REGISTER(example_module_gpio, CONFIG_SYS_LOG_LEVEL);
@@ -55,7 +55,6 @@ typedef struct {
  * ============================================================================= */
 
 static example_module_gpio_cb_t g_module_gpio;
-static uint32_t                 g_subscriber_id = 0;
 
 /* =============================================================================
  * 前向声明
