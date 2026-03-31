@@ -21,7 +21,7 @@ LOG_MODULE_REGISTER(example_module_b, CONFIG_SYS_LOG_LEVEL);
  * ============================================================================= */
 
 #define EXAMPLE_MODULE_B_THREAD_PRIORITY   6
-#define EXAMPLE_MODULE_B_THREAD_STACK_SIZE 1024
+#define EXAMPLE_MODULE_B_THREAD_STACK_SIZE 2048
 
 /* Control commands */
 #define CMD_SEND_DATA                      1

@@ -221,9 +221,9 @@ int app_init(const app_config_t* config) {
 #if APP_CONFIG_ENABLE_MEMORY_MGR
     sys_mem_config_t mem_config = {.pool_sizes =
                                        {
-                                           [SYS_MEM_POOL_GENERAL] = 8192,
-                                           [SYS_MEM_POOL_EVENT] = 4096,
-                                           [SYS_MEM_POOL_MODULE] = 4096,
+                                           [SYS_MEM_POOL_GENERAL] = CONFIG_SYS_MEMORY_POOL_SIZE,
+                                           [SYS_MEM_POOL_EVENT] = CONFIG_SYS_MEMORY_POOL_SIZE / 2,
+                                           [SYS_MEM_POOL_MODULE] = CONFIG_SYS_MEMORY_POOL_SIZE / 2,
                                        },
                                    .enable_tracking = true,
                                    .enable_defrag = false,
@@ -447,7 +447,13 @@ static int app_register_modules(void) {
 #endif
 
 #if IS_ENABLED(CONFIG_EXAMPLE_MODULE_UART)
-    example_module_uart_config_t uart_cfg = {0};
+    example_module_uart_config_t uart_cfg = {
+        .device_name = CONFIG_EXAMPLE_MODULE_UART_DEVICE_NAME,
+        .baudrate = 115200,
+        .rx_buffer_size = 256,
+        .tx_buffer_size = 256,
+        .enable_interrupt = true,
+    };
 
     if (module_manager_register(example_module_uart_get_interface(), &uart_cfg, &module_id) == 0) {
         registered++;

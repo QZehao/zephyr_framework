@@ -31,7 +31,7 @@ LOG_MODULE_REGISTER(example_module_gpio, CONFIG_SYS_LOG_LEVEL);
  * ============================================================================= */
 
 #define GPIO_THREAD_PRIORITY   5
-#define GPIO_THREAD_STACK_SIZE 1024
+#define GPIO_THREAD_STACK_SIZE 2048
 
 /* =============================================================================
  * 内部数据结构

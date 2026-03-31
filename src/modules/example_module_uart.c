@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(example_module_uart, CONFIG_SYS_LOG_LEVEL);
  * ============================================================================= */
 
 #define UART_THREAD_PRIORITY   5
-#define UART_THREAD_STACK_SIZE 1024
+#define UART_THREAD_STACK_SIZE 2048
 #define UART_DEFAULT_BAUDRATE  115200
 
 /* =============================================================================
@@ -45,7 +45,7 @@ typedef struct {
     size_t               tx_count;
     size_t               rx_count;
     size_t               error_count;
-    struct k_mutex       rx_lock;
+    struct k_spinlock    rx_lock;
     struct k_mutex       tx_lock;
 } example_module_uart_cb_t;
 
@@ -88,7 +88,6 @@ int example_module_uart_init(void* config) {
     g_module_uart.tx_buffer = g_tx_buffer_static;
     g_module_uart.status = MODULE_STATUS_INITIALIZED;
 
-    k_mutex_init(&g_module_uart.rx_lock);
     k_mutex_init(&g_module_uart.tx_lock);
 
     /* 注册事件类型 */
@@ -254,9 +253,14 @@ int example_module_uart_receive(void* data, size_t len) {
     if (data == NULL || len == 0)
         return -1;
 
-    k_mutex_lock(&g_module_uart.rx_lock, K_FOREVER);
-
-    size_t available = g_module_uart.rx_head - g_module_uart.rx_tail;
+    k_spinlock_key_t key = k_spin_lock(&g_module_uart.rx_lock);
+    size_t           available = g_module_uart.rx_head - g_module_uart.rx_tail;
+    size_t           capacity = g_module_uart.config.rx_buffer_size;
+    if (available > capacity) {
+        /* 防御性修正：理论上不会出现，出现时丢弃最旧数据保证边界安全 */
+        g_module_uart.rx_tail = g_module_uart.rx_head - capacity;
+        available = capacity;
+    }
     size_t to_copy = MIN(len, available);
 
     uint8_t* rx_data = (uint8_t*) data;
@@ -267,22 +271,25 @@ int example_module_uart_receive(void* data, size_t len) {
     g_module_uart.rx_tail += to_copy;
     g_module_uart.rx_count += to_copy;
 
-    k_mutex_unlock(&g_module_uart.rx_lock);
+    k_spin_unlock(&g_module_uart.rx_lock, key);
     return (int) to_copy;
 }
 
 size_t example_module_uart_get_rx_count(void) {
-    k_mutex_lock(&g_module_uart.rx_lock, K_FOREVER);
-    size_t count = g_module_uart.rx_head - g_module_uart.rx_tail;
-    k_mutex_unlock(&g_module_uart.rx_lock);
+    k_spinlock_key_t key = k_spin_lock(&g_module_uart.rx_lock);
+    size_t           count = g_module_uart.rx_head - g_module_uart.rx_tail;
+    if (count > g_module_uart.config.rx_buffer_size) {
+        count = g_module_uart.config.rx_buffer_size;
+    }
+    k_spin_unlock(&g_module_uart.rx_lock, key);
     return count;
 }
 
 void example_module_uart_clear_rx_buffer(void) {
-    k_mutex_lock(&g_module_uart.rx_lock, K_FOREVER);
+    k_spinlock_key_t key = k_spin_lock(&g_module_uart.rx_lock);
     g_module_uart.rx_head = 0;
     g_module_uart.rx_tail = 0;
-    k_mutex_unlock(&g_module_uart.rx_lock);
+    k_spin_unlock(&g_module_uart.rx_lock, key);
 }
 
 void example_module_uart_get_stats(uint32_t* tx_count, uint32_t* rx_count, uint32_t* errors) {
@@ -333,10 +340,17 @@ static void uart_irq_callback(const struct device* dev, void* user_data) {
             uint8_t byte;
             if (uart_fifo_read(cb->dev, &byte, 1) > 0) {
                 /* 存入环形缓冲区 */
-                k_mutex_lock(&cb->rx_lock, K_FOREVER);
-                cb->rx_buffer[cb->rx_head % cb->config.rx_buffer_size] = byte;
-                cb->rx_head++;
-                k_mutex_unlock(&cb->rx_lock);
+                k_spinlock_key_t key = k_spin_lock(&cb->rx_lock);
+                size_t           cap = cb->config.rx_buffer_size;
+                if (cap > 0U) {
+                    cb->rx_buffer[cb->rx_head % cap] = byte;
+                    cb->rx_head++;
+                    if ((cb->rx_head - cb->rx_tail) > cap) {
+                        /* 缓冲区满时覆盖最旧字节，避免计数无限增长后越界语义 */
+                        cb->rx_tail = cb->rx_head - cap;
+                    }
+                }
+                k_spin_unlock(&cb->rx_lock, key);
             }
         }
 

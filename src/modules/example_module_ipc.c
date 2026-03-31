@@ -30,7 +30,7 @@ typedef struct {
 static example_module_ipc_cb_t g_mod_ipc;
 
 /** 演示线程栈：仅用于 start 后发起一次 ipc_call_sync */
-K_THREAD_STACK_DEFINE(example_module_ipc_demo_stack, 1024);
+K_THREAD_STACK_DEFINE(example_module_ipc_demo_stack, 2048);
 
 static void demo_thread_fn(void* p1, void* p2, void* p3);
 
