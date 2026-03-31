@@ -49,5 +49,7 @@ docs/api/
 
 .qwen/
 .vscode/
+.cache/
 
 release/
+copywriting/
