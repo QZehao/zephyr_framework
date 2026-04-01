@@ -6,7 +6,11 @@
 /*
  * Sample device tree overlay for zephyr_template
  *
- * This file can be used to customize the device tree for your specific board.
+ * 注意：本文件不会自动加载！仅作为示例模板。
+ * 用法：
+ *   1. 重命名为 boards/<board_name>.overlay（如 boards/nucleo_h743zi.overlay）
+ *   2. 或使用 west build -- -DDTC_OVERLAY_FILE=boards/overlay.dts 显式指定
+ *
  * GPIO 示例模块需要板级 DTS 提供 led0（必选）与 sw0（可选）等别名，勿在此引用
  * 不存在的节点标签。若你的板使用其它按键节点，可在本文件或板级 overlay 中增加：
  *   / { aliases { sw0 = &your_button; }; };
