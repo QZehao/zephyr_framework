@@ -9,14 +9,14 @@
  */
 
 #include "example_module_a.h"
-#include "app_config.h"
-#include "event_system.h"
-#include "module_manager.h"
-#include <errno.h>
-#include <string.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <errno.h>
+#include <string.h>
+#include "app_config.h"
+#include "event_system.h"
+#include "module_manager.h"
 
 LOG_MODULE_REGISTER(example_module_a, CONFIG_SYS_LOG_LEVEL);
 

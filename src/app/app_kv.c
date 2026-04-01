@@ -29,14 +29,14 @@ LOG_MODULE_REGISTER(app_kv, CONFIG_SYS_LOG_LEVEL);
 #if APP_CONFIG_ENABLE_APP_KV
 
 typedef struct {
-    char  key[APP_KV_KEY_MAX_LEN];
-    char  value[APP_KV_VALUE_MAX_LEN];
-    bool  in_use;
+    char key[APP_KV_KEY_MAX_LEN];
+    char value[APP_KV_VALUE_MAX_LEN];
+    bool in_use;
 } app_kv_slot_t;
 
 static struct k_mutex s_kv_lock;
-static app_kv_slot_t   s_kv[APP_KV_MAX_ENTRIES];
-static bool            s_kv_ready;
+static app_kv_slot_t  s_kv[APP_KV_MAX_ENTRIES];
+static bool           s_kv_ready;
 
 static int find_key_locked(const char* key) {
     for (int i = 0; i < APP_KV_MAX_ENTRIES; i++) {
@@ -354,7 +354,7 @@ int app_kv_get_int32(const char* key, int32_t* out) {
     }
     errno = 0;
     char* end = NULL;
-    long  lv  = strtol(buf, &end, 10);
+    long  lv = strtol(buf, &end, 10);
     if (end == buf || *end != '\0') {
         return APP_ERR_INVALID_PARAM;
     }
@@ -372,8 +372,8 @@ int app_kv_save(void) {
     if (!s_kv_ready) {
         return APP_ERR_INIT;
     }
-    uint8_t  blob[APP_KV_PERSIST_BLOB_MAX];
-    size_t   len = 0U;
+    uint8_t blob[APP_KV_PERSIST_BLOB_MAX];
+    size_t  len = 0U;
     k_mutex_lock(&s_kv_lock, K_FOREVER);
     int enc = kv_encode_blob_locked(blob, sizeof(blob), &len);
     k_mutex_unlock(&s_kv_lock);

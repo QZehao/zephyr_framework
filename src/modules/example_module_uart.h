@@ -35,13 +35,13 @@ typedef struct {
  * 模块接口
  * ============================================================================= */
 
-int             example_module_uart_init(void* config);
-int             example_module_uart_start(void);
-int             example_module_uart_stop(void);
-int             example_module_uart_shutdown(void);
-void            example_module_uart_on_event(const event_t* event, void* user_data);
-module_status_t example_module_uart_get_status(void);
-int             example_module_uart_control(int cmd, void* arg);
+int                       example_module_uart_init(void* config);
+int                       example_module_uart_start(void);
+int                       example_module_uart_stop(void);
+int                       example_module_uart_shutdown(void);
+void                      example_module_uart_on_event(const event_t* event, void* user_data);
+module_status_t           example_module_uart_get_status(void);
+int                       example_module_uart_control(int cmd, void* arg);
 const module_interface_t* example_module_uart_get_interface(void);
 
 /* =============================================================================

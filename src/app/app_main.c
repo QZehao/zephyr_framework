@@ -24,8 +24,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <zephyr/kernel.h>
 #include <zephyr/init.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/printk.h>
@@ -156,7 +156,7 @@ static int cmd_app_kv_get(const struct shell* shell, size_t argc, char** argv) {
         return -EINVAL;
     }
     char buf[APP_KV_VALUE_MAX_LEN];
-    int r = app_kv_get(argv[1], buf, sizeof(buf));
+    int  r = app_kv_get(argv[1], buf, sizeof(buf));
     if (r == APP_ERR_NOT_FOUND) {
         shell_print(shell, "(not found)");
         return 0;

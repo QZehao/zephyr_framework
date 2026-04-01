@@ -34,7 +34,8 @@ int app_kv_set(const char* key, const char* value);
 
 /**
  * @brief 读取键对应值，写入 out（含 NUL，至多 out_len-1 字符）
- * @return APP_OK；未找到为 APP_ERR_NOT_FOUND。value 长于 out_len-1 时仍会截断并返回 APP_OK（调用方可用更长缓冲或先估长）
+ * @return APP_OK；未找到为 APP_ERR_NOT_FOUND。value 长于 out_len-1 时仍会截断并返回
+ * APP_OK（调用方可用更长缓冲或先估长）
  */
 int app_kv_get(const char* key, char* out, size_t out_len);
 

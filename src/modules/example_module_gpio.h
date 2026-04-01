@@ -33,13 +33,13 @@ typedef struct {
  * 模块接口
  * ============================================================================= */
 
-int             example_module_gpio_init(void* config);
-int             example_module_gpio_start(void);
-int             example_module_gpio_stop(void);
-int             example_module_gpio_shutdown(void);
-void            example_module_gpio_on_event(const event_t* event, void* user_data);
-module_status_t example_module_gpio_get_status(void);
-int             example_module_gpio_control(int cmd, void* arg);
+int                       example_module_gpio_init(void* config);
+int                       example_module_gpio_start(void);
+int                       example_module_gpio_stop(void);
+int                       example_module_gpio_shutdown(void);
+void                      example_module_gpio_on_event(const event_t* event, void* user_data);
+module_status_t           example_module_gpio_get_status(void);
+int                       example_module_gpio_control(int cmd, void* arg);
 const module_interface_t* example_module_gpio_get_interface(void);
 
 /* =============================================================================

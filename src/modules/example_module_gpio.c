@@ -9,15 +9,15 @@
  */
 
 #include "example_module_gpio.h"
-#include "app_config.h"
-#include "event_system.h"
-#include "module_manager.h"
-#include <errno.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <errno.h>
+#include "app_config.h"
+#include "event_system.h"
+#include "module_manager.h"
 
 #if !DT_NODE_EXISTS(DT_ALIAS(led0))
 #error "example_module_gpio requires devicetree alias led0"

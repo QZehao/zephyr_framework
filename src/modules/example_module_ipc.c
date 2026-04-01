@@ -14,12 +14,12 @@
 #include "ipc_service_event.h"
 #endif
 
-#include <errno.h>
-#include <string.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <errno.h>
+#include <string.h>
 
 LOG_MODULE_REGISTER(example_module_ipc, CONFIG_SYS_LOG_LEVEL);
 
