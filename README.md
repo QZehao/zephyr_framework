@@ -79,7 +79,7 @@ zephyr_template/
 | 3 | **CMake**：根目录 `CMakeLists.txt` 中 `project(...)` 名称改为你的产品工程名。 |
 | 4 | **版本与说明**：按需修改 `APP_VERSION`、README 标题与产品描述。 |
 | 5 | **板型与 CI**：`prj.conf`、**`.github/workflows/ci.yml`** / **`.gitlab-ci.yml`** 中 ARM 矩阵 `board` 与目标硬件一致或按需裁剪。 |
-| 6 | **示例代码**：`src/modules/example_*` 可删除或替换；同步 `CMakeLists.txt` 与 `app_main.c` 注册逻辑。 |
+| 6 | **示例代码**：`src/modules/example_*` 可删除或替换；同步 `CMakeLists.txt`、Kconfig，以及各模块 **`.c` 的 `SYS_INIT` 注册**与 **`app_config.h` 的 `APP_INIT_PRIO_*`**。 |
 
 > **文档与 CI 的板型示例**：入门文档中可能出现 `nucleo_l4r5zi` 等示例板名；CI 当前固定为若干 Nucleo/Disco 板。**以你手头的 `BOARD` 与 CI 矩阵为准**；若遇 RAM/链接问题，见 **[docs/设备树与内存配置手册.md](docs/设备树与内存配置手册.md)**。
 
@@ -237,7 +237,7 @@ event_publish_copy(EVENT_TYPE_SENSOR_DATA, EVENT_PRIORITY_NORMAL, &data, sizeof(
 
 模块是独立的业务逻辑单元：
 - **生命周期**：init → start → run → stop → shutdown
-- **注册**：通过模块管理器动态注册
+- **注册**：通过模块管理器动态注册；主固件在 **`SYS_INIT(POST_KERNEL, APP_INIT_PRIO_*)`** 中自动注册（见 `src/app/app_config.h` 与各 `example_module_*.c`）
 - **事件处理**：自动将事件路由到订阅的模块
 - **隔离**：每个模块有自己的状态和配置
 
@@ -245,8 +245,12 @@ event_publish_copy(EVENT_TYPE_SENSOR_DATA, EVENT_PRIORITY_NORMAL, &data, sizeof(
 // 定义模块接口
 DECLARE_MODULE_INTERFACE(my_module);
 
-// 注册到模块管理器
-module_manager_register(&my_module_interface, &config, &module_id);
+// 典型：在模块 .c 内用 Zephyr 自动初始化注册（需在 app_config.h 定义 APP_INIT_PRIO_MODULE_*）
+static int my_module_auto_register(void) {
+    uint32_t id;
+    return module_manager_register(my_module_get_interface(), &config, &id) ? -EIO : 0;
+}
+SYS_INIT(my_module_auto_register, POST_KERNEL, APP_INIT_PRIO_MODULE_MINE);
 ```
 
 ### 系统服务
@@ -368,13 +372,21 @@ int my_module_start(void) {
 DECLARE_MODULE_INTERFACE(my_module);
 ```
 
-3. 在 `app_main.c` 中注册：
+3. 在 **`my_module.c`** 中用 **`SYS_INIT`** 注册（并在 **`app_config.h`** 增加 **`APP_INIT_PRIO_MODULE_MINE`**，取值在 **`APP_INIT_PRIO_MODULE_MGR`** 与 **`APP_INIT_PRIO_APP_FINAL`** 之间；若依赖其它已注册模块，优先级数值应**更大**以更晚执行）：
 
 ```c
-module_manager_register(&my_module_interface, &config, &module_id);
+#include "app_config.h"
+#include <zephyr/init.h>
+#include <errno.h>
+
+static int my_module_auto_register(void) {
+    uint32_t id;
+    return module_manager_register(&my_module_interface, &config, &id) ? -EIO : 0;
+}
+SYS_INIT(my_module_auto_register, POST_KERNEL, APP_INIT_PRIO_MODULE_MINE);
 ```
 
-多模块依赖、`depends_on` 写法与 Kconfig 开关说明见 **docs/模块系统详细使用说明.md** 中的「运行时依赖」与「配置选项」；多依赖示例源码为 `src/modules/example_module_multi_dep.c`。
+多模块依赖、`depends_on` 写法与 Kconfig 开关说明见 **docs/模块系统详细使用说明.md** 中的「应用启动与初始化顺序（Zephyr SYS_INIT）」「运行时依赖」与「配置选项」；多依赖示例源码为 `src/modules/example_module_multi_dep.c`。
 
 ## 事件流程
 

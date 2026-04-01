@@ -44,17 +44,29 @@
 
 ## 3. 初始化顺序（必读）
 
-本工程主流程（`app_main.c`）顺序为：
+### 3.1 `main()` 之前（`SYS_INIT`，`POST_KERNEL`）
+
+子系统与 **`module_manager_register()`** 在 **`main()` 前**按 **`app_config.h`** 中 **`APP_INIT_PRIO_*`** 顺序执行，包括：
 
 ```text
 event_system_init()
-module_manager_init()
-app_register_modules()          ← 此处调用各模块的 init()，可含 ipc_service_init()
+event_dispatcher_init()
 …
-app_start():
-  event_system_start()
-  module_manager_start()
-  module_manager_start_all()    ← 此处调用各模块的 start()，可含 ipc_service_start()
+module_manager_init()
+各 example_module_*.c / 业务模块内的 SYS_INIT → module_manager_register()
+  → 各模块 init()（可含 ipc_service_init()）
+app_init_finalize()
+```
+
+### 3.2 `main()` 中（`app_start()`）
+
+`app_main.c` 中 **`app_start()`** 顺序为：
+
+```text
+event_system_start()
+event_dispatcher_start()
+module_manager_start()
+module_manager_start_all()    ← 此处调用各模块的 start()，可含 ipc_service_start()
 ```
 
 因此：
@@ -95,7 +107,7 @@ typedef struct {
 
 ### 4.5 注册到 `module_manager`
 
-与其它示例模块相同，提供 **`module_interface_t`**，在 `app_register_modules()` 中 **`module_manager_register(example_xxx_get_interface(), config, &module_id)`**。
+与其它示例模块相同，提供 **`module_interface_t`**，在**本模块 `.c`** 内通过 **`SYS_INIT(..., APP_INIT_PRIO_MODULE_IPC)`** 调用 **`module_manager_register(example_xxx_get_interface(), config, &module_id)`**（见 `example_module_ipc.c`）。
 
 ---
 
@@ -109,7 +121,7 @@ typedef struct {
 | 业务函数 | `mod_ipc_service_func`：echo 输入；若启用 **`CONFIG_THREAD_IPC_SERVICE_EVENT_BRIDGE`**，则 **`thread_ipc_event_publish_result(EXAMPLE_MODULE_IPC_EVENT_SOURCE_ID, …)`** |
 | 对外调试 API | `example_module_ipc_demo_call_sync()`：模块 RUNNING 时可再次发起同步调用 |
 
-**`app_main.c`** 在 `CONFIG_EXAMPLE_MODULE_THREAD_IPC` 打开时会注册该模块。
+打开 **`CONFIG_EXAMPLE_MODULE_THREAD_IPC`** 时，**`example_module_ipc.c`** 内的 **`SYS_INIT`** 会自动注册该模块（无需改 `app_main.c`）。
 
 ---
 

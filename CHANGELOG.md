@@ -4,6 +4,9 @@
 
 ## [未发布]
 
+### 改进
+- 应用与子系统初始化改为 **`SYS_INIT(POST_KERNEL, APP_INIT_PRIO_*)`**；示例模块在各自 **`.c`** 内注册；**`app_init()`** 仅作初始化完成查询。已同步更新 **README**、**docs/模块系统详细使用说明**、**docs/开发者入门指南**、**docs/系统服务使用说明**、**docs/项目配置项说明**、**docs/Thread_IPC模块集成指南**、**docs/Zephyr应用开发与服务指南**、**docs/文档索引**、**tests/README**、**CHANGELOG**（本段）。
+
 ### 修复
 - `west.yml`：默认使用 **`https://github.com/zephyrproject-rtos/zephyr`** 与 **`v3.6.0`**（与 CI 一致），替代不可移植的本地 `file://` 路径；`scripts/build_all.sh` 在 `set -e` 下正确统计失败次数；`scripts/package_release.sh` 去掉无意义的 `cat | tr`。
 - 根目录版本文件由 `VERSION` 重命名为 `APP_VERSION`，并在 `find_package(Zephyr)` 之前解析，避免与 Zephyr `version.cmake` 对 `VERSION` 文件的解析冲突（`VERSION_MAJOR must be present`）。
