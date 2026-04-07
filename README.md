@@ -490,12 +490,14 @@ west build -t run --build-dir build_tests
 - **GPL v3**（免费）：个人学习、研究、开源项目可免费使用，但**必须开源你的衍生代码**
 - **商业许可证**（付费）：企业用户、闭源商业产品需购买许可证，可闭源商用
 
-📧 获取商业许可证：请联系项目作者
+📧 获取商业许可证：发送邮件至 [china_qzh@163.com](mailto:china_qzh@163.com)
 
 💼 企业授权价格：
   - 初创企业授权：¥2,999 起
   - 企业授权：¥19,999 起
   - OEM 授权：¥99,999 起
+
+📄 详细条款：详见 [LICENSE_COMMERCIAL.md](LICENSE_COMMERCIAL.md)
 
 > ⚠️ 违反 GPL 条款使用本代码将面临法律风险！购买商业许可证可合法闭源使用。
 
@@ -584,3 +586,4 @@ git commit -m "修复 bug"       # 未说明修复什么
 | [docs/安全与密钥管理说明.md](docs/安全与密钥管理说明.md) | 密钥、Secret、OTA 签名注意 |
 | [tests/README.md](tests/README.md) | 单元测试（详细） |
 | [LICENSE](LICENSE) | GPL v3 全文 |
+| [LICENSE_COMMERCIAL.md](LICENSE_COMMERCIAL.md) | 商业许可证条款 |
