@@ -1,7 +1,7 @@
 #
-# Copyright (c) 2024 Your Name
+# Copyright (c) 2026
 #
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0
 #
 
 zephyr_library()

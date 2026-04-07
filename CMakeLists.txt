@@ -1,6 +1,6 @@
 # Zephyr Event-Driven Project Template
 # Copyright (c) 2026
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0
 #
 # This is a freestanding Zephyr application (application and Zephyr are in separate directories)
 # See: https://docs.zephyrproject.org/latest/application/index.html#zephyr-freestanding-app

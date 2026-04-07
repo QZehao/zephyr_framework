@@ -481,7 +481,23 @@ west build -t run --build-dir build_tests
 
 ## 许可证
 
-本项目采用 Apache License 2.0 许可证 - 详见 LICENSE 文件。
+本项目采用 **GNU General Public License v3.0 (GPL-3.0)** - 详见 LICENSE 文件。
+
+### 双许可证模式
+
+本项目采用**双许可证**模式：
+
+- **GPL v3**（免费）：个人学习、研究、开源项目可免费使用，但**必须开源你的衍生代码**
+- **商业许可证**（付费）：企业用户、闭源商业产品需购买许可证，可闭源商用
+
+📧 获取商业许可证：请联系项目作者
+
+💼 企业授权价格：
+  - 初创企业授权：¥2,999 起
+  - 企业授权：¥19,999 起
+  - OEM 授权：¥99,999 起
+
+> ⚠️ 违反 GPL 条款使用本代码将面临法律风险！购买商业许可证可合法闭源使用。
 
 ## 贡献
 
@@ -567,4 +583,4 @@ git commit -m "修复 bug"       # 未说明修复什么
 | [docs/参与贡献与代码规范.md](docs/参与贡献与代码规范.md) | PR、代码风格与 CI |
 | [docs/安全与密钥管理说明.md](docs/安全与密钥管理说明.md) | 密钥、Secret、OTA 签名注意 |
 | [tests/README.md](tests/README.md) | 单元测试（详细） |
-| [LICENSE](LICENSE) | Apache 2.0 全文 |
+| [LICENSE](LICENSE) | GPL v3 全文 |

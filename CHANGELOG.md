@@ -107,4 +107,4 @@
 
 ## 许可证
 
-本项目采用 Apache License 2.0 许可证。
+本项目采用 GNU General Public License v3.0 (GPL-3.0) 许可证。

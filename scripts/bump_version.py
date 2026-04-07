@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0
 """同步语义化版本到 APP_VERSION、Doxyfile、README（CMake 从 APP_VERSION 读取）。
 
 勿使用根目录文件名 VERSION：会与 Zephyr find_package 的内核版本解析冲突。
