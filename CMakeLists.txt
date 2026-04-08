@@ -292,6 +292,7 @@ if(CONFIG_MESH_COMMUNICATION)
     # 添加子模块源文件
     target_sources(app PRIVATE
         src/proprietary/mesh_communication/src/mesh_transport.c
+        src/proprietary/mesh_communication/src/mesh_communication_register.c
     )
     target_include_directories(app PRIVATE
         ${CMAKE_SOURCE_DIR}/src/proprietary/mesh_communication/include
@@ -299,8 +300,19 @@ if(CONFIG_MESH_COMMUNICATION)
     message(STATUS "Proprietary Module: Mesh Communication v2.0.0 enabled")
 endif()
 
+# Event System Pro Module (商业模块)
+if(CONFIG_EVENT_SYSTEM_PRO)
+    target_sources(app PRIVATE
+        src/proprietary/event_system_pro/src/event_system_pro.c
+    )
+    target_include_directories(app PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/proprietary/event_system_pro/include
+    )
+    message(STATUS "Proprietary Module: Event System Pro v1.0.0 enabled")
+endif()
+
 # 后续商业模块在此添加
-# if(CONFIG_EVENT_SYSTEM_PRO)
+# if(CONFIG_SECURITY_CRYPTO)
 #     target_sources(app PRIVATE ...)
 #     target_include_directories(app PRIVATE ...)
 # endif()
