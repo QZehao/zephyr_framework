@@ -355,6 +355,17 @@ if(CONFIG_CELLULAR_5G_USB)
     message(STATUS "Proprietary Module: Cellular 5G USB CDC ECM v1.0.0 enabled")
 endif()
 
+# USB Host CDC ECM Module (商业模块)
+if(CONFIG_CELLULAR_USB_HOST_CDC_ECM)
+    target_sources(app PRIVATE
+        src/proprietary/usb_host_cdc_ecm/src/usb_host_cdc_ecm.c
+    )
+    target_include_directories(app PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/proprietary/usb_host_cdc_ecm/include
+    )
+    message(STATUS "Proprietary Module: USB Host CDC ECM v1.0.0 enabled")
+endif()
+
 # 后续商业模块在此添加
 # if(CONFIG_CLOUD_CONNECTOR)
 #     target_sources(app PRIVATE ...)

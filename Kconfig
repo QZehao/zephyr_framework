@@ -230,6 +230,7 @@ source "src/proprietary/module_manager_pro/Kconfig"
 source "src/proprietary/security_crypto/Kconfig"
 source "src/proprietary/ota_manager/Kconfig"
 source "src/proprietary/cellular_5g_usb/Kconfig"
+source "src/proprietary/usb_host_cdc_ecm/Kconfig"
 
 # 后续商业模块 Kconfig 在此添加
 # source "src/proprietary/cloud_connector/Kconfig"
