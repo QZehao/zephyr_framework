@@ -333,8 +333,19 @@ if(CONFIG_SECURITY_CRYPTO)
     message(STATUS "Proprietary Module: Security Crypto v1.0.0 enabled")
 endif()
 
+# OTA Manager Module (商业模块)
+if(CONFIG_OTA_MANAGER)
+    target_sources(app PRIVATE
+        src/proprietary/ota_manager/src/ota_manager.c
+    )
+    target_include_directories(app PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/proprietary/ota_manager/include
+    )
+    message(STATUS "Proprietary Module: OTA Manager v1.0.0 enabled")
+endif()
+
 # 后续商业模块在此添加
-# if(CONFIG_OTA_MANAGER)
+# if(CONFIG_CLOUD_CONNECTOR)
 #     target_sources(app PRIVATE ...)
 #     target_include_directories(app PRIVATE ...)
 # endif()
