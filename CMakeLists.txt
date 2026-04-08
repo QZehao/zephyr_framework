@@ -344,6 +344,17 @@ if(CONFIG_OTA_MANAGER)
     message(STATUS "Proprietary Module: OTA Manager v1.0.0 enabled")
 endif()
 
+# Cellular 5G USB CDC ECM Module (商业模块)
+if(CONFIG_CELLULAR_5G_USB)
+    target_sources(app PRIVATE
+        src/proprietary/cellular_5g_usb/src/cellular_5g_usb.c
+    )
+    target_include_directories(app PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/proprietary/cellular_5g_usb/include
+    )
+    message(STATUS "Proprietary Module: Cellular 5G USB CDC ECM v1.0.0 enabled")
+endif()
+
 # 后续商业模块在此添加
 # if(CONFIG_CLOUD_CONNECTOR)
 #     target_sources(app PRIVATE ...)
