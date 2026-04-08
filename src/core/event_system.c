@@ -322,7 +322,12 @@ event_status_t event_subscribe(event_type_t type, event_callback_t callback, voi
                 *subscriber_id = entry->subscribers[i].subscriber_id;
             }
 
+            /* SIL-2: 防止订阅者 ID 溢出 */
             g_event_system.next_subscriber_id++;
+            if (g_event_system.next_subscriber_id == 0) {
+                g_event_system.next_subscriber_id = 1;
+                LOG_WRN("Subscriber ID wrapped around, resetting to 1");
+            }
 
             k_mutex_unlock(&entry->lock);
             LOG_DBG("Subscriber %d registered for event type %d", entry->subscribers[i].subscriber_id, type);
@@ -484,14 +489,18 @@ event_status_t event_publish_copy(event_type_t type, event_priority_t priority, 
      * k_msgq_put 会复制 event_t；队列中的副本仍然指向堆上的 event->data。
      * 只释放事件外壳；数据负载由队列中的消息拥有。
      */
-    if (status == EVENT_OK) {
-        if (event->data != NULL && event->is_dynamic) {
-            event->data = NULL;
-            event->is_dynamic = false;
-        }
+    if (event->data != NULL && event->is_dynamic) {
+        /* SIL-2: 无论发布成功与否，都要确保不重复释放数据 */
+        event->data = NULL;
+        event->is_dynamic = false;
+    }
+    
+    if (status != EVENT_OK) {
+        /* SIL-2: 发布失败时释放事件外壳 */
         event_free(event);
     } else {
-        event_free(event);
+        /* SIL-2: 发布成功，数据所有权已转移，只释放外壳 */
+        k_free(event);
     }
 
     return status;
@@ -510,6 +519,12 @@ event_status_t event_publish_copy(event_type_t type, event_priority_t priority, 
  */
 event_t* event_create(event_type_t type, event_priority_t priority) {
     if (!g_event_system.initialized) {
+        return NULL;
+    }
+
+    /* SIL-2: 验证参数范围 */
+    if (type >= MAX_EVENT_TYPES) {
+        LOG_ERR("Invalid event type: %d", type);
         return NULL;
     }
 
@@ -538,8 +553,15 @@ event_t* event_create(event_type_t type, event_priority_t priority) {
  * @return 指向新事件的指针，失败返回 NULL
  */
 event_t* event_create_with_data(event_type_t type, event_priority_t priority, const void* data, size_t data_len) {
+    /* SIL-2: 验证参数 */
     if (data == NULL || data_len == 0) {
         return event_create(type, priority);
+    }
+
+    /* SIL-2: 验证数据长度合理性 */
+    if (data_len > 65535) { /* 64KB 限制 */
+        LOG_ERR("Event data length %zu exceeds maximum allowed", data_len);
+        return NULL;
     }
 
     event_t* event = event_create(type, priority);
@@ -549,8 +571,8 @@ event_t* event_create_with_data(event_type_t type, event_priority_t priority, co
 
     event->data = k_malloc(data_len);
     if (event->data == NULL) {
+        LOG_ERR("Failed to allocate event data of size %zu", data_len);
         k_free(event);
-        LOG_ERR("Failed to allocate event data");
         return NULL;
     }
 
@@ -570,9 +592,13 @@ void event_free(event_t* event) {
         return;
     }
 
+    /* SIL-2: 防止重复释放 */
     if (event->is_dynamic && event->data != NULL) {
         k_free(event->data);
+        event->data = NULL;
+        event->is_dynamic = false;
     }
+    
     k_free(event);
 }
 
@@ -694,9 +720,14 @@ event_status_t event_notify_subscribers(const event_t* event) {
 
     k_mutex_unlock(&entry->lock);
 
-    /* 在锁外调用所有回调 */
+    /* SIL-2: 在锁外调用所有回调，添加空指针检查 */
     for (uint32_t i = 0; i < n; i++) {
-        snap[i].cb(event, snap[i].ud);
+        if (snap[i].cb != NULL) {
+            snap[i].cb(event, snap[i].ud);
+        } else {
+            /* SIL-2: 防御性编程，不应该发生 */
+            LOG_ERR("NULL callback in subscriber snapshot at index %u", i);
+        }
     }
 
     k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);

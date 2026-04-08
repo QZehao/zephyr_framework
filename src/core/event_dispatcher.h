@@ -36,6 +36,45 @@ extern "C" {
 #endif
 
 /* =============================================================================
+ * 配置验证宏 (Configuration Validation Macros)
+ * ============================================================================= */
+
+/** 最小合理栈大小 (256 字节) */
+#ifndef EVENT_DISPATCHER_MIN_STACK_SIZE
+#define EVENT_DISPATCHER_MIN_STACK_SIZE 256U
+#endif
+
+/** 最大合理栈大小 (64 KB) */
+#ifndef EVENT_DISPATCHER_MAX_STACK_SIZE
+#define EVENT_DISPATCHER_MAX_STACK_SIZE 65536U
+#endif
+
+/** 最小优先级 (Zephyr: 数值越大优先级越低) */
+#ifndef EVENT_DISPATCHER_MIN_PRIORITY
+#define EVENT_DISPATCHER_MIN_PRIORITY 0
+#endif
+
+/** 最大优先级 */
+#ifndef EVENT_DISPATCHER_MAX_PRIORITY
+#define EVENT_DISPATCHER_MAX_PRIORITY 15
+#endif
+
+/** 每个周期最大处理事件数上限 */
+#ifndef EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE
+#define EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE 10000U
+#endif
+
+/** 线程超时退出的最大等待时间 (毫秒) */
+#ifndef EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS
+#define EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS 500U
+#endif
+
+/** PAUSED 状态下休眠时间 (毫秒) */
+#ifndef EVENT_DISPATCHER_PAUSE_SLEEP_MS
+#define EVENT_DISPATCHER_PAUSE_SLEEP_MS 10U
+#endif
+
+/* =============================================================================
  * 类型定义 (Type Definitions)
  * ============================================================================= */
 

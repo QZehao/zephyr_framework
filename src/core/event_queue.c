@@ -52,6 +52,20 @@ static event_queue_cb_t g_queue_cb[CONFIG_EVENT_QUEUE_SIZE > 256 ? 2 : 1];
  */
 static event_t g_drop_lowest_scratch[CONFIG_EVENT_QUEUE_SIZE];
 
+/**
+ * @brief 验证事件有效性
+ */
+static bool event_is_valid(const event_t* event) {
+    if (event == NULL) {
+        return false;
+    }
+    /* SIL-2: 验证事件类型范围 */
+    if (event->type >= 256) {
+        return false;
+    }
+    return true;
+}
+
 static void event_free_queued_payload(event_t* ev) {
     if (ev->is_dynamic && ev->data != NULL) {
         k_free(ev->data);
@@ -67,6 +81,12 @@ static event_status_t enqueue_drop_lowest(struct k_msgq* queue, const event_t* e
                                           event_queue_cb_t* cb) {
     if (k_is_in_isr()) {
         LOG_WRN("QUEUE_OVERFLOW_DROP_LOWEST is not supported from ISR");
+        return EVENT_ERR_INVALID_ARG;
+    }
+
+    /* SIL-2: 验证输入事件有效性 */
+    if (!event_is_valid(event)) {
+        LOG_ERR("Invalid event in enqueue_drop_lowest");
         return EVENT_ERR_INVALID_ARG;
     }
 
@@ -269,6 +289,12 @@ event_status_t event_queue_enqueue(struct k_msgq* queue, const event_t* event, q
 
     msgq_get_attrs_const(queue, &qattrs);
 
+    /* SIL-2: 验证事件类型有效性 */
+    if (event->type >= 256) {
+        LOG_ERR("Invalid event type in enqueue: %d", event->type);
+        return EVENT_ERR_INVALID_ARG;
+    }
+
     /* 检查队列是否已满（用 msgq 属性，避免未调用 event_queue_init 时 capacity 为 0） */
     if (qattrs.used_msgs >= qattrs.max_msgs) {
         k_mutex_lock(&cb->stats_lock, K_FOREVER);
@@ -284,8 +310,14 @@ event_status_t event_queue_enqueue(struct k_msgq* queue, const event_t* event, q
             return enqueue_drop_lowest(queue, event, timeout, cb);
 
         case QUEUE_OVERFLOW_BLOCK:
-            /* 阻塞等待 */
+            /* SIL-2: 阻塞等待，添加日志 */
+            LOG_DBG("Queue full, blocking until space available");
             break;
+        
+        default:
+            /* SIL-2: 防御性编程，处理未知策略 */
+            LOG_ERR("Unknown overflow policy: %d", policy);
+            return EVENT_ERR_INVALID_ARG;
         }
     }
 

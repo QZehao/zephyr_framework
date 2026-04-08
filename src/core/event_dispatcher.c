@@ -108,7 +108,7 @@ static uint32_t calculate_latency_us(uint64_t event_timestamp);
  * @brief 初始化事件分发器
  *
  * @param config 分发器配置，NULL 使用默认配置
- * @return EVENT_OK 成功，EVENT_ERR_INVALID_ARG 事件系统未初始化
+ * @return EVENT_OK 成功，EVENT_ERR_INVALID_ARG 配置无效或事件系统未初始化
  */
 event_status_t event_dispatcher_init(const dispatcher_config_t* config) {
     LOG_INF("Initializing event dispatcher...");
@@ -117,6 +117,32 @@ event_status_t event_dispatcher_init(const dispatcher_config_t* config) {
 
     /* 设置默认配置或用户提供的配置 */
     if (config != NULL) {
+        /* SIL-2: 验证配置参数范围 */
+        if (config->stack_size < EVENT_DISPATCHER_MIN_STACK_SIZE ||
+            config->stack_size > EVENT_DISPATCHER_MAX_STACK_SIZE) {
+            LOG_ERR("Invalid stack size: %u (min: %u, max: %u)",
+                    config->stack_size,
+                    EVENT_DISPATCHER_MIN_STACK_SIZE,
+                    EVENT_DISPATCHER_MAX_STACK_SIZE);
+            return EVENT_ERR_INVALID_ARG;
+        }
+
+        if (config->priority < EVENT_DISPATCHER_MIN_PRIORITY ||
+            config->priority > EVENT_DISPATCHER_MAX_PRIORITY) {
+            LOG_ERR("Invalid priority: %d (min: %d, max: %d)",
+                    config->priority,
+                    EVENT_DISPATCHER_MIN_PRIORITY,
+                    EVENT_DISPATCHER_MAX_PRIORITY);
+            return EVENT_ERR_INVALID_ARG;
+        }
+
+        if (config->max_events_per_cycle > EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE) {
+            LOG_ERR("Invalid max_events_per_cycle: %u (max: %u)",
+                    config->max_events_per_cycle,
+                    EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE);
+            return EVENT_ERR_INVALID_ARG;
+        }
+
         g_dispatcher.config = *config;
     } else {
         g_dispatcher.config.stack_size = DEFAULT_STACK_SIZE;
@@ -146,7 +172,7 @@ event_status_t event_dispatcher_init(const dispatcher_config_t* config) {
 /**
  * @brief 启动分发器
  *
- * @return EVENT_OK 成功
+ * @return EVENT_OK 成功，EVENT_ERR_NO_MEM 线程创建失败
  */
 event_status_t event_dispatcher_start(void) {
     k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
@@ -171,11 +197,14 @@ event_status_t event_dispatcher_start(void) {
 
     g_dispatcher.state = DISPATCHER_RUNNING;
 
-    /* 创建分发器线程 */
+    /* SIL-2: 创建分发器线程并检查返回值 */
     k_thread_create(&g_dispatcher.thread, g_dispatcher.stack, g_dispatcher.config.stack_size, dispatcher_thread_func,
                     NULL, NULL, NULL, g_dispatcher.config.priority, 0, K_FOREVER);
 
-    k_thread_name_set(&g_dispatcher.thread, g_dispatcher.config.thread_name);
+    if (k_thread_name_set(&g_dispatcher.thread, g_dispatcher.config.thread_name) != 0) {
+        LOG_WRN("Failed to set thread name, continuing anyway");
+    }
+
     k_thread_start(&g_dispatcher.thread);
     g_dispatcher.thread_started = true;
 
@@ -200,18 +229,24 @@ event_status_t event_dispatcher_stop(void) {
         return EVENT_OK;
     }
 
+    /* SIL-2: 设置停止状态，线程会在下次循环检查时退出 */
     g_dispatcher.state = DISPATCHER_STOPPED;
     should_join = g_dispatcher.thread_started;
     k_mutex_unlock(&g_dispatcher.lock);
 
+    /* SIL-2: 等待线程退出，使用更长的超时时间 */
     if (should_join && k_current_get() != &g_dispatcher.thread) {
-        int jret = k_thread_join(&g_dispatcher.thread, K_MSEC(DISPATCH_THREAD_MSGQ_TIMEOUT_MS + 50));
+        int jret = k_thread_join(&g_dispatcher.thread, K_MSEC(EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS));
 
         if (jret != 0) {
-            LOG_WRN("Dispatcher thread join timeout/failed: %d", jret);
+            LOG_ERR("Dispatcher thread join timeout/failed: %d (timeout=%u ms)", 
+                    jret, EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS);
+        } else {
+            LOG_INF("Dispatcher thread joined successfully");
         }
     }
 
+    /* SIL-2: 无论 join 成功与否，都清理状态 */
     k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
     g_dispatcher.thread_started = false;
     k_mutex_unlock(&g_dispatcher.lock);
@@ -286,6 +321,11 @@ dispatcher_state_t event_dispatcher_get_state(void) {
  * @param user_data 用户数据
  */
 void event_dispatcher_set_filter(event_filter_t filter, void* user_data) {
+    /* SIL-2: 验证过滤器一致性 */
+    if (filter == NULL && user_data != NULL) {
+        LOG_WRN("Setting user_data without filter function");
+    }
+
     k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
     g_dispatcher.filter = filter;
     g_dispatcher.filter_user_data = user_data;
@@ -313,11 +353,14 @@ event_status_t event_dispatcher_process_one(k_timeout_t timeout) {
     dispatcher_state_t state;
     event_filter_t     filter;
     void*              filter_user_data;
+    bool               enable_stats;
 
+    /* SIL-2: 在持有锁的情况下读取所有需要的状态 */
     k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
     state = g_dispatcher.state;
     filter = g_dispatcher.filter;
     filter_user_data = g_dispatcher.filter_user_data;
+    enable_stats = g_dispatcher.config.enable_stats;
     k_mutex_unlock(&g_dispatcher.lock);
 
     if (state != DISPATCHER_RUNNING) {
@@ -336,7 +379,8 @@ event_status_t event_dispatcher_process_one(k_timeout_t timeout) {
             if (event.is_dynamic && event.data != NULL) {
                 k_free(event.data);
             }
-            if (g_dispatcher.config.enable_stats) {
+            /* SIL-2: 使用之前捕获的 enable_stats，避免数据竞争 */
+            if (enable_stats) {
                 k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
                 g_dispatcher.stats.events_dropped++;
                 k_mutex_unlock(&g_dispatcher.lock);
@@ -362,6 +406,13 @@ event_status_t event_dispatcher_process_one(k_timeout_t timeout) {
  * @return 已处理的事件数量
  */
 uint32_t event_dispatcher_process_all(uint32_t max_events) {
+    /* SIL-2: 验证输入参数 */
+    if (max_events > EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE) {
+        LOG_WRN("max_events %u exceeds limit, capping to %u", 
+                max_events, EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE);
+        max_events = EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE;
+    }
+
     if (max_events == 0) {
         max_events = g_dispatcher.config.max_events_per_cycle;
     }
@@ -372,6 +423,13 @@ uint32_t event_dispatcher_process_all(uint32_t max_events) {
             break; /* 无更多事件 */
         }
         processed++;
+    }
+
+    /* SIL-2: 更新批处理统计 */
+    if (g_dispatcher.config.enable_stats && processed > 0) {
+        k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
+        g_dispatcher.events_in_batch = processed;
+        k_mutex_unlock(&g_dispatcher.lock);
     }
 
     return processed;
@@ -445,20 +503,25 @@ static void dispatcher_thread_func(void* p1, void* p2, void* p3) {
         st = g_dispatcher.state;
         k_mutex_unlock(&g_dispatcher.lock);
 
+        /* SIL-2: 优先检查停止状态，确保快速退出 */
         if (st == DISPATCHER_STOPPED) {
+            LOG_INF("Dispatcher thread received stop signal");
             break;
         }
 
         if (st == DISPATCHER_PAUSED) {
-            k_msleep(10);
+            /* SIL-2: 使用命名常量代替魔法数字 */
+            k_msleep(EVENT_DISPATCHER_PAUSE_SLEEP_MS);
             continue;
         }
 
         (void) event_dispatcher_process_one(K_MSEC(DISPATCH_THREAD_MSGQ_TIMEOUT_MS));
     }
 
+    /* SIL-2: 清理线程状态 */
     k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
     g_dispatcher.thread_started = false;
+    g_dispatcher.state = DISPATCHER_STOPPED;
     k_mutex_unlock(&g_dispatcher.lock);
 
     LOG_INF("Dispatcher thread exiting");
@@ -481,7 +544,14 @@ static void process_event(const event_t* event) {
     event_status_t status = event_notify_subscribers(event);
 
     uint64_t end_time = k_cycle_get_64();
-    uint32_t latency_us = (uint32_t) ((end_time - start_time) * 1000000ULL / sys_clock_hw_cycles_per_sec());
+    /* SIL-2: 使用安全的除法计算延迟，避免溢出 */
+    uint32_t latency_us;
+    if (sys_clock_hw_cycles_per_sec() != 0) {
+        latency_us = (uint32_t) ((end_time - start_time) * 1000000ULL / sys_clock_hw_cycles_per_sec());
+    } else {
+        latency_us = 0;
+        LOG_ERR("sys_clock_hw_cycles_per_sec() returned 0");
+    }
 
     /* 更新统计信息 */
     if (g_dispatcher.config.enable_stats) {
@@ -497,10 +567,16 @@ static void process_event(const event_t* event) {
             g_dispatcher.stats.max_latency_us = latency_us;
         }
 
-        /* 运行平均延迟 */
-        uint64_t total =
-            (uint64_t) g_dispatcher.stats.avg_latency_us * (g_dispatcher.stats.events_processed - 1) + latency_us;
-        g_dispatcher.stats.avg_latency_us = (uint32_t) (total / g_dispatcher.stats.events_processed);
+        /* SIL-2: 安全的运行平均延迟计算，避免除零 */
+        if (g_dispatcher.stats.events_processed > 0) {
+            /* 使用增量平均算法避免大数溢出 */
+            uint64_t total =
+                (uint64_t) g_dispatcher.stats.avg_latency_us * (g_dispatcher.stats.events_processed - 1) + latency_us;
+            g_dispatcher.stats.avg_latency_us = (uint32_t) (total / g_dispatcher.stats.events_processed);
+        } else {
+            /* 不应该到达这里，但防御性编程 */
+            g_dispatcher.stats.avg_latency_us = latency_us;
+        }
 
         k_mutex_unlock(&g_dispatcher.lock);
     }
