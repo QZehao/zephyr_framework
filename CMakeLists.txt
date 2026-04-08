@@ -322,8 +322,19 @@ if(CONFIG_MODULE_MANAGER_PRO)
     message(STATUS "Proprietary Module: Module Manager Pro v1.0.0 enabled")
 endif()
 
+# Security Crypto Module (商业模块)
+if(CONFIG_SECURITY_CRYPTO)
+    target_sources(app PRIVATE
+        src/proprietary/security_crypto/src/security_crypto.c
+    )
+    target_include_directories(app PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/proprietary/security_crypto/include
+    )
+    message(STATUS "Proprietary Module: Security Crypto v1.0.0 enabled")
+endif()
+
 # 后续商业模块在此添加
-# if(CONFIG_SECURITY_CRYPTO)
+# if(CONFIG_OTA_MANAGER)
 #     target_sources(app PRIVATE ...)
 #     target_include_directories(app PRIVATE ...)
 # endif()
