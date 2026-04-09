@@ -6,6 +6,8 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/build/zephyr/include/generated/zephyr/",
                 "D:/Code/1-github-code/zephyrproject/zephyr/include",
+                "D:/Code/1-github-code/zephyrproject/zephyr/include/zephyr",
+                "D:/Code/1-github-code/zephyrproject/zephyr/modules",
                 "D:/Code/3-Project/zephyr_template/build/zephyr/include/generated",
                 "build/zephyr/include/generated/zephyr"
             ],
@@ -16,7 +18,10 @@
                 "STM32F373xC",
                 "USE_FULL_LL_DRIVER",
                 "USE_HAL_DRIVER",
-                "ULOG_ENABLED"
+                "ULOG_ENABLED",
+                "CONFIG_ZEPHYR=1",
+                "CONFIG_USB_HOST_STACK=1",
+                "CONFIG_UHC_DRIVER=1"
             ],
             "compilerPath": "C:/MyApp/mingw64//bin/gcc.exe",
             "cStandard": "c17",
