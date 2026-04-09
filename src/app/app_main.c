@@ -20,7 +20,10 @@
 #include "app_version.h"
 #include "event_dispatcher.h"
 #include "event_system.h"
+#include "event_system_compat.h"
+#include "module_base.h"
 #include "module_manager.h"
+#include "module_manager_compat.h"
 #include "sys_log.h"
 #include "sys_memory.h"
 #include "sys_timer.h"
@@ -276,11 +279,10 @@ static int cmd_app_status(const struct shell* shell, size_t argc, char** argv) {
 
 static int cmd_app_modules(const struct shell* shell, size_t argc, char** argv) {
     shell_print(shell, "Registered Modules:");
-    module_manager_dump_info();
+    module_compat_dump_info();
 
-    /* Get and print module stats */
-    module_mgr_stats_t stats;
-    module_manager_get_stats(&stats);
+    module_compat_stats_t stats;
+    module_compat_get_stats(&stats);
     shell_print(shell, "Module Statistics:");
     shell_print(shell, "  Total: %d", stats.total_modules);
     shell_print(shell, "  Active: %d", stats.active_modules);
@@ -290,13 +292,13 @@ static int cmd_app_modules(const struct shell* shell, size_t argc, char** argv) 
 }
 
 static int cmd_app_events(const struct shell* shell, size_t argc, char** argv) {
-    uint32_t total_events, queue_depth, dropped_events;
-    event_get_statistics(&total_events, &queue_depth, &dropped_events);
+    event_compat_stats_t stats;
+    event_compat_get_statistics(&stats);
 
     shell_print(shell, "Event System Statistics:");
-    shell_print(shell, "  Total Events: %d", total_events);
-    shell_print(shell, "  Queue Depth: %d", queue_depth);
-    shell_print(shell, "  Dropped: %d", dropped_events);
+    shell_print(shell, "  Total Events: %d", stats.total_events);
+    shell_print(shell, "  Queue Depth: %d", stats.queue_depth);
+    shell_print(shell, "  Dropped: %d", stats.dropped_events);
 
 #if APP_CONFIG_ENABLE_STATS
     dispatcher_stats_t dstats;
@@ -437,7 +439,10 @@ static int app_init_sys_mem(void) {
 }
 
 static int app_init_event_system_step(void) {
-    event_system_init();
+    if (event_compat_init(NULL) != 0) {
+        LOG_ERR("event_compat_init failed");
+        return -EIO;
+    }
     LOG_INF("Event system initialized");
     return 0;
 }
@@ -477,7 +482,10 @@ static int app_init_sys_wdt_step(void) {
 }
 
 static int app_init_module_mgr_step(void) {
-    module_manager_init();
+    if (module_compat_init(NULL) != 0) {
+        LOG_ERR("module_compat_init failed");
+        return -EIO;
+    }
     LOG_INF("Module manager initialized");
     return 0;
 }
@@ -513,21 +521,27 @@ int app_start(void) {
     LOG_INF("Starting application...");
 
     /* Start event system */
-    event_system_start();
+    if (event_compat_start() != 0) {
+        LOG_ERR("event_compat_start failed");
+        return APP_ERR_INIT;
+    }
 
     /* Start event dispatcher thread (single consumer for event queue) */
     if (event_dispatcher_start() != EVENT_OK) {
         LOG_ERR("event_dispatcher_start failed");
-        (void) event_system_stop();
+        (void) event_compat_stop();
         return APP_ERR_INIT;
     }
     LOG_INF("Event dispatcher started");
 
     /* Start module manager */
-    module_manager_start();
+    if (module_compat_start() != 0) {
+        LOG_ERR("module_compat_start failed");
+        return APP_ERR_INIT;
+    }
 
     /* Start all registered modules */
-    int started = module_manager_start_all();
+    int started = module_compat_start_all();
     LOG_INF("Started %d modules", started);
 
     /* Start watchdog */
@@ -566,7 +580,7 @@ int app_stop(void) {
     g_app.running = false;
 
     /* Stop all modules */
-    module_manager_stop_all();
+    module_compat_stop_all();
 
     /* Stop event dispatcher before event system */
     if (event_dispatcher_stop() != EVENT_OK) {
@@ -576,7 +590,9 @@ int app_stop(void) {
     }
 
     /* Stop event system */
-    event_system_stop();
+    if (event_compat_stop() != 0) {
+        LOG_ERR("event_compat_stop failed");
+    }
 
     /* Stop watchdog */
     sys_wdt_stop();

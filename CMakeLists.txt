@@ -188,6 +188,8 @@ target_sources(app PRIVATE
     src/core/event_queue.h
     src/core/event_dispatcher.c
     src/core/event_dispatcher.h
+    src/core/event_system_compat.c
+    src/core/event_system_compat.h
 )
 
 # System Services
@@ -218,6 +220,8 @@ target_sources(app PRIVATE
     src/modules/module_manager.c
     src/modules/module_manager.h
     src/modules/module_base.h
+    src/modules/module_manager_compat.c
+    src/modules/module_manager_compat.h
     # Example modules
     src/modules/example_module_a.c
     src/modules/example_module_a.h

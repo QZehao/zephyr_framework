@@ -43,7 +43,7 @@ LOG_MODULE_REGISTER(sys_watchdog, CONFIG_SYS_LOG_LEVEL);
 
 /** 线程名称最大长度 */
 #ifndef SYS_WDT_THREAD_NAME_MAX_LEN
-#define SYS_WDT_THREAD_NAME_MAX_LEN (sizeof(thread_monitor_t::name) - 1)
+#define SYS_WDT_THREAD_NAME_MAX_LEN 31U
 #endif
 
 /* =============================================================================
@@ -72,6 +72,10 @@ typedef struct {
     uint32_t last_alive_time;
     bool     is_monitored;
 } thread_monitor_t;
+
+/* 验证宏与结构体定义一致 */
+BUILD_ASSERT(SYS_WDT_THREAD_NAME_MAX_LEN == (sizeof(((thread_monitor_t*)0)->name) - 1),
+             "SYS_WDT_THREAD_NAME_MAX_LEN mismatch");
 
 typedef struct {
     wdt_status_t    status;
