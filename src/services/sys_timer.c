@@ -310,9 +310,35 @@ int sys_timer_restart(sys_timer_handle_t timer) {
         return -EINVAL;
     }
 
-    sys_timer_stop(timer);
-    /* SIL-2: 使用命名常量替代魔法数字 */
+    /* SIL-2: 先停止定时器并等待线程退出 */
+    int ret = sys_timer_stop(timer);
+    if (ret != 0 && ret != -EALREADY) {
+        return ret;
+    }
+
+    /* SIL-2: 等待监控线程完全退出,避免竞态 */
+    k_mutex_lock(&g_sys_timer.lock, K_FOREVER);
+    bool thread_was_started = timer->thread_started;
+    k_mutex_unlock(&g_sys_timer.lock);
+
+    if (thread_was_started) {
+        ret = k_thread_join(&timer->thread, K_MSEC(SYS_TIMER_THREAD_JOIN_TIMEOUT_MS));
+        if (ret != 0) {
+            LOG_ERR("Timer restart: thread join timeout (%d), aborting", ret);
+            k_mutex_lock(&g_sys_timer.lock, K_FOREVER);
+            k_thread_abort(&timer->thread);
+            timer->thread_started = false;
+            k_mutex_unlock(&g_sys_timer.lock);
+        } else {
+            k_mutex_lock(&g_sys_timer.lock, K_FOREVER);
+            timer->thread_started = false;
+            k_mutex_unlock(&g_sys_timer.lock);
+        }
+    }
+
+    /* SIL-2: 短暂等待确保线程资源完全释放 */
     k_msleep(SYS_TIMER_RESTART_WAIT_MS);
+
     return sys_timer_start(timer);
 }
 
@@ -504,7 +530,8 @@ static void timer_thread_func(void* p1, void* p2, void* p3) {
 
     while (timer->status == SYS_TIMER_RUNNING) {
         /* Wait for trigger or timeout */
-        uint32_t wait_time = timer->next_fire_time - k_uptime_get_32();
+        uint32_t now = k_uptime_get_32();
+        uint32_t wait_time = (timer->next_fire_time > now) ? (timer->next_fire_time - now) : 0;
 
         if (wait_time > 0) {
             k_sem_take(&timer->sem, K_MSEC(wait_time));
@@ -516,10 +543,14 @@ static void timer_thread_func(void* p1, void* p2, void* p3) {
         }
 
         /* Check if it's time to fire */
-        uint32_t now = k_uptime_get_32();
+        now = k_uptime_get_32();
         if (now >= timer->next_fire_time) {
-            /* SIL-2: 计算实际延迟 (微秒) */
-            uint32_t latency_us = 0;
+            /* SIL-2: 计算实际延迟 (微秒) - 测量回调执行前后的时间差 */
+            uint32_t fire_time_actual = now;
+            uint32_t scheduled_time = timer->next_fire_time;
+            uint32_t latency_us = (fire_time_actual >= scheduled_time)
+                                      ? ((fire_time_actual - scheduled_time) * 1000U)
+                                      : 0;
 
             /* Call callback */
             if (timer->config.callback != NULL) {
@@ -530,23 +561,29 @@ static void timer_thread_func(void* p1, void* p2, void* p3) {
             timer->fire_count++;
             timer->last_fire_time = now;
 
-            /* SIL-2: 防止除零 */
-            if (timer->fire_count > 0) {
+            /* SIL-2: 更新延迟统计 (防止除零) */
+            if (timer->fire_count == 1U) {
+                timer->avg_latency_us = latency_us;
+                timer->max_latency_us = latency_us;
+            } else {
                 if (latency_us > timer->max_latency_us) {
                     timer->max_latency_us = latency_us;
                 }
 
-                /* 计算运行平均延迟 */
+                /* SIL-2: 计算运行平均延迟 (使用增量平均算法) */
                 uint64_t total = (uint64_t) timer->avg_latency_us * (timer->fire_count - 1) + latency_us;
                 timer->avg_latency_us = (uint32_t) (total / timer->fire_count);
-            } else {
-                timer->avg_latency_us = latency_us;
-                timer->max_latency_us = latency_us;
             }
 
             /* Calculate next fire time */
             if (timer->config.mode == SYS_TIMER_PERIODIC) {
-                timer->next_fire_time = now + timer->config.period_ms;
+                /* SIL-2: 使用基准时间避免漂移累积 */
+                timer->next_fire_time = scheduled_time + timer->config.period_ms;
+                /* 如果已经落后超过一个周期,调整到下一个周期 */
+                if (now >= timer->next_fire_time) {
+                    uint32_t periods_behind = (now - scheduled_time) / timer->config.period_ms;
+                    timer->next_fire_time = scheduled_time + (periods_behind + 1) * timer->config.period_ms;
+                }
             } else {
                 timer->status = SYS_TIMER_EXPIRED;
                 break;

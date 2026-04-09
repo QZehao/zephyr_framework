@@ -208,7 +208,7 @@ int sys_wdt_feed(void) {
 
     if (g_wdt.status != WDT_STATUS_RUNNING && g_wdt.status != WDT_STATUS_PAUSED) {
         k_mutex_unlock(&g_wdt.lock);
-        return -1;
+        return -EPERM;
     }
 
     wdt_feed_internal();
@@ -222,7 +222,7 @@ int sys_wdt_pause(void) {
 
     if (g_wdt.status != WDT_STATUS_RUNNING) {
         k_mutex_unlock(&g_wdt.lock);
-        return -1;
+        return -EPERM;
     }
 
     g_wdt.status = WDT_STATUS_PAUSED;
@@ -237,7 +237,7 @@ int sys_wdt_resume(void) {
 
     if (g_wdt.status != WDT_STATUS_PAUSED) {
         k_mutex_unlock(&g_wdt.lock);
-        return -1;
+        return -EPERM;
     }
 
     g_wdt.status = WDT_STATUS_RUNNING;
@@ -326,7 +326,7 @@ int sys_wdt_unmonitor_thread(k_tid_t thread_id) {
 
 int sys_wdt_thread_alive(k_tid_t thread_id) {
     if (thread_id == NULL) {
-        return -1;
+        return -EINVAL;
     }
 
     k_mutex_lock(&g_wdt.lock, K_FOREVER);
@@ -340,7 +340,7 @@ int sys_wdt_thread_alive(k_tid_t thread_id) {
     }
 
     k_mutex_unlock(&g_wdt.lock);
-    return -1; /* Thread not being monitored */
+    return -ENOENT; /* Thread not being monitored */
 }
 
 /* =============================================================================
@@ -364,19 +364,25 @@ void sys_wdt_reset_stats(void) {
 }
 
 uint32_t sys_wdt_get_time_since_feed(void) {
+    k_mutex_lock(&g_wdt.lock, K_FOREVER);
     uint32_t now = k_uptime_get_32();
-    return now - g_wdt.last_feed_time;
+    uint32_t elapsed = now - g_wdt.last_feed_time;
+    k_mutex_unlock(&g_wdt.lock);
+    return elapsed;
 }
 
 uint32_t sys_wdt_get_time_until_expire(void) {
+    k_mutex_lock(&g_wdt.lock, K_FOREVER);
     uint32_t now = k_uptime_get_32();
     uint32_t elapsed = now - g_wdt.last_feed_time;
+    uint32_t timeout = g_wdt.config.timeout_ms;
+    k_mutex_unlock(&g_wdt.lock);
 
-    if (elapsed >= g_wdt.config.timeout_ms) {
+    if (elapsed >= timeout) {
         return 0;
     }
 
-    return g_wdt.config.timeout_ms - elapsed;
+    return timeout - elapsed;
 }
 
 void sys_wdt_simulate_expire(void) {
@@ -399,9 +405,19 @@ static void wdt_monitor_thread(void* p1, void* p2, void* p3) {
         uint32_t now = k_uptime_get_32();
         uint32_t time_since_feed = now - g_wdt.last_feed_time;
 
-        /* Check if watchdog needs feeding */
-        if (time_since_feed >= g_wdt.config.timeout_ms - g_wdt.config.feed_margin_ms) {
-            LOG_WRN("Watchdog timeout warning: %dms since last feed", time_since_feed);
+        /* SIL-2: 计算安全喂狗窗口
+         * 喂狗条件: 已过一半超时时间 且 距离超时还有至少feed_margin_ms
+         * 避免过早喂狗(掩盖故障)或过晚喂狗(导致复位)
+         */
+        uint32_t feed_threshold = g_wdt.config.timeout_ms / 2;
+        uint32_t expire_threshold = (g_wdt.config.timeout_ms > g_wdt.config.feed_margin_ms)
+                                        ? (g_wdt.config.timeout_ms - g_wdt.config.feed_margin_ms)
+                                        : g_wdt.config.timeout_ms;
+
+        /* SIL-2: 检查是否即将超时,触发预警 */
+        if (time_since_feed >= expire_threshold) {
+            LOG_ERR("Watchdog critical: %ums since last feed (expire at %ums)", time_since_feed,
+                    g_wdt.config.timeout_ms);
 
             k_mutex_lock(&g_wdt.lock, K_FOREVER);
             g_wdt.stats.warning_count++;
@@ -411,6 +427,18 @@ static void wdt_monitor_thread(void* p1, void* p2, void* p3) {
             if (g_wdt.config.pre_expire_callback != NULL) {
                 g_wdt.config.pre_expire_callback(g_wdt.config.callback_user_data);
             }
+
+            /* SIL-2: 在安全窗口内立即喂狗 */
+            if (time_since_feed < g_wdt.config.timeout_ms) {
+                wdt_feed_internal();
+            } else {
+                /* SIL-2: 已超时,触发过期处理 */
+                wdt_expire_handler();
+                break;
+            }
+        } else if (time_since_feed >= feed_threshold) {
+            /* SIL-2: 正常喂狗窗口,安全喂狗 */
+            wdt_feed_internal();
         }
 
         /* Check monitored threads */
@@ -421,7 +449,7 @@ static void wdt_monitor_thread(void* p1, void* p2, void* p3) {
 
             uint32_t idle_time = now - g_wdt.threads[i].last_alive_time;
             if (idle_time > g_wdt.threads[i].max_idle_ms) {
-                LOG_ERR("Thread '%s' appears stuck: idle for %dms (max: %dms)", g_wdt.threads[i].name, idle_time,
+                LOG_ERR("Thread '%s' appears stuck: idle for %ums (max: %ums)", g_wdt.threads[i].name, idle_time,
                         g_wdt.threads[i].max_idle_ms);
 
                 k_mutex_lock(&g_wdt.lock, K_FOREVER);
@@ -430,13 +458,8 @@ static void wdt_monitor_thread(void* p1, void* p2, void* p3) {
             }
         }
 
-        /* Feed the watchdog periodically */
-        if (time_since_feed >= g_wdt.config.timeout_ms / 2) {
-            wdt_feed_internal();
-        }
-
-        /* Sleep for a short period */
-        k_msleep(100);
+        /* Sleep for monitoring interval */
+        k_msleep(SYS_WDT_MONITOR_INTERVAL_MS);
     }
 
     LOG_INF("Watchdog monitor thread stopped");
@@ -455,14 +478,24 @@ static void wdt_feed_internal(void) {
 
     g_wdt.stats.last_feed_time_ms = now;
 
+    int ret = -ENODEV;
 #ifdef CONFIG_WDT
+    /* SIL-2: 检查硬件喂狗是否成功 */
     if (g_wdt.wdt_dev != NULL && g_wdt.wdt_channel >= 0) {
-        /* Feed hardware watchdog */
-        wdt_feed(g_wdt.wdt_dev, g_wdt.wdt_channel);
+        ret = wdt_feed(g_wdt.wdt_dev, g_wdt.wdt_channel);
+        if (ret != 0) {
+            LOG_ERR("Hardware watchdog feed failed: %d", ret);
+            k_mutex_lock(&g_wdt.lock, K_FOREVER);
+            g_wdt.status = WDT_STATUS_ERROR;
+            g_wdt.stats.warning_count++;
+            k_mutex_unlock(&g_wdt.lock);
+        }
     }
+#else
+    ARG_UNUSED(ret);
 #endif
 
-    LOG_DBG("Watchdog fed (interval: %dms)", interval);
+    LOG_DBG("Watchdog fed (interval: %ums)", interval);
 }
 
 static void wdt_expire_handler(void) {
@@ -473,8 +506,17 @@ static void wdt_expire_handler(void) {
     g_wdt.status = WDT_STATUS_EXPIRED;
     k_mutex_unlock(&g_wdt.lock);
 
+    /* SIL-2: 如果配置了复位,必须执行系统复位
+     * 这是安全关键功能,不可被注释或禁用
+     */
     if (g_wdt.config.reset_on_expire) {
-        LOG_ERR("System reset triggered by watchdog");
-        /* In real implementation: sys_reboot(SYS_REBOOT_COLD_START) */
+        LOG_ERR("Executing system reset via watchdog");
+        /* SIL-2: 在最终产品中使用实际复位调用 */
+#if defined(CONFIG_SYS_WATCHDOG_FORCE_RESET)
+        sys_reboot(SYS_REBOOT_COLD_START);
+#else
+        /* 开发阶段: 仅记录,不实际复位 */
+        LOG_WRN("SYS_WATCHDOG_FORCE_RESET not enabled, reset skipped (development mode)");
+#endif
     }
 }

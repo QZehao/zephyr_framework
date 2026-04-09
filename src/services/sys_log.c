@@ -81,6 +81,8 @@ typedef struct {
     struct k_mutex   lock;
     sys_log_level_t  module_levels[16]; /* Per-module levels */
     bool             destinations_enabled[4];
+    char             module_names[16][SYS_LOG_MAX_MODULE_NAME_LEN]; /* SIL-2: 存储模块名称副本 */
+    uint32_t         module_name_count;
 } sys_log_cb_t;
 
 /* =============================================================================
@@ -151,7 +153,16 @@ static void add_entry(sys_log_level_t level, const char* module, const char* msg
 
     entry->timestamp = timestamp;
     entry->level = level;
-    entry->module = module;
+
+    /* SIL-2: 安全复制模块名称,避免悬垂指针 */
+    if (module != NULL) {
+        size_t mod_len = strnlen(module, SYS_LOG_MAX_MODULE_NAME_LEN - 1);
+        memcpy(entry->module_name, module, mod_len);
+        entry->module_name[mod_len] = '\0';
+    } else {
+        entry->module_name[0] = '\0';
+    }
+
     strncpy(entry->message, msg, SYS_LOG_MSG_MAX_LEN - 1);
     entry->message[SYS_LOG_MSG_MAX_LEN - 1] = '\0';
 
@@ -176,13 +187,14 @@ static void output_to_printk(sys_log_level_t level, const char* module, const ch
 
     const char* color = level_to_color(level);
     const char* reset = g_sys_log.config.enable_colors ? COLOR_RESET : "";
+    const char* mod_str = (module != NULL) ? module : "N/A";
 
     if (g_sys_log.config.enable_timestamp) {
         printk("%s[%08d]%s ", color, timestamp, reset);
     }
 
-    if (g_sys_log.config.enable_module_name && module != NULL) {
-        printk("%s[%s]%s ", color, module, reset);
+    if (g_sys_log.config.enable_module_name) {
+        printk("%s[%s]%s ", color, mod_str, reset);
     }
 
     printk("%s%s%s\n", color, msg, reset);
@@ -197,7 +209,8 @@ static void output_to_rtt(sys_log_level_t level, const char* module, const char*
     }
 
     char buf[SYS_LOG_MSG_MAX_LEN + 96];
-    int  n = snprintf(buf, sizeof(buf), "[%08u][%s] %s\n", timestamp, module != NULL ? module : "-", msg);
+    int  n = snprintf(buf, sizeof(buf), "[%08u][%s] %s\n", timestamp,
+                      (module != NULL) ? module : "-", msg);
     if (n > 0) {
         SEGGER_RTT_Write(0, buf, (unsigned) MIN((size_t) n, sizeof(buf)));
     }
@@ -424,6 +437,8 @@ void sys_log_dump(sys_log_level_t level_filter) {
 
     sys_log_entry_t entries[32];
     uint32_t        retrieved;
+    uint32_t        max_iterations = (MAX_LOG_ENTRIES + 31) / 32; /* SIL-2: 防止无限循环 */
+    uint32_t        iterations = 0;
 
     printk("\n=== Log Dump (min level: %d) ===\n", level_filter);
 
@@ -432,10 +447,15 @@ void sys_log_dump(sys_log_level_t level_filter) {
         for (uint32_t i = 0; i < retrieved; i++) {
             if (entries[i].level >= level_filter) {
                 printk("[%08d][%s][%s] %s\n", entries[i].timestamp, level_to_string(entries[i].level),
-                       entries[i].module != NULL ? entries[i].module : "N/A", entries[i].message);
+                       (entries[i].module_name[0] != '\0') ? entries[i].module_name : "N/A", entries[i].message);
             }
         }
-    } while (retrieved == 32);
+        iterations++;
+    } while (retrieved == 32 && iterations < max_iterations); /* SIL-2: 添加循环保护 */
+
+    if (iterations >= max_iterations) {
+        printk("... (truncated after %u iterations)\n", max_iterations);
+    }
 
     printk("=== End Log Dump ===\n\n");
 }

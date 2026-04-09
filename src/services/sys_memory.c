@@ -193,13 +193,25 @@ static mem_pool_t* lock_pool_from_ptr(void* ptr, alloc_header_t** header_out) {
 
     k_mutex_lock(&pool->lock, K_FOREVER);
 
-    /* 再次验证指针是否在池内（锁内确保一致性） */
+    /* SIL-2: 再次验证指针是否在池内（锁内确保一致性） */
     if (!ptr_in_pool(pool, ptr)) {
         k_mutex_unlock(&pool->lock);
         return NULL;
     }
 
+    /* SIL-2: 确保指针距离池起始位置至少有头部大小
+     * 防止 ptr 指向池起始位置,导致 header 计算到池外
+     */
+    uintptr_t ptr_offset = (uintptr_t) ptr - (uintptr_t) pool->buffer;
+    if (ptr_offset < sizeof(alloc_header_t)) {
+        LOG_ERR("Pointer too close to pool start: offset=%zu < header=%zu", (size_t)ptr_offset, sizeof(alloc_header_t));
+        k_mutex_unlock(&pool->lock);
+        return NULL;
+    }
+
     alloc_header_t* header = get_alloc_header(ptr);
+
+    /* SIL-2: 验证 header 也在池内 */
     if (!ptr_in_pool(pool, header)) {
         k_mutex_unlock(&pool->lock);
         return NULL;
@@ -346,6 +358,13 @@ static void* pool_alloc_locked(mem_pool_t* pool, size_t req_size, bool zero, con
         return NULL;
     }
 
+    /* SIL-2: 验证分配不会超出池边界 */
+    if (total_needed > pool->total_size) {
+        LOG_ERR("Requested size %zu exceeds pool size %zu", total_needed, pool->total_size);
+        pool->fail_count++;
+        return NULL;
+    }
+
     /* 查找第一个足够大的空闲块 */
     free_block_t* prev = NULL;
     free_block_t* curr = pool->free_list;
@@ -379,6 +398,14 @@ static void* pool_alloc_locked(mem_pool_t* pool, size_t req_size, bool zero, con
             prev->next = curr->next;
         }
         /* 此时 block_start 仍是原块起始地址 */
+    }
+
+    /* SIL-2: 最终边界检查 - 确保分配块不超出池 */
+    if ((block_start + total_needed) > (pool->buffer + pool->total_size)) {
+        LOG_ERR("Allocation would exceed pool boundary: %p + %zu > %p", block_start, total_needed,
+                pool->buffer + pool->total_size);
+        pool->fail_count++;
+        return NULL;
     }
 
     /* 初始化分配头部 */
@@ -808,8 +835,14 @@ size_t sys_mem_defrag(sys_mem_pool_type_t type) {
 
     size_t reclaimed = 0;
 
-    /* 如果没有任何活跃分配，重置空闲链表为一个完整块 */
-    if (pool->alloc_count == pool->free_count) {
+    /* SIL-2: 使用活跃分配计数而非总计数,防止误判
+     * 只有当前没有活跃分配时才能安全重置整个池
+     */
+    uint32_t active_allocs = (pool->alloc_count >= pool->free_count)
+                                 ? (pool->alloc_count - pool->free_count)
+                                 : 0;
+
+    if (active_allocs == 0) {
         reclaimed = pool->used_size;
         pool->free_list = (free_block_t*) pool->buffer;
         pool->free_list->next = NULL;
@@ -817,8 +850,10 @@ size_t sys_mem_defrag(sys_mem_pool_type_t type) {
         pool->used_size = 0;
         pool->max_used = pool->used_size; /* 重置峰值 */
     } else {
-        /* 否则，只合并相邻空闲块（已经由释放时合并，但可以再次确保） */
+        /* SIL-2: 仅合并相邻空闲块,不影响活跃分配 */
         coalesce_free_blocks(pool);
+        /* 计算合并后回收的空间 */
+        reclaimed = 0; /* 碎片整理不释放内存,只优化布局 */
     }
 
     k_mutex_unlock(&pool->lock);

@@ -59,7 +59,7 @@ typedef uint32_t sys_log_dest_mask_t;
 typedef struct {
     uint32_t        timestamp;
     sys_log_level_t level;
-    const char*     module;
+    char            module_name[32]; /* SIL-2: 存储模块名称副本而非指针 */
     char            message[SYS_LOG_MSG_MAX_LEN];
 } sys_log_entry_t;
 
