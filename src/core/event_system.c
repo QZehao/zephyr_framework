@@ -494,7 +494,7 @@ event_status_t event_publish_copy(event_type_t type, event_priority_t priority, 
         event->data = NULL;
         event->is_dynamic = false;
     }
-    
+
     if (status != EVENT_OK) {
         /* SIL-2: 发布失败时释放事件外壳 */
         event_free(event);
@@ -598,7 +598,7 @@ void event_free(event_t* event) {
         event->data = NULL;
         event->is_dynamic = false;
     }
-    
+
     k_free(event);
 }
 

@@ -256,7 +256,7 @@ int sys_wdt_monitor_thread(k_tid_t thread_id, const char* thread_name, uint32_t 
     if (thread_id == NULL || max_idle_ms == 0) {
         return -EINVAL;
     }
-    
+
     /* SIL-2: 验证max_idle_ms合理性 */
     if (max_idle_ms < SYS_WDT_MONITOR_INTERVAL_MS) {
         LOG_ERR("max_idle_ms %u too small (min: %u)", max_idle_ms, SYS_WDT_MONITOR_INTERVAL_MS);

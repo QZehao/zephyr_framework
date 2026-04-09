@@ -74,7 +74,7 @@ static atomic_t s_request_id_counter = ATOMIC_INIT(1);
  * @brief 生成唯一的请求 ID
  *
  * @return 非零的请求 ID
- * 
+ *
  * @note SIL-2: 添加溢出保护，计数器达到上限时回绕到 1
  */
 ipc_request_id_t ipc_generate_request_id(void) {
@@ -83,17 +83,17 @@ ipc_request_id_t ipc_generate_request_id(void) {
 
     do {
         old_val = (ipc_request_id_t) atomic_get(&s_request_id_counter);
-        
+
         /* SIL-2: 防止计数器溢出 */
         if (old_val == UINT32_MAX) {
             atomic_set(&s_request_id_counter, 1);
             LOG_WRN("Request ID counter wrapped around");
             return 1U;
         }
-        
+
         id = (ipc_request_id_t) atomic_inc(&s_request_id_counter);
     } while (id == 0U);
-    
+
     return id;
 }
 
@@ -281,7 +281,7 @@ static void service_thread_func(void* p1, void* p2, void* p3) {
             k_mutex_lock(&service->state_lock, K_FOREVER);
             bool should_exit = service->shutdown;
             k_mutex_unlock(&service->state_lock);
-            
+
             if (should_exit) {
                 LOG_INF("Worker thread exiting on shutdown signal");
                 break;
@@ -293,7 +293,7 @@ static void service_thread_func(void* p1, void* p2, void* p3) {
         k_mutex_lock(&service->state_lock, K_FOREVER);
         bool should_exit = service->shutdown;
         k_mutex_unlock(&service->state_lock);
-        
+
         if (should_exit) {
             LOG_INF("Worker thread detected shutdown after receiving request");
             break;
@@ -365,7 +365,7 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
             k_mutex_lock(&service->state_lock, K_FOREVER);
             bool should_exit = service->shutdown;
             k_mutex_unlock(&service->state_lock);
-            
+
             if (should_exit) {
                 LOG_INF("Dispatcher thread exiting on shutdown signal");
                 break;
@@ -377,7 +377,7 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
         k_mutex_lock(&service->state_lock, K_FOREVER);
         bool should_exit = service->shutdown;
         k_mutex_unlock(&service->state_lock);
-        
+
         if (should_exit) {
             LOG_INF("Dispatcher thread detected shutdown");
             break;
@@ -554,7 +554,7 @@ int ipc_service_stop(ipc_service_t* service) {
         k_mutex_unlock(&service->state_lock);
         return 0;
     }
-    
+
     /* SIL-2: 设置 shutdown 标志 */
     service->shutdown = true;
     k_mutex_unlock(&service->state_lock);
@@ -590,8 +590,7 @@ int ipc_service_stop(ipc_service_t* service) {
     for (int i = 0; i < CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS; i++) {
         if (service->pending_requests[i].in_use) {
             /* 唤醒 SYNC 模式的等待者 */
-            if (service->pending_requests[i].future == NULL && 
-                service->pending_requests[i].callback == NULL) {
+            if (service->pending_requests[i].future == NULL && service->pending_requests[i].callback == NULL) {
                 service->pending_requests[i].result = -ECANCELED;
                 k_sem_give(&service->pending_requests[i].response_sem);
             }
@@ -600,8 +599,7 @@ int ipc_service_stop(ipc_service_t* service) {
     }
     k_mutex_unlock(&service->pending_lock);
 
-    LOG_INF("IPC service '%s' stopped (worker_ret=%d, dispatcher_ret=%d)", 
-            service->name, ret1, ret2);
+    LOG_INF("IPC service '%s' stopped (worker_ret=%d, dispatcher_ret=%d)", service->name, ret1, ret2);
 
     return 0;
 }

@@ -710,7 +710,7 @@ int module_manager_stop(void) {
  */
 int module_manager_shutdown(void) {
     int (*shutdown_fn[CONFIG_MAX_MODULES])(void);
-    bool need_shutdown[CONFIG_MAX_MODULES];
+    bool     need_shutdown[CONFIG_MAX_MODULES];
     uint32_t shutdown_count = 0;
 
     LOG_INF("Shutting down module manager...");
@@ -749,7 +749,7 @@ int module_manager_shutdown(void) {
     if (shutdown_count > 0) {
         LOG_INF("Calling shutdown for %u modules", shutdown_count);
     }
-    
+
     for (int i = 0; i < CONFIG_MAX_MODULES; i++) {
         if (need_shutdown[i] && shutdown_fn[i] != NULL) {
             int ret = shutdown_fn[i]();
@@ -795,24 +795,24 @@ int module_manager_register(const module_interface_t* interface, void* config, u
         LOG_ERR("Module manager not initialized");
         return -EINVAL;
     }
-    
+
     if (interface == NULL) {
         LOG_ERR("NULL interface pointer");
         return -EINVAL;
     }
-    
+
     /* SIL-2: 验证模块名称有效性 */
     if (interface->name == NULL || interface->name[0] == '\0') {
         LOG_ERR("Module name is NULL or empty");
         return -EINVAL;
     }
-    
+
     /* SIL-2: 验证必需的回调函数 */
     if (interface->init == NULL) {
         LOG_ERR("Module '%s' missing required init function", interface->name);
         return -EINVAL;
     }
-    
+
     /* SIL-2: 验证模块数量未超限 */
     k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
     if (g_module_mgr.module_count >= CONFIG_MAX_MODULES) {
@@ -820,12 +820,11 @@ int module_manager_register(const module_interface_t* interface, void* config, u
         LOG_ERR("Maximum module count (%d) reached", CONFIG_MAX_MODULES);
         return -ENOMEM;
     }
-    
+
     /* SIL-2: 检查是否已注册同名模块 */
     for (int i = 0; i < CONFIG_MAX_MODULES; i++) {
         if (g_module_mgr.modules[i].status != MODULE_STATUS_UNINITIALIZED &&
-            g_module_mgr.modules[i].interface != NULL &&
-            g_module_mgr.modules[i].interface->name != NULL &&
+            g_module_mgr.modules[i].interface != NULL && g_module_mgr.modules[i].interface->name != NULL &&
             strcmp(g_module_mgr.modules[i].interface->name, interface->name) == 0) {
             k_mutex_unlock(&g_module_mgr.lock);
             LOG_WRN("Module '%s' already registered", interface->name);
@@ -861,7 +860,7 @@ int module_manager_register(const module_interface_t* interface, void* config, u
     if (module_id != NULL) {
         *module_id = info->id;
     }
-    
+
     /* SIL-2: 验证模块 ID 未溢出 */
     if (g_module_mgr.next_module_id == 0U) {
         LOG_WRN("Module ID counter wrapped around");

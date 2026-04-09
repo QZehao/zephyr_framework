@@ -218,18 +218,18 @@ int sys_timer_delete(sys_timer_handle_t timer) {
     if (timer->status == SYS_TIMER_RUNNING || timer->status == SYS_TIMER_PAUSED) {
         timer->status = SYS_TIMER_STOPPED;
         k_sem_give(&timer->sem); /* Wake up thread */
-        
+
         /* SIL-2: 给线程时间退出，避免强制终止 */
         k_mutex_unlock(&g_sys_timer.lock);
-        
+
         int ret = k_thread_join(&timer->thread, K_MSEC(SYS_TIMER_THREAD_JOIN_TIMEOUT_MS));
         if (ret != 0) {
             LOG_ERR("Timer thread join timeout (%d), aborting", ret);
             k_thread_abort(&timer->thread);
         }
-        
+
         k_mutex_lock(&g_sys_timer.lock, K_FOREVER);
-        
+
         /* 重新验证timer有效性 */
         if (!timer->is_allocated || timer->magic != TIMER_MAGIC) {
             k_mutex_unlock(&g_sys_timer.lock);
@@ -309,7 +309,7 @@ int sys_timer_restart(sys_timer_handle_t timer) {
     if (timer == NULL) {
         return -EINVAL;
     }
-    
+
     sys_timer_stop(timer);
     /* SIL-2: 使用命名常量替代魔法数字 */
     k_msleep(SYS_TIMER_RESTART_WAIT_MS);
@@ -368,7 +368,7 @@ int sys_timer_set_period(sys_timer_handle_t timer, uint32_t period_ms) {
     if (timer == NULL || period_ms == 0) {
         return -EINVAL;
     }
-    
+
     if (period_ms < SYS_TIMER_MIN_DELAY_MS) {
         LOG_WRN("Period %u ms below minimum %u ms", period_ms, SYS_TIMER_MIN_DELAY_MS);
         return -EINVAL;
@@ -520,7 +520,7 @@ static void timer_thread_func(void* p1, void* p2, void* p3) {
         if (now >= timer->next_fire_time) {
             /* SIL-2: 计算实际延迟 (微秒) */
             uint32_t latency_us = 0;
-            
+
             /* Call callback */
             if (timer->config.callback != NULL) {
                 timer->config.callback(timer, timer->config.user_data);
@@ -535,7 +535,7 @@ static void timer_thread_func(void* p1, void* p2, void* p3) {
                 if (latency_us > timer->max_latency_us) {
                     timer->max_latency_us = latency_us;
                 }
-                
+
                 /* 计算运行平均延迟 */
                 uint64_t total = (uint64_t) timer->avg_latency_us * (timer->fire_count - 1) + latency_us;
                 timer->avg_latency_us = (uint32_t) (total / timer->fire_count);

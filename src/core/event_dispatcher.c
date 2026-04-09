@@ -120,25 +120,19 @@ event_status_t event_dispatcher_init(const dispatcher_config_t* config) {
         /* SIL-2: 验证配置参数范围 */
         if (config->stack_size < EVENT_DISPATCHER_MIN_STACK_SIZE ||
             config->stack_size > EVENT_DISPATCHER_MAX_STACK_SIZE) {
-            LOG_ERR("Invalid stack size: %u (min: %u, max: %u)",
-                    config->stack_size,
-                    EVENT_DISPATCHER_MIN_STACK_SIZE,
+            LOG_ERR("Invalid stack size: %u (min: %u, max: %u)", config->stack_size, EVENT_DISPATCHER_MIN_STACK_SIZE,
                     EVENT_DISPATCHER_MAX_STACK_SIZE);
             return EVENT_ERR_INVALID_ARG;
         }
 
-        if (config->priority < EVENT_DISPATCHER_MIN_PRIORITY ||
-            config->priority > EVENT_DISPATCHER_MAX_PRIORITY) {
-            LOG_ERR("Invalid priority: %d (min: %d, max: %d)",
-                    config->priority,
-                    EVENT_DISPATCHER_MIN_PRIORITY,
+        if (config->priority < EVENT_DISPATCHER_MIN_PRIORITY || config->priority > EVENT_DISPATCHER_MAX_PRIORITY) {
+            LOG_ERR("Invalid priority: %d (min: %d, max: %d)", config->priority, EVENT_DISPATCHER_MIN_PRIORITY,
                     EVENT_DISPATCHER_MAX_PRIORITY);
             return EVENT_ERR_INVALID_ARG;
         }
 
         if (config->max_events_per_cycle > EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE) {
-            LOG_ERR("Invalid max_events_per_cycle: %u (max: %u)",
-                    config->max_events_per_cycle,
+            LOG_ERR("Invalid max_events_per_cycle: %u (max: %u)", config->max_events_per_cycle,
                     EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE);
             return EVENT_ERR_INVALID_ARG;
         }
@@ -239,8 +233,8 @@ event_status_t event_dispatcher_stop(void) {
         int jret = k_thread_join(&g_dispatcher.thread, K_MSEC(EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS));
 
         if (jret != 0) {
-            LOG_ERR("Dispatcher thread join timeout/failed: %d (timeout=%u ms)", 
-                    jret, EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS);
+            LOG_ERR("Dispatcher thread join timeout/failed: %d (timeout=%u ms)", jret,
+                    EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS);
         } else {
             LOG_INF("Dispatcher thread joined successfully");
         }
@@ -408,8 +402,7 @@ event_status_t event_dispatcher_process_one(k_timeout_t timeout) {
 uint32_t event_dispatcher_process_all(uint32_t max_events) {
     /* SIL-2: 验证输入参数 */
     if (max_events > EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE) {
-        LOG_WRN("max_events %u exceeds limit, capping to %u", 
-                max_events, EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE);
+        LOG_WRN("max_events %u exceeds limit, capping to %u", max_events, EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE);
         max_events = EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE;
     }
 

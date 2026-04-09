@@ -229,8 +229,7 @@ int sys_log_init(const sys_log_config_t* config) {
     /* Set default config */
     if (config != NULL) {
         /* SIL-2: 验证配置参数 */
-        if (config->memory_buffer_size > 0 && 
-            config->memory_buffer_size < sizeof(sys_log_entry_t)) {
+        if (config->memory_buffer_size > 0 && config->memory_buffer_size < sizeof(sys_log_entry_t)) {
             LOG_ERR("Invalid memory_buffer_size: %u", config->memory_buffer_size);
             return -EINVAL;
         }
@@ -246,8 +245,8 @@ int sys_log_init(const sys_log_config_t* config) {
 
     /* SIL-2: 验证MAX_LOG_ENTRIES合理性 */
     if (MAX_LOG_ENTRIES < SYS_LOG_MIN_BUFFER_SIZE || MAX_LOG_ENTRIES > SYS_LOG_MAX_BUFFER_SIZE) {
-        LOG_WRN("MAX_LOG_ENTRIES %u outside reasonable range [%u, %u]",
-                MAX_LOG_ENTRIES, SYS_LOG_MIN_BUFFER_SIZE, SYS_LOG_MAX_BUFFER_SIZE);
+        LOG_WRN("MAX_LOG_ENTRIES %u outside reasonable range [%u, %u]", MAX_LOG_ENTRIES, SYS_LOG_MIN_BUFFER_SIZE,
+                SYS_LOG_MAX_BUFFER_SIZE);
     }
 
     /* Initialize buffer */

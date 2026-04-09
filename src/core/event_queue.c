@@ -313,7 +313,7 @@ event_status_t event_queue_enqueue(struct k_msgq* queue, const event_t* event, q
             /* SIL-2: 阻塞等待，添加日志 */
             LOG_DBG("Queue full, blocking until space available");
             break;
-        
+
         default:
             /* SIL-2: 防御性编程，处理未知策略 */
             LOG_ERR("Unknown overflow policy: %d", policy);
