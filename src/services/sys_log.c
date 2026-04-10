@@ -459,3 +459,25 @@ void sys_log_dump(sys_log_level_t level_filter) {
 
     printk("=== End Log Dump ===\n\n");
 }
+
+/* =============================================================================
+ * SYS_INIT 自动初始化
+ * ============================================================================= */
+
+#include "app_config.h"
+
+static int sys_log_auto_init(void) {
+#if APP_CONFIG_ENABLE_LOGGING
+    sys_log_config_t log_config = {.default_level = (sys_log_level_t) CONFIG_SYS_LOG_LEVEL,
+                                   .destinations = SYS_LOG_DEST_CONSOLE | SYS_LOG_DEST_MEMORY,
+                                   .enable_timestamp = true,
+                                   .enable_colors = true,
+                                   .enable_module_name = true,
+                                   .memory_buffer_size = CONFIG_SYS_MEMORY_POOL_SIZE};
+    sys_log_init(&log_config);
+    LOG_INF("System log initialized");
+#endif
+    return 0;
+}
+
+SYS_INIT(sys_log_auto_init, POST_KERNEL, APP_INIT_PRIO_SYS_LOG);

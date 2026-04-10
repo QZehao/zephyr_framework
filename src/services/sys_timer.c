@@ -593,3 +593,19 @@ static void timer_thread_func(void* p1, void* p2, void* p3) {
 
     LOG_DBG("Timer thread stopped");
 }
+
+/* =============================================================================
+ * SYS_INIT 自动初始化
+ * ============================================================================= */
+
+#include "app_config.h"
+
+static int sys_timer_auto_init(void) {
+#if APP_CONFIG_ENABLE_TIMER_SVC
+    sys_timer_init();
+    LOG_INF("Timer service initialized");
+#endif
+    return 0;
+}
+
+SYS_INIT(sys_timer_auto_init, POST_KERNEL, APP_INIT_PRIO_SYS_TIMER);

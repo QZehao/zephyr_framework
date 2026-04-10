@@ -188,6 +188,7 @@ target_sources(app PRIVATE
     src/core/event_queue.h
     src/core/event_dispatcher.c
     src/core/event_dispatcher.h
+    src/core/event_dispatcher_autoinit.c
     src/core/event_system_compat.c
     src/core/event_system_compat.h
 )

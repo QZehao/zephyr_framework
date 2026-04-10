@@ -928,3 +928,28 @@ void* sys_mem_alloc_with_info(sys_mem_pool_type_t type, size_t size, const char*
     }
     return ptr;
 }
+
+/* =============================================================================
+ * SYS_INIT 自动初始化
+ * ============================================================================= */
+
+#include "app_config.h"
+
+static int sys_mem_auto_init(void) {
+#if APP_CONFIG_ENABLE_MEMORY_MGR
+    sys_mem_config_t mem_config = {.pool_sizes =
+                                       {
+                                           [SYS_MEM_POOL_GENERAL] = CONFIG_SYS_MEMORY_POOL_SIZE,
+                                           [SYS_MEM_POOL_EVENT] = CONFIG_SYS_MEMORY_POOL_SIZE / 2,
+                                           [SYS_MEM_POOL_MODULE] = CONFIG_SYS_MEMORY_POOL_SIZE / 2,
+                                       },
+                                   .enable_tracking = true,
+                                   .enable_defrag = false,
+                                   .max_allocations = 256};
+    sys_mem_init(&mem_config);
+    LOG_INF("Memory system initialized");
+#endif
+    return 0;
+}
+
+SYS_INIT(sys_mem_auto_init, POST_KERNEL, APP_INIT_PRIO_SYS_MEM);

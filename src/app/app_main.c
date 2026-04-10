@@ -71,25 +71,13 @@ static int app_init_apply_cb(void);
 #if APP_CONFIG_ENABLE_APP_KV
 static int app_init_kv_step(void);
 #endif
-static int app_init_sys_log(void);
-static int app_init_sys_mem(void);
-static int app_init_event_system_step(void);
-static int app_init_event_dispatcher_step(void);
-static int app_init_sys_timer_step(void);
-static int app_init_sys_wdt_step(void);
 static int app_init_finalize(void);
 
 SYS_INIT(app_init_apply_cb, POST_KERNEL, APP_INIT_PRIO_APP_CB);
 #if APP_CONFIG_ENABLE_APP_KV
 SYS_INIT(app_init_kv_step, POST_KERNEL, APP_INIT_PRIO_APP_KV);
 #endif
-SYS_INIT(app_init_sys_log, POST_KERNEL, APP_INIT_PRIO_SYS_LOG);
-SYS_INIT(app_init_sys_mem, POST_KERNEL, APP_INIT_PRIO_SYS_MEM);
-SYS_INIT(app_init_event_system_step, POST_KERNEL, APP_INIT_PRIO_EVENT_SYS);
-SYS_INIT(app_init_event_dispatcher_step, POST_KERNEL, APP_INIT_PRIO_DISPATCHER);
-SYS_INIT(app_init_sys_timer_step, POST_KERNEL, APP_INIT_PRIO_SYS_TIMER);
-SYS_INIT(app_init_sys_wdt_step, POST_KERNEL, APP_INIT_PRIO_SYS_WDT);
-/* 模块管理器由 module_manager_compat.c 的 SYS_INIT 自动初始化，此处不再重复 */
+/* 所有系统服务和事件系统已改为自动初始化机制（在各自的 .c 文件中） */
 SYS_INIT(app_init_finalize, POST_KERNEL, APP_INIT_PRIO_APP_FINAL);
 
 /* =============================================================================
@@ -406,80 +394,6 @@ static int app_init_kv_step(void) {
 }
 #endif
 
-static int app_init_sys_log(void) {
-#if APP_CONFIG_ENABLE_LOGGING
-    sys_log_config_t log_config = {.default_level = (sys_log_level_t) g_app.config.log_level,
-                                   .destinations = SYS_LOG_DEST_CONSOLE | SYS_LOG_DEST_MEMORY,
-                                   .enable_timestamp = true,
-                                   .enable_colors = true,
-                                   .enable_module_name = true,
-                                   .memory_buffer_size = CONFIG_SYS_MEMORY_POOL_SIZE};
-    sys_log_init(&log_config);
-    LOG_INF("Logging system initialized");
-#endif
-    return 0;
-}
-
-static int app_init_sys_mem(void) {
-#if APP_CONFIG_ENABLE_MEMORY_MGR
-    sys_mem_config_t mem_config = {.pool_sizes =
-                                       {
-                                           [SYS_MEM_POOL_GENERAL] = CONFIG_SYS_MEMORY_POOL_SIZE,
-                                           [SYS_MEM_POOL_EVENT] = CONFIG_SYS_MEMORY_POOL_SIZE / 2,
-                                           [SYS_MEM_POOL_MODULE] = CONFIG_SYS_MEMORY_POOL_SIZE / 2,
-                                       },
-                                   .enable_tracking = true,
-                                   .enable_defrag = false,
-                                   .max_allocations = 256};
-    sys_mem_init(&mem_config);
-    LOG_INF("Memory system initialized");
-#endif
-    return 0;
-}
-
-static int app_init_event_system_step(void) {
-    if (event_compat_init(NULL) != 0) {
-        LOG_ERR("event_compat_init failed");
-        return -EIO;
-    }
-    LOG_INF("Event system initialized");
-    return 0;
-}
-
-static int app_init_event_dispatcher_step(void) {
-    dispatcher_config_t dispatcher_config = {.stack_size = CONFIG_EVENT_DISPATCHER_STACK_SIZE,
-                                             .priority = CONFIG_EVENT_DISPATCHER_PRIORITY,
-                                             .thread_name = "event_disp",
-                                             .enable_stats = APP_CONFIG_ENABLE_STATS,
-                                             .max_events_per_cycle = 100};
-    if (event_dispatcher_init(&dispatcher_config) != EVENT_OK) {
-        LOG_ERR("event_dispatcher_init failed");
-        return -EIO;
-    }
-    LOG_INF("Event dispatcher initialized");
-    return 0;
-}
-
-static int app_init_sys_timer_step(void) {
-#if APP_CONFIG_ENABLE_TIMER_SVC
-    sys_timer_init();
-    LOG_INF("Timer service initialized");
-#endif
-    return 0;
-}
-
-static int app_init_sys_wdt_step(void) {
-#if APP_CONFIG_ENABLE_WATCHDOG
-    wdt_config_t wdt_config = {.mode = WDT_MODE_SOFTWARE,
-                               .timeout_ms = APP_WATCHDOG_TIMEOUT_MS,
-                               .feed_margin_ms = 1000,
-                               .reset_on_expire = false};
-    sys_wdt_init(&wdt_config);
-    LOG_INF("Watchdog initialized");
-#endif
-    return 0;
-}
-
 static int app_init_finalize(void) {
     g_app.initialized = true;
     g_app.start_time = k_uptime_get_32();
@@ -510,19 +424,7 @@ int app_start(void) {
 
     LOG_INF("Starting application...");
 
-    /* Start event system */
-    if (event_compat_start() != 0) {
-        LOG_ERR("event_compat_start failed");
-        return APP_ERR_INIT;
-    }
-
-    /* Start event dispatcher thread (single consumer for event queue) */
-    if (event_dispatcher_start() != EVENT_OK) {
-        LOG_ERR("event_dispatcher_start failed");
-        (void) event_compat_stop();
-        return APP_ERR_INIT;
-    }
-    LOG_INF("Event dispatcher started");
+    /* 事件系统和事件分发器已由各自的 SYS_INIT 自动启动，此处不再重复调用 */
 
     /* 模块管理器已由 module_manager_compat.c 的 SYS_INIT 自动启动，此处不再重复调用 */
 

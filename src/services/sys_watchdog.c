@@ -553,3 +553,23 @@ static void wdt_expire_handler(void) {
 #endif
     }
 }
+
+/* =============================================================================
+ * SYS_INIT 自动初始化
+ * ============================================================================= */
+
+#include "app_config.h"
+
+static int sys_wdt_auto_init(void) {
+#if APP_CONFIG_ENABLE_WATCHDOG
+    wdt_config_t wdt_config = {.mode = WDT_MODE_SOFTWARE,
+                               .timeout_ms = APP_WATCHDOG_TIMEOUT_MS,
+                               .feed_margin_ms = 1000,
+                               .reset_on_expire = false};
+    sys_wdt_init(&wdt_config);
+    LOG_INF("Watchdog initialized");
+#endif
+    return 0;
+}
+
+SYS_INIT(sys_wdt_auto_init, POST_KERNEL, APP_INIT_PRIO_SYS_WDT);

@@ -139,3 +139,27 @@ void event_compat_reset_statistics(void) {
     /* 标准版没有 reset_statistics，统计自动重置 */
 #endif
 }
+
+/* =============================================================================
+ * SYS_INIT 自动初始化
+ * ============================================================================= */
+
+#include "app_config.h"
+#include <zephyr/init.h>
+
+static int event_compat_auto_init(void) {
+    if (event_compat_init(NULL) != 0) {
+        LOG_ERR("event_compat_init failed");
+        return -EIO;
+    }
+
+    if (event_compat_start() != 0) {
+        LOG_ERR("event_compat_start failed");
+        return -EIO;
+    }
+
+    LOG_INF("Event system initialized and started");
+    return 0;
+}
+
+SYS_INIT(event_compat_auto_init, POST_KERNEL, APP_INIT_PRIO_EVENT_SYS);
