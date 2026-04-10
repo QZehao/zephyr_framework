@@ -351,10 +351,12 @@ if(CONFIG_USB_HOST_RNDIS)
     add_proprietary_module(USB_HOST_RNDIS)
 endif()
 
+# Cloud Connector Module (商业模块)
+if(CONFIG_CLOUD_CONNECTOR)
+    add_proprietary_module(CLOUD_CONNECTOR)
+endif()
+
 # 后续商业模块在此添加
-# if(CONFIG_CLOUD_CONNECTOR)
-#     add_proprietary_module(CLOUD_CONNECTOR)
-# endif()
 
 # =============================================================================
 # Compiler Definitions

@@ -17,8 +17,6 @@ rsource "src/proprietary/ota_manager/Kconfig"
 rsource "src/proprietary/usb_host_cdc_ecm/Kconfig"
 rsource "src/proprietary/usb_host_rndis/Kconfig"
 
-# 以下模块暂未开源
-# rsource "src/proprietary/cellular_5g_usb/Kconfig"
-# rsource "src/proprietary/cloud_connector/Kconfig"
+rsource "src/proprietary/cloud_connector/Kconfig"
 
 endmenu
