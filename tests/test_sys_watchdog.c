@@ -185,4 +185,35 @@ ZTEST(sys_watchdog, test_monitor_thread) {
     sys_wdt_stop();
 }
 
+ZTEST(sys_watchdog, test_hardware_watchdog_init) {
+    wdt_config_t hw_config = {
+        .mode = WDT_MODE_HARDWARE,
+        .timeout_ms = CONFIG_SYS_WATCHDOG_TIMEOUT_MS,
+        .feed_margin_ms = 1000,
+        .pre_expire_callback = NULL,
+        .callback_user_data = NULL,
+        .reset_on_expire = false,
+        .name = "hw_wdt_test"
+    };
+
+    /* 尝试初始化硬件看门狗 */
+    int ret = sys_wdt_init(&hw_config);
+    
+#ifdef CONFIG_WATCHDOG
+    /* 有硬件看门狗配置时应成功 */
+    zassert_equal(ret, 0, "硬件看门狗初始化应成功");
+    
+    /* 验证模式（如果硬件不可用会降级为软件）*/
+    wdt_status_t status = sys_wdt_get_status();
+    zassert_true(status == WDT_STATUS_STOPPED, "初始化后应为 STOPPED");
+#else
+    /* 无硬件看门狗时应降级为软件模式 */
+    zassert_equal(ret, 0, "降级为软件模式应成功");
+#endif
+
+    zassert_equal(sys_wdt_start(), 0, NULL);
+    zassert_equal(sys_wdt_feed(), 0, NULL);
+    zassert_equal(sys_wdt_stop(), 0, NULL);
+}
+
 ZTEST_SUITE(sys_watchdog, NULL, NULL, NULL, NULL, NULL);

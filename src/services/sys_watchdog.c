@@ -124,10 +124,15 @@ int sys_wdt_init(const wdt_config_t* config) {
     if (config != NULL) {
         g_wdt.config = *config;
     } else {
+        /* SIL-2: 使用 Kconfig 配置的默认模式 */
+#if defined(CONFIG_SYS_WATCHDOG_DEFAULT_MODE)
+        g_wdt.config.mode = (wdt_mode_t)CONFIG_SYS_WATCHDOG_DEFAULT_MODE;
+#else
         g_wdt.config.mode = WDT_MODE_SOFTWARE;
+#endif
         g_wdt.config.timeout_ms = CONFIG_SYS_WATCHDOG_TIMEOUT_MS;
         g_wdt.config.feed_margin_ms = WDT_FEED_MARGIN_MS;
-        g_wdt.config.reset_on_expire = false;
+        g_wdt.config.reset_on_expire = IS_ENABLED(CONFIG_SYS_WATCHDOG_FORCE_RESET);
         g_wdt.config.name = "sys_wdt";
     }
 

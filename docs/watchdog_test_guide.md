@@ -1,0 +1,181 @@
+# 硬件看门狗测试指南
+
+## 问题诊断
+
+### 为什么测试时没看到看门狗重启系统？
+
+**原因：** 测试代码默认使用 `WDT_MODE_SOFTWARE`（软件模式），不会初始化硬件看门狗。
+
+即使设备树中有 `watchdog0 = &wdog0;` 节点，也需要：
+1. 显式设置模式为 `WDT_MODE_HARDWARE` 或 `WDT_MODE_DUAL`
+2. 在真实硬件上运行（native_posix 没有硬件看门狗）
+
+## 测试方法
+
+### 方法 1：使用测试叠加配置（推荐）
+
+```bash
+# 清理之前的构建
+west build -t pristine
+
+# 使用硬件看门狗配置构建测试
+west build -b mimxrt1050_fire tests/ \
+  -- -DCONF_FILE="prj.conf;prj_test_watchdog.conf"
+
+# 烧录并监控
+west flash
+west console
+```
+
+这将启用：
+- `CONFIG_SYS_WATCHDOG_DEFAULT_MODE=1` （硬件模式）
+- `CONFIG_SYS_WATCHDOG_TIMEOUT_MS=3000` （3秒超时）
+- 调试日志级别
+
+### 方法 2：使用主应用配置
+
+创建 `prj_watchdog_test.conf`：
+
+```conf
+CONFIG_SYS_WATCHDOG_DEFAULT_MODE=1
+CONFIG_SYS_WATCHDOG_TIMEOUT_MS=3000
+CONFIG_WATCHDOG=y
+```
+
+然后构建主应用：
+
+```bash
+west build -b mimxrt1050_fire . \
+  -- -DCONF_FILE="prj.conf;prj_watchdog_test.conf"
+west flash
+west console
+```
+
+### 方法 3：代码中显式配置
+
+```c
+wdt_config_t hw_config = {
+    .mode = WDT_MODE_HARDWARE,
+    .timeout_ms = 3000,
+    .feed_margin_ms = 1000,
+    .reset_on_expire = false,  /* 测试时禁用复位 */
+    .name = "my_wdt"
+};
+
+sys_wdt_init(&hw_config);
+sys_wdt_start();
+```
+
+## 验证硬件看门狗是否工作
+
+### 1. 查看启动日志
+
+成功初始化硬件看门狗会输出：
+
+```
+[INF] sys_wdt: Initializing watchdog...
+[INF] sys_wdt: Hardware watchdog device found
+[INF] sys_wdt: Hardware watchdog channel installed: 0
+[INF] sys_wdt: Watchdog initialized: timeout=3000ms, mode=1
+[INF] sys_wdt: Watchdog started
+[INF] sys_wdt: Watchdog monitor thread started
+```
+
+如果降级为软件模式会输出：
+
+```
+[WRN] sys_wdt: Hardware watchdog device not found or not ready, using software mode
+[INF] sys_wdt: Watchdog initialized: timeout=3000ms, mode=0
+```
+
+### 2. 测试不喂狗导致复位
+
+**警告：这将导致系统不断重启！**
+
+```conf
+# prj_watchdog_reset.conf
+CONFIG_SYS_WATCHDOG_DEFAULT_MODE=1
+CONFIG_SYS_WATCHDOG_TIMEOUT_MS=2000
+CONFIG_SYS_WATCHDOG_FORCE_RESET=y  # 启用复位
+```
+
+构建后，如果不调用 `sys_wdt_feed()`，系统会在超时后重启。
+
+### 3. 测试喂狗防止复位
+
+```c
+/* 主循环中定期喂狗 */
+while (1) {
+    sys_wdt_feed();  /* 每 1-2 秒喂一次 */
+    k_sleep(K_SECONDS(1));
+}
+```
+
+## 新增测试用例
+
+已添加 `test_hardware_watchdog_init` 测试用例：
+
+```c
+ZTEST(sys_watchdog, test_hardware_watchdog_init) {
+    wdt_config_t hw_config = {
+        .mode = WDT_MODE_HARDWARE,
+        .timeout_ms = CONFIG_SYS_WATCHDOG_TIMEOUT_MS,
+        .feed_margin_ms = 1000,
+        .pre_expire_callback = NULL,
+        .callback_user_data = NULL,
+        .reset_on_expire = false,
+        .name = "hw_wdt_test"
+    };
+
+    int ret = sys_wdt_init(&hw_config);
+    zassert_equal(ret, 0, "硬件看门狗初始化应成功");
+    
+    zassert_equal(sys_wdt_start(), 0, NULL);
+    zassert_equal(sys_wdt_feed(), 0, NULL);
+    zassert_equal(sys_wdt_stop(), 0, NULL);
+}
+```
+
+## Kconfig 配置选项
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `CONFIG_SYS_WATCHDOG_ENABLE` | bool | y | 启用看门狗服务 |
+| `CONFIG_SYS_WATCHDOG_TIMEOUT_MS` | int | 5000 | 超时时间（毫秒） |
+| `CONFIG_SYS_WATCHDOG_DEFAULT_MODE` | int | 0 | 默认模式：0=软件, 1=硬件, 2=双模式 |
+| `CONFIG_SYS_WATCHDOG_FORCE_RESET` | bool | n | 过期时强制复位（开发时禁用） |
+| `CONFIG_WATCHDOG` | bool | y | 启用 Zephyr 看门狗驱动 |
+
+## 常见问题
+
+### Q: 为什么显示 "Hardware watchdog device not found"？
+
+**A:** 可能原因：
+1. 使用 `native_posix` 板（没有硬件看门狗）
+2. 设备树中没有 `watchdog0` 别名或 `wdog0` 节点未启用
+3. `CONFIG_WATCHDOG=n`
+
+### Q: 如何确认硬件看门狗真的在工作？
+
+**A:** 
+1. 查看日志中是否有 "Hardware watchdog channel installed"
+2. 停止喂狗，观察系统是否在超时后复位（需启用 `FORCE_RESET`）
+3. 使用万用表测量看门狗引脚（如果适用）
+
+### Q: 测试时系统不断重启怎么办？
+
+**A:** 
+1. 烧录时按住复位按钮
+2. 使用 `west flash` 重新烧录
+3. 立即修改配置，设置 `CONFIG_SYS_WATCHDOG_FORCE_RESET=n`
+
+## 生产环境建议
+
+```conf
+# 生产配置示例
+CONFIG_SYS_WATCHDOG_DEFAULT_MODE=1  # 硬件模式
+CONFIG_SYS_WATCHDOG_TIMEOUT_MS=5000  # 5秒超时
+CONFIG_SYS_WATCHDOG_FORCE_RESET=y    # 启用复位
+```
+
+确保主循环或关键任务中定期调用 `sys_wdt_feed()`。

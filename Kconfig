@@ -182,6 +182,37 @@ config SYS_WATCHDOG_TIMEOUT_MS
 	help
 	  Watchdog timeout in milliseconds.
 
+config SYS_WATCHDOG_DEFAULT_MODE
+	int "Default Watchdog Mode"
+	default 0
+	range 0 2
+	help
+	  Default watchdog mode when initialized with NULL config:
+	    0 = Software only (WDT_MODE_SOFTWARE)
+	    1 = Hardware only (WDT_MODE_HARDWARE)
+	    2 = Dual mode (WDT_MODE_DUAL)
+	  
+	  Note: If hardware watchdog is not available, it will fallback
+	  to software mode automatically.
+
+config SYS_WATCHDOG_FORCE_RESET
+	bool "Force System Reset on Watchdog Expiry"
+	default n
+	depends on SYS_WATCHDOG_ENABLE
+	help
+	  When enabled, the system will execute a hardware reset via
+	  sys_reboot() when watchdog expires.
+	  
+	  For development/testing, leave this disabled to prevent
+	  unwanted resets. Enable for production builds.
+
+config WATCHDOG
+	bool "Enable Zephyr Watchdog Driver"
+	default y
+	help
+	  Enable Zephyr's watchdog driver. This is required for
+	  hardware watchdog support.
+
 endmenu
 
 menu "Application KV store"
