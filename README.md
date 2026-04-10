@@ -14,7 +14,7 @@
 | **5 分钟看看效果** | [docs/5 分钟快速体验.md](docs/5 分钟快速体验.md) | 5 分钟 |
 | **正式搭建环境** | [docs/环境搭建与配置指南.md](docs/环境搭建与配置指南.md) | 1-2 小时 |
 | **开始写代码** | [docs/开发者入门指南.md](docs/开发者入门指南.md) | 1 小时 |
-| **控制硬件（LED）** | [docs/从零到 Blink LED.md](docs/从零到 Blink LED.md) *(待创建)* | 30 分钟 |
+| **控制硬件（LED）** | [docs/开发者入门指南.md](docs/开发者入门指南.md) | 30 分钟 |
 | **查术语** | [docs/术语速查卡片.md](docs/术语速查卡片.md) | 随时 |
 | **浏览全部文档** | [docs/文档索引.md](docs/文档索引.md) | - |
 
@@ -41,20 +41,18 @@ zephyr_template/
 ├── APP_VERSION                 # 应用语义化版本（勿用文件名 VERSION，与 Zephyr 冲突）
 ├── CMakeLists.txt              # 构建配置（独立应用需 ZEPHYR_BASE 或 zephyr_config.env）
 ├── Kconfig                     # 应用 Kconfig（含事件/模块/IPC 等）
-├── prj.conf                    # 默认 Zephyr 配置（可与 prj_*.conf 合并）
-├── .clang-tidy                 # clang-tidy 检查项（可选）
-├── .pre-commit-config.yaml     # pre-commit 钩子（可选）
-├── prj_example_module_ipc.conf # Thread IPC 示例模块叠加配置示例
-├── prj_example_gpio_uart.conf  # GPIO / UART 示例模块叠加配置（可选）
-├── README.md
-├── LICENSE
-├── west.yml                    # 可选 West 清单
-├── .github/workflows/ci.yml    # GitHub Actions CI
-├── .gitlab-ci.yml              # GitLab CI（可选；步骤见 docs/CI平台配置保姆级手册.md）
+├── Kconfig_proprietary         # 商业模块 Kconfig
+├── prj.conf                    # 默认 Zephyr 配置（最小配置，商用模块默认禁用）
+├── prj_example_*.conf          # 叠加配置示例
+├── app.overlay                 # 通用设备树覆盖
+├── west.yml                    # West 清单
 ├── zephyr_config.env           # 本地路径（由 template 复制生成，勿提交密钥）
 ├── zephyr_config.env.template
+├── .clang-format              # 代码格式化配置
+├── .clang-tidy                # 静态分析配置
+├── .pre-commit-config.yaml    # pre-commit 钩子配置
 ├── boards/
-│   └── overlay.dts             # 通用设备树覆盖
+│   └── overlay.dts            # 通用设备树覆盖
 ├── scripts/                    # 环境脚本、打包、串口工具等
 ├── tests/                      # ztest 单元测试（native_posix）
 │   ├── CMakeLists.txt
@@ -66,7 +64,8 @@ zephyr_template/
     ├── core/
     │   ├── event_system.c/h
     │   ├── event_queue.c/h
-    │   └── event_dispatcher.c/h
+    │   ├── event_dispatcher.c/h
+    │   └── event_system_compat.c/h  # 事件系统兼容层
     ├── services/
     │   ├── sys_log.c/h
     │   ├── sys_memory.c/h
@@ -75,17 +74,20 @@ zephyr_template/
     ├── modules/
     │   ├── module_base.h
     │   ├── module_manager.c/h
-    │   ├── ipc_service/         # Thread IPC 服务实现（Kconfig: THREAD_IPC_SERVICE）
+    │   ├── module_manager_compat.c/h  # 模块管理器兼容层
+    │   ├── ipc_service/         # Thread IPC 服务（Kconfig: THREAD_IPC_SERVICE）
     │   ├── example_module_a.c/h
     │   ├── example_module_b.c/h
     │   ├── example_module_gpio.c/h
     │   ├── example_module_uart.c/h
     │   ├── example_module_ipc.c/h
-    │   └── example_module_multi_dep.c/h  # 多依赖示例（Kconfig: EXAMPLE_MODULE_MULTI_DEP）
-    └── app/
-        ├── app_main.c/h
-        ├── app_config.h
-        └── app_version.c/h
+    │   └── example_module_multi_dep.c/h  # 多依赖示例
+    ├── app/
+    │   ├── app_main.c/h
+    │   ├── app_config.h
+    │   ├── app_version.c/h
+    │   └── app_kv.c/h          # 应用键值存储
+    └── proprietary/            # 商业闭源模块
 ```
 
 ## 从本模板初始化新项目（检查清单）

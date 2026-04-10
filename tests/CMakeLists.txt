@@ -32,11 +32,13 @@ target_sources(app PRIVATE
 	${APP_SRC_DIR}/core/event_system.c
 	${APP_SRC_DIR}/core/event_queue.c
 	${APP_SRC_DIR}/core/event_dispatcher.c
+	${APP_SRC_DIR}/core/event_system_compat.c  # 事件系统兼容层
 	${APP_SRC_DIR}/services/sys_log.c
 	${APP_SRC_DIR}/services/sys_memory.c
 	${APP_SRC_DIR}/services/sys_watchdog.c
 	${APP_SRC_DIR}/services/sys_timer.c
 	${APP_SRC_DIR}/modules/module_manager.c
+	${APP_SRC_DIR}/modules/module_manager_compat.c  # 模块管理器兼容层
 )
 
 target_sources(app PRIVATE
