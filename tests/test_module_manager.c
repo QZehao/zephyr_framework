@@ -128,7 +128,8 @@ ZTEST(module_manager, test_get_module_info) {
     /* 获取模块信息 */
     zassert_equal(module_manager_get_module_info(id, &info), 0, "get_module_info 失败");
     zassert_equal(info.id, id, "模块 ID 应匹配");
-    zassert_not_null(info.name, "模块名称不应为 NULL");
+    zassert_not_null(info.interface, "接口指针不应为 NULL");
+    zassert_not_null(info.interface->name, "模块名称不应为 NULL");
 
     /* 测试无效 ID */
     zassert_equal(module_manager_get_module_info(9999, &info), -1, "无效 ID 应返回 -1");

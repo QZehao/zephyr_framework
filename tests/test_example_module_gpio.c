@@ -369,4 +369,4 @@ ZTEST(example_module_gpio, test_get_interface)
  * 测试套件
  * ============================================================================= */
 
-ZTEST_SUITE(example_module_gpio, NULL, test_suite_setup, NULL, test_suite_teardown);
+ZTEST_SUITE(example_module_gpio, NULL, test_suite_setup, NULL, NULL, test_suite_teardown);

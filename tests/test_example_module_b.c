@@ -316,4 +316,4 @@ ZTEST(example_module_b, test_get_interface)
  * 测试套件
  * ============================================================================= */
 
-ZTEST_SUITE(example_module_b, NULL, test_suite_setup, NULL, test_suite_teardown);
+ZTEST_SUITE(example_module_b, NULL, test_suite_setup, NULL, NULL, test_suite_teardown);

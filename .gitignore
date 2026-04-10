@@ -9,6 +9,7 @@ id_ed25519
 
 # Zephyr build directory
 build/
+build_tests_hw/
 
 # CMake
 CMakeCache.txt

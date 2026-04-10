@@ -430,4 +430,4 @@ ZTEST(example_module_uart, test_get_interface)
  * 测试套件
  * ============================================================================= */
 
-ZTEST_SUITE(example_module_uart, NULL, test_suite_setup, NULL, test_suite_teardown);
+ZTEST_SUITE(example_module_uart, NULL, test_suite_setup, NULL, NULL, test_suite_teardown);

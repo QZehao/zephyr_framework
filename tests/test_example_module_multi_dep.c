@@ -68,7 +68,7 @@ ZTEST(example_module_multi_dep, test_depends_on)
     zassert_not_null(iface->depends_on, "depends_on 不应为 NULL");
     zassert_not_null(iface->depends_on[0], "第一个依赖不应为 NULL");
     zassert_not_null(iface->depends_on[1], "第二个依赖不应为 NULL");
-    zassert_null(iface->depends_on[2], "依赖数组应以 NULL 结尾");
+    zassert_is_null(iface->depends_on[2], "依赖数组应以 NULL 结尾");
 
     /* 验证依赖的模块名称 */
     zassert_true(strcmp(iface->depends_on[0], "example_module_a") == 0, "第一个依赖应为 example_module_a");
@@ -170,4 +170,4 @@ ZTEST(example_module_multi_dep, test_interface_functions)
  * 测试套件
  * ============================================================================= */
 
-ZTEST_SUITE(example_module_multi_dep, NULL, test_suite_setup, NULL, test_suite_teardown);
+ZTEST_SUITE(example_module_multi_dep, NULL, test_suite_setup, NULL, NULL, test_suite_teardown);

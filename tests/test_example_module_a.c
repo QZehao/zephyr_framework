@@ -46,22 +46,38 @@ static void test_suite_teardown(void *fixture)
  * 辅助函数
  * ============================================================================= */
 
-/* 简单的存根模块，用于测试模块管理器 */
-static int stub_init(void *config)
+/* 简单的存根模块，用于测试模块管理器（使用唯一前缀避免符号冲突）*/
+static int stub_a_init(void *config)
 {
     (void)config;
     return 0;
 }
 
-static int stub_start(void) { return 0; }
-static int stub_stop(void) { return 0; }
-static void stub_on_event(const event_t *event, void *user_data)
+static int stub_a_start(void) { return 0; }
+static int stub_a_stop(void) { return 0; }
+static int stub_a_shutdown(void) { return 0; }
+static void stub_a_on_event(const event_t *event, void *user_data)
 {
     (void)event;
     (void)user_data;
 }
 
-DECLARE_MODULE_INTERFACE_MINIMAL(stub_module);
+DECLARE_MODULE_INTERFACE_MINIMAL(stub_a);
+
+/* =============================================================================
+ * 本地类型定义（与 example_module_a.c 内部定义一致）
+ * ============================================================================= */
+
+/* 控制命令 */
+#define CMD_SET_RATE  1
+#define CMD_GET_RATE  2
+#define CMD_RESET     3
+
+/* 传感器采样数据类型 */
+typedef struct {
+    int32_t value;
+    uint32_t timestamp;
+} sensor_sample_t;
 
 /* =============================================================================
  * 测试用例：模块初始化与生命周期
@@ -525,4 +541,4 @@ ZTEST(example_module_a, test_concurrent_access)
  * 测试套件
  * ============================================================================= */
 
-ZTEST_SUITE(example_module_a, NULL, test_suite_setup, NULL, test_suite_teardown);
+ZTEST_SUITE(example_module_a, NULL, test_suite_setup, NULL, NULL, test_suite_teardown);

@@ -168,7 +168,7 @@ ZTEST(event_dispatcher, test_stats_comprehensive) {
 
     /* 发布并处理一些事件 */
     for (int i = 0; i < 10; i++) {
-        event_publish_copy(300, EVENT_PRIORITY_NORMAL, "stats", 5);
+        event_publish_copy(50, EVENT_PRIORITY_NORMAL, "stats", 5);
     }
 
     k_msleep(100);
