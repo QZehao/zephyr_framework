@@ -77,7 +77,6 @@ static int app_init_event_system_step(void);
 static int app_init_event_dispatcher_step(void);
 static int app_init_sys_timer_step(void);
 static int app_init_sys_wdt_step(void);
-static int app_init_module_mgr_step(void);
 static int app_init_finalize(void);
 
 SYS_INIT(app_init_apply_cb, POST_KERNEL, APP_INIT_PRIO_APP_CB);
@@ -90,7 +89,7 @@ SYS_INIT(app_init_event_system_step, POST_KERNEL, APP_INIT_PRIO_EVENT_SYS);
 SYS_INIT(app_init_event_dispatcher_step, POST_KERNEL, APP_INIT_PRIO_DISPATCHER);
 SYS_INIT(app_init_sys_timer_step, POST_KERNEL, APP_INIT_PRIO_SYS_TIMER);
 SYS_INIT(app_init_sys_wdt_step, POST_KERNEL, APP_INIT_PRIO_SYS_WDT);
-SYS_INIT(app_init_module_mgr_step, POST_KERNEL, APP_INIT_PRIO_MODULE_MGR);
+/* 模块管理器由 module_manager_compat.c 的 SYS_INIT 自动初始化，此处不再重复 */
 SYS_INIT(app_init_finalize, POST_KERNEL, APP_INIT_PRIO_APP_FINAL);
 
 /* =============================================================================
@@ -481,15 +480,6 @@ static int app_init_sys_wdt_step(void) {
     return 0;
 }
 
-static int app_init_module_mgr_step(void) {
-    if (module_compat_init(NULL) != 0) {
-        LOG_ERR("module_compat_init failed");
-        return -EIO;
-    }
-    LOG_INF("Module manager initialized");
-    return 0;
-}
-
 static int app_init_finalize(void) {
     g_app.initialized = true;
     g_app.start_time = k_uptime_get_32();
@@ -534,11 +524,7 @@ int app_start(void) {
     }
     LOG_INF("Event dispatcher started");
 
-    /* Start module manager */
-    if (module_compat_start() != 0) {
-        LOG_ERR("module_compat_start failed");
-        return APP_ERR_INIT;
-    }
+    /* 模块管理器已由 module_manager_compat.c 的 SYS_INIT 自动启动，此处不再重复调用 */
 
     /* Start all registered modules */
     int started = module_compat_start_all();
