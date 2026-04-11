@@ -56,3 +56,4 @@ release/
 copywriting/
 
 src/proprietary/
+.claude/
