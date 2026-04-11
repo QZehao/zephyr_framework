@@ -36,28 +36,28 @@ extern "C" {
 
 /* 示例模块开关 */
 #ifdef CONFIG_EXAMPLE_MODULE_A_ENABLE
-#define APP_CONFIG_ENABLE_MODULE_A   1
+#define APP_CONFIG_ENABLE_MODULE_A 1
 #else
-#define APP_CONFIG_ENABLE_MODULE_A   0
+#define APP_CONFIG_ENABLE_MODULE_A 0
 #endif
 
 #ifdef CONFIG_EXAMPLE_MODULE_B_ENABLE
-#define APP_CONFIG_ENABLE_MODULE_B   1
+#define APP_CONFIG_ENABLE_MODULE_B 1
 #else
-#define APP_CONFIG_ENABLE_MODULE_B   0
+#define APP_CONFIG_ENABLE_MODULE_B 0
 #endif
 
 /* 系统服务开关 */
 #ifdef CONFIG_SYS_LOG_ENABLE
-#define APP_CONFIG_ENABLE_LOGGING    1
+#define APP_CONFIG_ENABLE_LOGGING 1
 #else
-#define APP_CONFIG_ENABLE_LOGGING    0
+#define APP_CONFIG_ENABLE_LOGGING 0
 #endif
 
 #ifdef CONFIG_SYS_WATCHDOG_ENABLE
-#define APP_CONFIG_ENABLE_WATCHDOG   1
+#define APP_CONFIG_ENABLE_WATCHDOG 1
 #else
-#define APP_CONFIG_ENABLE_WATCHDOG   0
+#define APP_CONFIG_ENABLE_WATCHDOG 0
 #endif
 
 #ifdef CONFIG_SYS_MEMORY_ENABLE
@@ -67,43 +67,43 @@ extern "C" {
 #endif
 
 #ifdef CONFIG_SYS_TIMER_ENABLE
-#define APP_CONFIG_ENABLE_TIMER_SVC  1
+#define APP_CONFIG_ENABLE_TIMER_SVC 1
 #else
-#define APP_CONFIG_ENABLE_TIMER_SVC  0
+#define APP_CONFIG_ENABLE_TIMER_SVC 0
 #endif
 
 /* 应用功能开关 */
 #ifdef CONFIG_APP_ENABLE_SHELL
-#define APP_CONFIG_ENABLE_SHELL      1
+#define APP_CONFIG_ENABLE_SHELL 1
 #else
-#define APP_CONFIG_ENABLE_SHELL      0
+#define APP_CONFIG_ENABLE_SHELL 0
 #endif
 
 #ifdef CONFIG_APP_ENABLE_STATS
-#define APP_CONFIG_ENABLE_STATS      1
+#define APP_CONFIG_ENABLE_STATS 1
 #else
-#define APP_CONFIG_ENABLE_STATS      0
+#define APP_CONFIG_ENABLE_STATS 0
 #endif
 
 #ifdef CONFIG_APP_ENABLE_LOG_DUMP
-#define APP_CONFIG_ENABLE_LOG_DUMP   1
+#define APP_CONFIG_ENABLE_LOG_DUMP 1
 #else
-#define APP_CONFIG_ENABLE_LOG_DUMP   0
+#define APP_CONFIG_ENABLE_LOG_DUMP 0
 #endif
 
 #ifdef CONFIG_APP_KV_ENABLE
-#define APP_CONFIG_ENABLE_APP_KV     1
+#define APP_CONFIG_ENABLE_APP_KV 1
 #else
-#define APP_CONFIG_ENABLE_APP_KV     0
+#define APP_CONFIG_ENABLE_APP_KV 0
 #endif
 
 /* =============================================================================
  * KV 存储配置（映射到 Kconfig）
  * ============================================================================= */
 
-#define APP_KV_MAX_ENTRIES           CONFIG_APP_KV_MAX_ENTRIES
-#define APP_KV_KEY_MAX_LEN           CONFIG_APP_KV_KEY_MAX_LEN
-#define APP_KV_VALUE_MAX_LEN         CONFIG_APP_KV_VALUE_MAX_LEN
+#define APP_KV_MAX_ENTRIES   CONFIG_APP_KV_MAX_ENTRIES
+#define APP_KV_KEY_MAX_LEN   CONFIG_APP_KV_KEY_MAX_LEN
+#define APP_KV_VALUE_MAX_LEN CONFIG_APP_KV_VALUE_MAX_LEN
 
 /** Settings 中单条 blob 上限（魔数+头+各槽位序列化，需 ≥ 实际编码长度） */
 #define APP_KV_PERSIST_BLOB_MAX                                                                                        \

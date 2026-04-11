@@ -209,8 +209,7 @@ static void output_to_rtt(sys_log_level_t level, const char* module, const char*
     }
 
     char buf[SYS_LOG_MSG_MAX_LEN + 96];
-    int  n = snprintf(buf, sizeof(buf), "[%08u][%s] %s\n", timestamp,
-                      (module != NULL) ? module : "-", msg);
+    int  n = snprintf(buf, sizeof(buf), "[%08u][%s] %s\n", timestamp, (module != NULL) ? module : "-", msg);
     if (n > 0) {
         SEGGER_RTT_Write(0, buf, (unsigned) MIN((size_t) n, sizeof(buf)));
     }

@@ -127,7 +127,7 @@ int sys_wdt_init(const wdt_config_t* config) {
     } else {
         /* SIL-2: 使用 Kconfig 配置的默认模式 */
 #if defined(CONFIG_SYS_WATCHDOG_DEFAULT_MODE)
-        g_wdt.config.mode = (wdt_mode_t)CONFIG_SYS_WATCHDOG_DEFAULT_MODE;
+        g_wdt.config.mode = (wdt_mode_t) CONFIG_SYS_WATCHDOG_DEFAULT_MODE;
 #else
         g_wdt.config.mode = WDT_MODE_SOFTWARE;
 #endif

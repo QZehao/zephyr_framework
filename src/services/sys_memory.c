@@ -204,7 +204,8 @@ static mem_pool_t* lock_pool_from_ptr(void* ptr, alloc_header_t** header_out) {
      */
     uintptr_t ptr_offset = (uintptr_t) ptr - (uintptr_t) pool->buffer;
     if (ptr_offset < sizeof(alloc_header_t)) {
-        LOG_ERR("Pointer too close to pool start: offset=%zu < header=%zu", (size_t)ptr_offset, sizeof(alloc_header_t));
+        LOG_ERR("Pointer too close to pool start: offset=%zu < header=%zu", (size_t) ptr_offset,
+                sizeof(alloc_header_t));
         k_mutex_unlock(&pool->lock);
         return NULL;
     }
@@ -838,9 +839,7 @@ size_t sys_mem_defrag(sys_mem_pool_type_t type) {
     /* SIL-2: 使用活跃分配计数而非总计数,防止误判
      * 只有当前没有活跃分配时才能安全重置整个池
      */
-    uint32_t active_allocs = (pool->alloc_count >= pool->free_count)
-                                 ? (pool->alloc_count - pool->free_count)
-                                 : 0;
+    uint32_t active_allocs = (pool->alloc_count >= pool->free_count) ? (pool->alloc_count - pool->free_count) : 0;
 
     if (active_allocs == 0) {
         reclaimed = pool->used_size;

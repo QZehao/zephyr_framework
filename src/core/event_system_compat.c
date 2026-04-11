@@ -144,8 +144,8 @@ void event_compat_reset_statistics(void) {
  * SYS_INIT 自动初始化
  * ============================================================================= */
 
-#include "app_config.h"
 #include <zephyr/init.h>
+#include "app_config.h"
 
 static int event_compat_auto_init(void) {
     if (event_compat_init(NULL) != 0) {

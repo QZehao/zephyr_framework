@@ -548,9 +548,8 @@ static void timer_thread_func(void* p1, void* p2, void* p3) {
             /* SIL-2: 计算实际延迟 (微秒) - 测量回调执行前后的时间差 */
             uint32_t fire_time_actual = now;
             uint32_t scheduled_time = timer->next_fire_time;
-            uint32_t latency_us = (fire_time_actual >= scheduled_time)
-                                      ? ((fire_time_actual - scheduled_time) * 1000U)
-                                      : 0;
+            uint32_t latency_us =
+                (fire_time_actual >= scheduled_time) ? ((fire_time_actual - scheduled_time) * 1000U) : 0;
 
             /* Call callback */
             if (timer->config.callback != NULL) {

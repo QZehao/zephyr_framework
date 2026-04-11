@@ -14,9 +14,9 @@
  *
  */
 
-#include "app_config.h"
 #include <zephyr/init.h>
 #include <zephyr/logging/log.h>
+#include "app_config.h"
 #include "event_dispatcher.h"
 
 LOG_MODULE_REGISTER(event_dispatcher_autoinit, CONFIG_SYS_LOG_LEVEL);

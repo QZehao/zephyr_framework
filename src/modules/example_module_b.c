@@ -91,8 +91,7 @@ int example_module_b_init(void* config) {
 int example_module_b_start(void) {
     LOG_INF("Starting Module B...");
 
-    if (g_module_b.status != MODULE_STATUS_INITIALIZED &&
-        g_module_b.status != MODULE_STATUS_STOPPED) {
+    if (g_module_b.status != MODULE_STATUS_INITIALIZED && g_module_b.status != MODULE_STATUS_STOPPED) {
         LOG_ERR("Module not initialized");
         return -1;
     }
