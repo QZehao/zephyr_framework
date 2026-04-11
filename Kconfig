@@ -151,6 +151,20 @@ config EXAMPLE_MODULE_UART_DEVICE_NAME
 	depends on EXAMPLE_MODULE_UART
 	default "UART_0"
 
+config EXAMPLE_MODULE_A_ENABLE
+	bool "Enable Example Module A (Sensor Simulator)"
+	depends on MODULE_MANAGER
+	default y
+	help
+	  Enable example_module_a which simulates sensor data publishing.
+
+config EXAMPLE_MODULE_B_ENABLE
+	bool "Enable Example Module B (Communication)"
+	depends on MODULE_MANAGER
+	default y
+	help
+	  Enable example_module_b which simulates communication module.
+
 endmenu
 
 menu "System Services Configuration"
@@ -162,12 +176,30 @@ config SYS_LOG_LEVEL
 	help
 	  0=OFF, 1=ERROR, 2=WARNING, 3=INFO, 4=DEBUG
 
+config SYS_LOG_ENABLE
+	bool "Enable System Log Service"
+	default y
+	help
+	  Enable the system log service with memory buffering.
+
 config SYS_MEMORY_POOL_SIZE
 	int "System Memory Pool Size"
 	default 8192
 	range 1024 65536
 	help
 	  Size of the system memory pool for event allocations.
+
+config SYS_MEMORY_ENABLE
+	bool "Enable System Memory Service"
+	default y
+	help
+	  Enable the system memory pool management with tracking.
+
+config SYS_TIMER_ENABLE
+	bool "Enable System Timer Service"
+	default y
+	help
+	  Enable the system timer service for software timers.
 
 config SYS_WATCHDOG_ENABLE
 	bool "Enable System Watchdog"
@@ -191,7 +223,7 @@ config SYS_WATCHDOG_DEFAULT_MODE
 	    0 = Software only (WDT_MODE_SOFTWARE)
 	    1 = Hardware only (WDT_MODE_HARDWARE)
 	    2 = Dual mode (WDT_MODE_DUAL)
-	  
+
 	  Note: If hardware watchdog is not available, it will fallback
 	  to software mode automatically.
 
@@ -216,7 +248,68 @@ config WATCHDOG
 
 endmenu
 
+menu "Application Features Configuration"
+
+config APP_ENABLE_SHELL
+	bool "Enable Shell Support"
+	default y
+	select SHELL if !SHELL
+	help
+	  Enable shell commands for application debugging and control.
+
+config APP_ENABLE_STATS
+	bool "Enable Statistics Collection"
+	default y
+	help
+	  Enable statistics collection for event dispatcher and modules.
+
+config APP_ENABLE_LOG_DUMP
+	bool "Enable Log Dump Command"
+	default y
+	depends on SYS_LOG_ENABLE
+	help
+	  Enable sys_log_dump shell command to dump buffered logs.
+
+config APP_HEARTBEAT_INTERVAL_MS
+	int "Application Heartbeat Interval (ms)"
+	default 1000
+	range 100 10000
+	help
+	  Interval for application heartbeat timer.
+
+endmenu
+
 menu "Application KV store"
+
+config APP_KV_ENABLE
+	bool "Enable application string KV store (RAM)"
+	default y
+	help
+	  Enable in-memory key-value store for application string data.
+
+config APP_KV_MAX_ENTRIES
+	int "Maximum KV store entries"
+	depends on APP_KV_ENABLE
+	default 16
+	range 4 64
+	help
+	  Maximum number of key-value pairs in the KV store.
+
+config APP_KV_KEY_MAX_LEN
+	int "Maximum KV key length"
+	depends on APP_KV_ENABLE
+	default 32
+	range 8 128
+	help
+	  Maximum length of KV store keys (bytes).
+
+config APP_KV_VALUE_MAX_LEN
+	int "Maximum KV value length"
+	depends on APP_KV_ENABLE
+	default 128
+	range 16 512
+	help
+	  Maximum length of KV store values (bytes).
 
 config APP_KV_PERSIST
 	bool "Persist app string KV to flash (Settings/NVS)"
