@@ -1,9 +1,9 @@
 # Kconfig for Event-Driven Project Template
 # SPDX-License-Identifier: Apache-2.0
 
-# Source Zephyr's main Kconfig to ensure proper board/SOC selection
-# This must come BEFORE any application-specific Kconfig options
-source "Kconfig.zephyr"
+# Source Zephyr's base Kconfig to get all standard symbols
+# (ZTEST, LOG, HEAP_MEM_POOL_SIZE, CONSOLE, SERIAL, GPIO, etc.)
+rsource "Kconfig.zephyr"
 
 menu "Event System Configuration"
 
@@ -253,9 +253,10 @@ menu "Application Features Configuration"
 config APP_ENABLE_SHELL
 	bool "Enable Shell Support"
 	default y
-	select SHELL if !SHELL
+	depends on SHELL
 	help
 	  Enable shell commands for application debugging and control.
+	  Requires CONFIG_SHELL=y in your prj.conf.
 
 config APP_ENABLE_STATS
 	bool "Enable Statistics Collection"

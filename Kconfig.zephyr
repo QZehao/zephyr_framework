@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# This file sources Zephyr's base Kconfig.zephyr for freestanding applications.
+# In Zephyr 4.x, the application's Kconfig file becomes the root Kconfig,
+# so we MUST source Kconfig.zephyr to get all standard Zephyr symbols.
+
+# ZEPHYR_BASE is exported by the Zephyr CMake package before Kconfig runs
+rsource "$ZEPHYR_BASE/Kconfig.zephyr"
