@@ -45,6 +45,11 @@
 #error "ipc_service.h requires CONFIG_THREAD_IPC_SERVICE=y (see THREAD_IPC_SERVICE in Kconfig)"
 #endif
 
+/* 包含共享内存管理器（如果启用） */
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+#include "ipc_shared_mem.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -68,7 +73,11 @@ typedef uint32_t ipc_request_id_t;
  * @return 0 成功，负值错误码失败
  *
  * @note 服务函数在工作线程上下文中执行
- * @note out_data 可以是输入数据的指针，或新分配的内存
+ * @note out_data 可以是：
+ *       - 输入数据的指针（零拷贝回显）
+ *       - 通过 ipc_shm_alloc() 分配的共享内存（推荐）
+ *       - 服务线程的静态缓冲区（需谨慎管理生命周期）
+ * @note 如果使用共享内存，框架会自动管理引用计数
  */
 typedef int (*ipc_service_func_t)(ipc_request_id_t request_id, const void* data, size_t data_size, void** out_data,
                                   size_t* out_data_size);
@@ -105,6 +114,9 @@ typedef struct ipc_future {
     size_t             data_size;  /**< 输出数据大小 */
     atomic_t           completed;  /**< 是否已完成（原子变量） */
     struct ipc_future* next;       /**< 空闲链表下一节点 */
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    ipc_shm_handle_t   shm_handle; /**< 共享内存句柄（0=未使用） */
+#endif
 } ipc_future_t;
 
 /**
@@ -125,6 +137,9 @@ typedef struct ipc_pending_request {
     const void*          response_data;      /**< 响应数据指针 */
     size_t               response_data_size; /**< 响应数据大小 */
     bool                 in_use;             /**< 槽位是否在使用中 */
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    ipc_shm_handle_t     shm_handle;         /**< 共享内存句柄（0=未使用） */
+#endif
 } ipc_pending_request_t;
 
 /**
@@ -139,6 +154,9 @@ typedef struct ipc_request_msg {
     ipc_async_callback_t callback;           /**< 回调函数 */
     void*                callback_user_data; /**< 回调用户数据 */
     struct k_thread*     caller_thread;      /**< 调用者线程 */
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    ipc_shm_handle_t     shm_handle;         /**< 共享内存句柄（0=未使用） */
+#endif
 } ipc_request_msg_t;
 
 /**
@@ -152,6 +170,9 @@ typedef struct ipc_response_msg {
     const void*      data;          /**< 输出数据 */
     size_t           data_size;     /**< 输出数据大小 */
     struct k_thread* caller_thread; /**< 调用者线程 */
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    ipc_shm_handle_t shm_handle;    /**< 共享内存句柄（0=未使用） */
+#endif
 } ipc_response_msg_t;
 
 /**
@@ -193,6 +214,10 @@ typedef struct ipc_service {
     struct k_mutex state_lock; /**< 保护 running/shutdown 的互斥锁 */
     bool           running;    /**< 服务是否正在运行 */
     volatile bool  shutdown;   /**< 服务是否正在关闭 */
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    ipc_shm_pool_t shm_pool; /**< 共享内存池（引用计数管理） */
+#endif
 } ipc_service_t;
 
 /**
@@ -251,9 +276,31 @@ int ipc_service_stop(ipc_service_t* service);
  * @return 服务函数返回值，或负值错误码
  *
  * @note 调用线程将阻塞直到收到响应或超时
+ * @note 如果服务返回的是共享内存，调用者需要通过 ipc_shm_release() 释放
  */
 int ipc_call_sync(ipc_service_t* service, const void* data, size_t data_size, void** out_data, size_t* out_data_size,
                   k_timeout_t timeout);
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+/**
+ * @brief 同步调用 IPC 服务（带共享内存句柄返回）
+ *
+ * 与 ipc_call_sync 相同，但额外返回共享内存句柄（如果有）。
+ *
+ * @param service 服务实例指针
+ * @param data 输入数据
+ * @param data_size 输入数据大小
+ * @param out_data 输出数据指针
+ * @param out_data_size 输出数据大小
+ * @param out_shm_handle 输出：共享内存句柄（可为 NULL）
+ * @param timeout 超时时间
+ * @return 服务函数返回值，或负值错误码
+ *
+ * @note 如果 out_shm_handle 非零，调用者必须在使用完 out_data 后调用 ipc_shm_release()
+ */
+int ipc_call_sync_shm(ipc_service_t* service, const void* data, size_t data_size, void** out_data,
+                      size_t* out_data_size, ipc_shm_handle_t* out_shm_handle, k_timeout_t timeout);
+#endif
 
 /**
  * @brief 异步调用 IPC 服务

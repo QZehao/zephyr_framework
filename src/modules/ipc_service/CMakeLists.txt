@@ -8,6 +8,10 @@ target_sources(app PRIVATE
     ipc_service.c
 )
 
+target_sources_ifdef(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM app PRIVATE
+    ipc_shared_mem.c
+)
+
 target_sources_ifdef(CONFIG_THREAD_IPC_SERVICE_EXAMPLE app PRIVATE
     ipc_service_example.c
 )

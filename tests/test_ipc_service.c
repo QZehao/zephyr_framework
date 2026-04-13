@@ -555,4 +555,168 @@ ZTEST(ipc_service, test_async_null_callback) {
     ipc_service_stop(&g_ipc);
 }
 
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+/* =============================================================================
+ * 共享内存引用计数测试
+ * ============================================================================= */
+
+/* 服务函数：分配共享内存并返回 */
+static int ipc_shm_alloc_handler(ipc_request_id_t request_id, const void* data, size_t data_size, void** out_data,
+                                  size_t* out_data_size) {
+    (void)request_id;
+    (void)data;
+    (void)data_size;
+
+    /* 注意：服务函数没有 service 指针，无法直接分配共享内存
+     * 实际使用中，服务函数需要通过用户数据或全局变量获取 service
+     * 这里我们简单返回输入数据（零拷贝）
+     */
+    *out_data = (void*)data;
+    *out_data_size = data_size;
+    return 0;
+}
+
+/* 测试共享内存基本功能 */
+ZTEST(ipc_service, test_shared_memory_basic) {
+    int r;
+
+    r = ipc_service_init(&g_ipc, "shm_test", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
+                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    zassert_equal(r, 0, "ipc_service_init failed: %d", r);
+
+    r = ipc_service_start(&g_ipc);
+    zassert_equal(r, 0, "ipc_service_start failed: %d", r);
+
+    /* 测试共享内存分配 */
+    ipc_shm_handle_t handle = ipc_shm_alloc(&g_ipc, 64);
+    zassert_true(handle != IPC_SHM_HANDLE_INVALID, "shm_alloc failed");
+
+    void* ptr = ipc_shm_get_ptr(&g_ipc, handle);
+    zassert_not_null(ptr, "shm_get_ptr returned NULL");
+
+    size_t size = ipc_shm_get_size(&g_ipc, handle);
+    zassert_equal(size, 64, "shm_get_size returned wrong size: %zu", size);
+
+    /* 写入测试数据 */
+    const char test_data[] = "hello shm";
+    memcpy(ptr, test_data, sizeof(test_data));
+
+    /* 测试引用计数 */
+    ipc_shm_acquire(&g_ipc, handle);
+    r = ipc_shm_release(&g_ipc, handle);
+    zassert_equal(r, 0, "shm_release failed: %d", r);
+
+    /* 再次释放，引用计数应降至 0 */
+    r = ipc_shm_release(&g_ipc, handle);
+    zassert_equal(r, 0, "shm_release failed on final release: %d", r);
+
+    /* 验证句柄不再有效 */
+    zassert_false(ipc_shm_is_valid(&g_ipc, handle), "handle should be invalid after release");
+
+    ipc_service_stop(&g_ipc);
+}
+
+/* 测试共享内存池统计 */
+ZTEST(ipc_service, test_shared_memory_stats) {
+    int r;
+    uint32_t active, peak, free;
+
+    r = ipc_service_init(&g_ipc, "shm_stats", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
+                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    zassert_equal(r, 0, "ipc_service_init failed: %d", r);
+
+    /* 初始状态 */
+    ipc_shm_get_stats(&g_ipc, &active, &peak, &free);
+    zassert_equal(active, 0, "initial active should be 0");
+    zassert_equal(peak, 0, "initial peak should be 0");
+    zassert_equal(free, CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE, "initial free should equal pool size");
+
+    /* 分配几个块 */
+    ipc_shm_handle_t h1 = ipc_shm_alloc(&g_ipc, 32);
+    ipc_shm_handle_t h2 = ipc_shm_alloc(&g_ipc, 64);
+
+    ipc_shm_get_stats(&g_ipc, &active, &peak, &free);
+    zassert_equal(active, 2, "active should be 2");
+    zassert_equal(peak, 2, "peak should be 2");
+
+    /* 释放一个 */
+    ipc_shm_release(&g_ipc, h1);
+    ipc_shm_get_stats(&g_ipc, &active, &peak, &free);
+    zassert_equal(active, 1, "active should be 1 after release");
+    zassert_equal(peak, 2, "peak should remain 2");
+
+    /* 释放另一个 */
+    ipc_shm_release(&g_ipc, h2);
+
+    ipc_service_stop(&g_ipc);
+}
+
+/* 测试共享内存池耗尽 */
+ZTEST(ipc_service, test_shared_memory_exhaustion) {
+    int r;
+    uint32_t pool_size = CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE;
+    ipc_shm_handle_t handles[16]; /* 假设池大小至少 8 */
+
+    r = ipc_service_init(&g_ipc, "shm_exhaust", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
+                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    zassert_equal(r, 0, "ipc_service_init failed: %d", r);
+
+    /* 分配直到池满 */
+    uint32_t allocated = 0;
+    for (uint32_t i = 0; i < pool_size && i < ARRAY_SIZE(handles); i++) {
+        handles[i] = ipc_shm_alloc(&g_ipc, 32);
+        if (handles[i] != IPC_SHM_HANDLE_INVALID) {
+            allocated++;
+        } else {
+            break;
+        }
+    }
+
+    zassert_true(allocated > 0, "should allocate at least one block");
+
+    /* 尝试再分配一个，应该失败 */
+    ipc_shm_handle_t extra = ipc_shm_alloc(&g_ipc, 32);
+    /* 可能成功（如果池大小>handles 数组）或失败 */
+    if (extra != IPC_SHM_HANDLE_INVALID) {
+        ipc_shm_release(&g_ipc, extra);
+    }
+
+    /* 释放所有已分配的块 */
+    for (uint32_t i = 0; i < allocated; i++) {
+        r = ipc_shm_release(&g_ipc, handles[i]);
+        zassert_equal(r, 0, "release failed at index %u: %d", i, r);
+    }
+
+    ipc_service_stop(&g_ipc);
+}
+
+/* 测试无效参数处理 */
+ZTEST(ipc_service, test_shared_memory_invalid_params) {
+    int r;
+
+    r = ipc_service_init(&g_ipc, "shm_invalid", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
+                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    zassert_equal(r, 0, "ipc_service_init failed: %d", r);
+
+    /* NULL service */
+    zassert_equal(ipc_shm_alloc(NULL, 32), IPC_SHM_HANDLE_INVALID, "alloc with NULL service should fail");
+    zassert_false(ipc_shm_is_valid(NULL, 123), "is_valid with NULL service should return false");
+
+    /* 过大尺寸 */
+    ipc_shm_handle_t h = ipc_shm_alloc(&g_ipc, CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_BLOCK_SIZE + 1);
+    zassert_equal(h, IPC_SHM_HANDLE_INVALID, "alloc with oversized should fail");
+
+    /* 零尺寸 */
+    h = ipc_shm_alloc(&g_ipc, 0);
+    zassert_equal(h, IPC_SHM_HANDLE_INVALID, "alloc zero size should fail");
+
+    /* 无效句柄 */
+    zassert_null(ipc_shm_get_ptr(&g_ipc, IPC_SHM_HANDLE_INVALID), "get_ptr invalid handle should return NULL");
+    zassert_equal(ipc_shm_get_size(&g_ipc, IPC_SHM_HANDLE_INVALID), 0, "get_size invalid handle should return 0");
+    zassert_equal(ipc_shm_release(&g_ipc, IPC_SHM_HANDLE_INVALID), -EINVAL, "release invalid handle should fail");
+
+    ipc_service_stop(&g_ipc);
+}
+#endif /* CONFIG_THREAD_IPC_SERVICE_SHARED_MEM */
+
 ZTEST_SUITE(ipc_service, NULL, test_suite_setup, NULL, NULL, test_suite_teardown);

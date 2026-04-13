@@ -158,6 +158,9 @@ static void init_pending_entry(ipc_service_t* service, ipc_pending_request_t* en
     entry->response_data = NULL;
     entry->response_data_size = 0;
     entry->in_use = true;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    entry->shm_handle = 0;
+#endif
     k_sem_init(&entry->response_sem, 0, 1);
 }
 
@@ -167,11 +170,21 @@ static void init_pending_entry(ipc_service_t* service, ipc_pending_request_t* en
  * @param entry 待释放的条目
  *
  * @note 调用前必须持有 pending_lock
+ * @note SIL-2: 自动释放共享内存引用
  */
-static void release_pending_entry(ipc_pending_request_t* entry) {
+static void release_pending_entry(ipc_service_t* service, ipc_pending_request_t* entry) {
+    ARG_UNUSED(service);
     entry->in_use = false;
     entry->callback = NULL;
     entry->future = NULL;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    /* SIL-2: 释放共享内存引用（如果有） */
+    if (entry->shm_handle != 0) {
+        LOG_DBG("release_pending_entry: releasing shm_handle %u", entry->shm_handle);
+        ipc_shm_release(service, entry->shm_handle);
+        entry->shm_handle = 0;
+    }
+#endif
 }
 
 /**
@@ -211,6 +224,14 @@ static void release_future(ipc_service_t* service, ipc_future_t* future) {
     future->result = 0;
     future->data = NULL;
     future->data_size = 0;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    /* SIL-2: 释放 future 中的共享内存引用 */
+    if (future->shm_handle != 0) {
+        LOG_DBG("release_future: releasing shm_handle %u", future->shm_handle);
+        ipc_shm_release(service, future->shm_handle);
+        future->shm_handle = 0;
+    }
+#endif
     future->next = service->free_futures;
     service->free_futures = future;
 }
@@ -302,6 +323,12 @@ static void service_thread_func(void* p1, void* p2, void* p3) {
         /* SIL-2: 验证 service_func 非空 */
         if (service->service_func == NULL) {
             LOG_ERR("Service function is NULL, dropping request %u", request_msg.request_id);
+            /* SIL-2: 如果有共享内存句柄，释放引用 */
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+            if (request_msg.shm_handle != 0) {
+                ipc_shm_release(service, request_msg.shm_handle);
+            }
+#endif
             continue;
         }
 
@@ -309,6 +336,14 @@ static void service_thread_func(void* p1, void* p2, void* p3) {
         size_t out_data_size = 0;
 
         LOG_DBG("Processing request %u", request_msg.request_id);
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+        /* SIL-2: 如果请求带有共享内存，增加引用确保在处理期间有效 */
+        if (request_msg.shm_handle != 0) {
+            ipc_shm_acquire(service, request_msg.shm_handle);
+            LOG_DBG("Request %u: acquired shm handle %u", request_msg.request_id, request_msg.shm_handle);
+        }
+#endif
 
         /* 调用用户服务函数处理请求 */
         int result = service->service_func(request_msg.request_id, request_msg.data, request_msg.data_size, &out_data,
@@ -320,11 +355,23 @@ static void service_thread_func(void* p1, void* p2, void* p3) {
         response_msg.data = out_data;
         response_msg.data_size = out_data_size;
         response_msg.caller_thread = request_msg.caller_thread;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+        /* 传递共享内存句柄到响应侧 */
+        response_msg.shm_handle = request_msg.shm_handle;
+        /* 清除本地引用，避免重复释放 */
+        request_msg.shm_handle = 0;
+#endif
 
         /* 发送响应到响应队列 */
-        ret = k_msgq_put(&service->response_queue, &response_msg, K_FOREVER);
+        int ret = k_msgq_put(&service->response_queue, &response_msg, K_FOREVER);
         if (ret != 0) {
             LOG_ERR("Failed to send response for request %u: %d", request_msg.request_id, ret);
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+            /* SIL-2: 发送失败时释放共享内存引用 */
+            if (response_msg.shm_handle != 0) {
+                ipc_shm_release(service, response_msg.shm_handle);
+            }
+#endif
         }
     }
 
@@ -393,6 +440,10 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
             entry->result = response_msg.result;
             entry->response_data = response_msg.data;
             entry->response_data_size = response_msg.data_size;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+            /* 保存共享内存句柄，稍后在回调/wait 后释放 */
+            ipc_shm_handle_t shm_handle = response_msg.shm_handle;
+#endif
 
             /* ASYNC 模式：有回调函数 */
             if (entry->callback != NULL) {
@@ -404,7 +455,7 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
                 const void*          rdata = entry->response_data;
                 size_t               rsize = entry->response_data_size;
 
-                release_pending_entry(entry);
+                release_pending_entry(service, entry);
                 k_mutex_unlock(&service->pending_lock);
 
                 /* SIL-2: 验证回调函数非空后再调用 */
@@ -413,6 +464,14 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
                 } else {
                     LOG_ERR("NULL callback detected for request %u", rid);
                 }
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+                /* SIL-2: 回调执行完毕后释放共享内存引用 */
+                if (shm_handle != 0) {
+                    LOG_DBG("ASYNC callback done, releasing shm handle %u", shm_handle);
+                    ipc_shm_release(service, shm_handle);
+                }
+#endif
                 continue;
             }
 
@@ -421,10 +480,15 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
                 entry->future->result = entry->result;
                 entry->future->data = entry->response_data;
                 entry->future->data_size = entry->response_data_size;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+                /* FUTURE 模式：传递共享内存句柄到 future */
+                entry->future->shm_handle = entry->shm_handle;
+                entry->shm_handle = 0; /* 转移所有权 */
+#endif
                 atomic_set(&entry->future->completed, 1);
                 k_sem_give(&entry->future->semaphore);
                 entry->future = NULL;
-                release_pending_entry(entry);
+                release_pending_entry(service, entry);
             } else {
                 /* SYNC 模式：signal 响应信号量唤醒等待线程 */
                 k_sem_give(&entry->response_sem);
@@ -493,6 +557,15 @@ int ipc_service_init(ipc_service_t* service, const char* name, ipc_service_func_
         k_sem_init(&service->futures[i].semaphore, 0, 1);
         service->free_futures = &service->futures[i];
     }
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    /* 初始化共享内存池 */
+    int shm_ret = ipc_shm_init(service);
+    if (shm_ret != 0) {
+        LOG_ERR("Failed to init shared memory pool: %d", shm_ret);
+        return shm_ret;
+    }
+#endif
 
     LOG_INF("IPC service '%s' initialized", name);
 
@@ -594,10 +667,15 @@ int ipc_service_stop(ipc_service_t* service) {
                 service->pending_requests[i].result = -ECANCELED;
                 k_sem_give(&service->pending_requests[i].response_sem);
             }
-            release_pending_entry(&service->pending_requests[i]);
+            release_pending_entry(service, &service->pending_requests[i]);
         }
     }
     k_mutex_unlock(&service->pending_lock);
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    /* 反初始化共享内存池（检查泄漏） */
+    ipc_shm_deinit(service);
+#endif
 
     LOG_INF("IPC service '%s' stopped (worker_ret=%d, dispatcher_ret=%d)", service->name, ret1, ret2);
 
@@ -655,6 +733,9 @@ int ipc_call_sync(ipc_service_t* service, const void* data, size_t data_size, vo
         .callback = NULL,
         .callback_user_data = NULL,
         .caller_thread = k_current_get(),
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+        .shm_handle = 0, /* 初始无共享内存 */
+#endif
     };
 
     /* 发送请求到请求队列 */
@@ -662,7 +743,7 @@ int ipc_call_sync(ipc_service_t* service, const void* data, size_t data_size, vo
 
     if (ret != 0) {
         k_mutex_lock(&service->pending_lock, K_FOREVER);
-        release_pending_entry(entry);
+        release_pending_entry(service, entry);
         k_mutex_unlock(&service->pending_lock);
         return ret;
     }
@@ -675,7 +756,7 @@ int ipc_call_sync(ipc_service_t* service, const void* data, size_t data_size, vo
         if (entry->in_use) {
             entry->result = ret;
             k_sem_give(&entry->response_sem); /* 唤醒可能的其他等待者 */
-            release_pending_entry(entry);
+            release_pending_entry(service, entry);
         }
         k_mutex_unlock(&service->pending_lock);
         return ret;
@@ -685,14 +766,105 @@ int ipc_call_sync(ipc_service_t* service, const void* data, size_t data_size, vo
     *out_data = (void*) entry->response_data;
     *out_data_size = entry->response_data_size;
     int result = entry->result;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    ipc_shm_handle_t shm_handle = entry->shm_handle;
+    entry->shm_handle = 0; /* 转移所有权到调用者 */
+#endif
 
     /* 释放 pending 条目 */
     k_mutex_lock(&service->pending_lock, K_FOREVER);
-    release_pending_entry(entry);
+    release_pending_entry(service, entry);
     k_mutex_unlock(&service->pending_lock);
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+    /* 存储共享内存句柄到输出参数，供调用者使用 */
+    /* 调用者需要通过 ipc_shm_release() 释放 */
+    if (shm_handle != 0) {
+        LOG_DBG("ipc_call_sync returning shm_handle %u", shm_handle);
+    }
+#endif
 
     return result;
 }
+
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+/**
+ * @brief 同步调用 IPC 服务（带共享内存句柄返回）
+ */
+int ipc_call_sync_shm(ipc_service_t* service, const void* data, size_t data_size, void** out_data,
+                      size_t* out_data_size, ipc_shm_handle_t* out_shm_handle, k_timeout_t timeout) {
+    /* 复用 ipc_call_sync 逻辑，但保存 shm_handle */
+    if (service == NULL || !service->running) {
+        return -EINVAL;
+    }
+    if (out_data == NULL || out_data_size == NULL) {
+        return -EINVAL;
+    }
+    if (timeout.ticks == 0) {
+        return -EINVAL;
+    }
+
+    ipc_request_id_t request_id = ipc_generate_request_id();
+
+    k_mutex_lock(&service->pending_lock, K_FOREVER);
+    ipc_pending_request_t* entry = allocate_pending_entry(service);
+    if (entry == NULL) {
+        k_mutex_unlock(&service->pending_lock);
+        return -ENOMEM;
+    }
+    init_pending_entry(service, entry, request_id, k_current_get(), NULL, NULL, NULL);
+    k_mutex_unlock(&service->pending_lock);
+
+    ipc_request_msg_t request_msg = {
+        .request_id = request_id,
+        .data = data,
+        .data_size = data_size,
+        .callback = NULL,
+        .callback_user_data = NULL,
+        .caller_thread = k_current_get(),
+        .shm_handle = 0,
+    };
+
+    int ret = k_msgq_put(&service->request_queue, &request_msg, K_FOREVER);
+    if (ret != 0) {
+        k_mutex_lock(&service->pending_lock, K_FOREVER);
+        release_pending_entry(service, entry);
+        k_mutex_unlock(&service->pending_lock);
+        return ret;
+    }
+
+    ret = k_sem_take(&entry->response_sem, timeout);
+    if (ret != 0) {
+        k_mutex_lock(&service->pending_lock, K_FOREVER);
+        if (entry->in_use) {
+            entry->result = ret;
+            k_sem_give(&entry->response_sem);
+            release_pending_entry(service, entry);
+        }
+        k_mutex_unlock(&service->pending_lock);
+        return ret;
+    }
+
+    *out_data = (void*) entry->response_data;
+    *out_data_size = entry->response_data_size;
+    int result = entry->result;
+    ipc_shm_handle_t shm_handle = entry->shm_handle;
+    entry->shm_handle = 0;
+
+    k_mutex_lock(&service->pending_lock, K_FOREVER);
+    release_pending_entry(service, entry);
+    k_mutex_unlock(&service->pending_lock);
+
+    if (out_shm_handle != NULL) {
+        *out_shm_handle = shm_handle;
+    } else if (shm_handle != 0) {
+        /* 调用者不关心句柄，自动释放 */
+        ipc_shm_release(service, shm_handle);
+    }
+
+    return result;
+}
+#endif
 
 /**
  * @brief 异步调用 IPC 服务
@@ -742,7 +914,7 @@ int ipc_call_async(ipc_service_t* service, const void* data, size_t data_size, i
 
     if (ret != 0) {
         k_mutex_lock(&service->pending_lock, K_FOREVER);
-        release_pending_entry(entry);
+        release_pending_entry(service, entry);
         k_mutex_unlock(&service->pending_lock);
         return ret;
     }
@@ -812,7 +984,7 @@ int ipc_call_future(ipc_service_t* service, const void* data, size_t data_size, 
 
     if (ret != 0) {
         k_mutex_lock(&service->pending_lock, K_FOREVER);
-        release_pending_entry(entry);
+        release_pending_entry(service, entry);
         release_future(service, future);
         k_mutex_unlock(&service->pending_lock);
         return ret;
@@ -949,14 +1121,21 @@ int ipc_service_cancel(ipc_service_t* service, ipc_request_id_t request_id) {
             entry->future->result = -ECANCELED;
             entry->future->data = NULL;
             entry->future->data_size = 0;
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+            /* 取消时释放共享内存引用 */
+            if (entry->shm_handle != 0) {
+                ipc_shm_release(service, entry->shm_handle);
+                entry->shm_handle = 0;
+            }
+#endif
             atomic_set(&entry->future->completed, 1);
             k_sem_give(&entry->future->semaphore);
             entry->future = NULL;
-            release_pending_entry(entry);
+            release_pending_entry(service, entry);
             ret = 0;
         } else if (entry->callback != NULL) {
             /* ASYNC 模式：直接释放条目（回调不会被调用） */
-            release_pending_entry(entry);
+            release_pending_entry(service, entry);
             ret = 0;
         } else {
             /* SYNC 模式：设置取消状态并唤醒等待线程 */
@@ -964,6 +1143,7 @@ int ipc_service_cancel(ipc_service_t* service, ipc_request_id_t request_id) {
             entry->response_data = NULL;
             entry->response_data_size = 0;
             k_sem_give(&entry->response_sem);
+            release_pending_entry(service, entry);
             ret = 0;
         }
     }
