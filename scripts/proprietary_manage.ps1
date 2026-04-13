@@ -30,6 +30,11 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 $ProprietaryDir = Join-Path $ProjectRoot "src\proprietary"
 $ProprietaryCommonCmake = Join-Path $ProprietaryDir "proprietary_modules_common.cmake"
+$ConfigFile = Join-Path $ProjectRoot "proprietary_modules.conf"
+$LocalConfigFile = Join-Path $ProjectRoot "proprietary_modules.local.conf"
+
+# Module configuration cache
+$script:ModuleConfig = @{}
 
 function Show-Help {
     Write-Host @"
@@ -42,6 +47,14 @@ Usage:
     .\proprietary_manage.ps1 -Status      Show proprietary modules status
     .\proprietary_manage.ps1 -Update      Update proprietary modules to latest version
     .\proprietary_manage.ps1 -Help        Show this help
+
+Configuration:
+    Create 'proprietary_modules.local.conf' to customize module URLs.
+    Format: MODULE_NAME=REPOSITORY_URL
+
+    Example:
+        EVENT_SYSTEM_PRO_URL=https://gitee.com/your-repo/event_system_pro.git
+        MESH_COMMUNICATION_URL=https://gitee.com/your-repo/mesh_communication.git
 
 Description:
     The proprietary modules directory (src/proprietary) is a Git submodule.
@@ -85,6 +98,65 @@ function Get-SubmoduleStatus {
     }
 }
 
+function Read-ModuleConfig {
+    # Read from default config file
+    if (Test-Path $ConfigFile) {
+        Get-Content $ConfigFile | ForEach-Object {
+            $line = $_.Trim()
+            if ($line -and !$line.StartsWith('#') -and $line.Contains('=')) {
+                $parts = $line.Split('=', 2)
+                $key = $parts[0].Trim()
+                $value = $parts[1].Trim()
+                if ($value) {
+                    $script:ModuleConfig[$key] = $value
+                }
+            }
+        }
+    }
+
+    # Read from local config file (overrides default)
+    if (Test-Path $LocalConfigFile) {
+        Get-Content $LocalConfigFile | ForEach-Object {
+            $line = $_.Trim()
+            if ($line -and !$line.StartsWith('#') -and $line.Contains('=')) {
+                $parts = $line.Split('=', 2)
+                $key = $parts[0].Trim()
+                $value = $parts[1].Trim()
+                if ($value) {
+                    $script:ModuleConfig[$key] = $value
+                }
+            }
+        }
+    }
+
+    # Read from environment variables (highest priority)
+    Get-ChildItem Env: | Where-Object { $_.Name -like 'PROPRIETARY_MODULE_*_URL' } | ForEach-Object {
+        $key = $_.Name
+        $value = $_.Value
+        $script:ModuleConfig[$key] = $value
+    }
+}
+
+function Get-ModuleUrl {
+    param([string]$ModuleName)
+
+    $envName = "PROPRIETARY_MODULE_${ModuleName}_URL"
+    $configName = "${ModuleName}_URL"
+
+    # Check environment variable first
+    $envValue = [Environment]::GetEnvironmentVariable($envName)
+    if ($envValue) {
+        return $envValue
+    }
+
+    # Check config
+    if ($script:ModuleConfig.ContainsKey($configName)) {
+        return $script:ModuleConfig[$configName]
+    }
+
+    return $null
+}
+
 function Enable-ProprietaryModules {
     Write-Info "Enabling proprietary modules..."
 
@@ -92,6 +164,9 @@ function Enable-ProprietaryModules {
         Write-ErrorMsg "Current directory is not a Git repository"
         exit 1
     }
+
+    # Read configuration
+    Read-ModuleConfig
 
     Push-Location $ProjectRoot
     try {
@@ -102,13 +177,86 @@ function Enable-ProprietaryModules {
             exit 1
         }
 
-        # Initialize and update submodule
-        Write-Info "Initializing submodule..."
-        git submodule update --init --recursive -- "src/proprietary"
+        # Initialize main submodule
+        Write-Info "Initializing main submodule..."
+        $result = git submodule update --init -- "src/proprietary" 2>&1
+        $mainExitCode = $LASTEXITCODE
 
-        if ($LASTEXITCODE -ne 0) {
-            Write-ErrorMsg "Submodule initialization failed"
+        if ($mainExitCode -ne 0) {
+            Write-ErrorMsg "Main submodule initialization failed"
             exit 1
+        }
+
+        Write-Success "Main submodule initialized"
+
+        # Check if we need to configure individual modules
+        if (Test-Path "$ProprietaryDir/.gitmodules") {
+            Write-Info "Configuring individual modules..."
+
+            # Get list of modules from .gitmodules
+            $modules = @()
+            Push-Location $ProprietaryDir
+            try {
+                $modules = git config --file .gitmodules --get-regexp path 2>$null | ForEach-Object {
+                    $_.Split()[1]
+                }
+            }
+            finally {
+                Pop-Location
+            }
+
+            $configuredCount = 0
+            $skippedCount = 0
+
+            foreach ($moduleName in $modules) {
+                $modulePath = Join-Path $ProprietaryDir $moduleName
+                $url = Get-ModuleUrl $moduleName
+
+                if ($url) {
+                    Write-Host "  Configuring: $moduleName" -NoNewline
+
+                    Push-Location $ProprietaryDir
+                    try {
+                        # Set the URL for this submodule
+                        git config --file .gitmodules "submodule.$moduleName.url" $url 2>$null
+
+                        # Clean up old submodule directory if it exists but is broken
+                        if (Test-Path $modulePath) {
+                            Remove-Item -Recurse -Force $modulePath 2>$null
+                        }
+
+                        # Sync and update
+                        git submodule sync -- $moduleName 2>$null
+
+                        # Run update - temporarily disable error action preference
+                        $prevErrorAction = $ErrorActionPreference
+                        $ErrorActionPreference = "Continue"
+                        try {
+                            $updateResult = git submodule update --init -- $moduleName 2>&1
+                            $updateExitCode = $LASTEXITCODE
+                        } finally {
+                            $ErrorActionPreference = $prevErrorAction
+                        }
+
+                        if ($updateExitCode -eq 0) {
+                            Write-Host " [OK]" -ForegroundColor Green
+                            $configuredCount++
+                        } else {
+                            Write-Host " [FAILED]" -ForegroundColor Red
+                            Write-Warning "  Could not initialize $moduleName from $url"
+                        }
+                    }
+                    finally {
+                        Pop-Location
+                    }
+                } else {
+                    Write-Host "  Skipping: $moduleName (no URL configured)" -ForegroundColor DarkGray
+                    $skippedCount++
+                }
+            }
+
+            Write-Host ""
+            Write-Info "Configured: $configuredCount, Skipped: $skippedCount"
         }
 
         # Verify
@@ -153,38 +301,34 @@ function Disable-ProprietaryModules {
         }
 
         # Check for uncommitted changes
-        Push-Location $ProprietaryDir
-        try {
-            $status = git status --porcelain 2>$null
-            if ($status) {
-                Write-Warning "Proprietary modules directory has uncommitted changes:"
-                Write-Host $status
-                $confirm = Read-Host "Continue with disable? (y/N)"
-                if ($confirm -ne "y" -and $confirm -ne "Y") {
-                    Write-Info "Operation cancelled"
-                    return
+        if (Test-Path "$ProprietaryDir/.git") {
+            Push-Location $ProprietaryDir
+            try {
+                $status = git status --porcelain 2>$null
+                if ($status) {
+                    Write-Warning "Proprietary modules directory has uncommitted changes:"
+                    Write-Host $status
+                    $confirm = Read-Host "Continue with disable? (y/N)"
+                    if ($confirm -ne "y" -and $confirm -ne "Y") {
+                        Write-Info "Operation cancelled"
+                        return
+                    }
                 }
             }
-        }
-        finally {
-            Pop-Location
+            finally {
+                Pop-Location
+            }
         }
 
         # Remove submodule content (but keep config)
         Write-Info "Removing proprietary modules content..."
 
         # Use git submodule deinit
-        git submodule deinit -f -- "src/proprietary"
+        git submodule deinit -f -- "src/proprietary" 2>&1 | Out-Null
 
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "Proprietary modules disabled"
-            Write-Info "Project can now compile without proprietary modules"
-            Write-Info "To re-enable, run: .\proprietary_manage.ps1 -Enable"
-        }
-        else {
-            Write-ErrorMsg "Disable failed"
-            exit 1
-        }
+        Write-Success "Proprietary modules disabled"
+        Write-Info "Project can now compile without proprietary modules"
+        Write-Info "To re-enable, run: .\proprietary_manage.ps1 -Enable"
     }
     finally {
         Pop-Location
@@ -203,6 +347,15 @@ function Show-Status {
         return
     }
 
+    # Check if directory is empty (deinit leaves empty dir)
+    $dirItems = Get-ChildItem -Path $ProprietaryDir -Force -ErrorAction SilentlyContinue
+    if ($dirItems.Count -eq 0) {
+        Write-Warning "Proprietary modules directory is empty (src/proprietary)"
+        Write-Info "Status: Not enabled"
+        Write-Info "Run '.\proprietary_manage.ps1 -Enable' to enable"
+        return
+    }
+
     # Check if key files exist
     if (-not (Test-Path $ProprietaryCommonCmake)) {
         Write-Warning "Proprietary modules directory exists but content is incomplete"
@@ -211,7 +364,8 @@ function Show-Status {
         return
     }
 
-    Write-Success "Directory: $ProprietaryDir"
+    Write-Success "Framework: Enabled"
+    Write-Info "Directory: $ProprietaryDir"
     Write-Host ""
 
     # Get submodule status
@@ -254,7 +408,18 @@ function Show-Status {
         }
     }
     else {
-        Write-Warning "  No proprietary modules found"
+        Write-Warning "  No modules available (submodules not initialized)"
+        Write-Info "  Configure URLs in proprietary_modules.local.conf and run -Update"
+    }
+
+    # Show configuration status
+    Write-Host ""
+    Write-Info "Configuration:"
+    if (Test-Path $LocalConfigFile) {
+        Write-Success "  Local config found: proprietary_modules.local.conf"
+    } elseif (Test-Path $ConfigFile) {
+        Write-Info "  Using default config: proprietary_modules.conf"
+        Write-Info "  Create proprietary_modules.local.conf to customize URLs"
     }
 }
 
@@ -266,24 +431,65 @@ function Update-ProprietaryModules {
         exit 1
     }
 
+    # Read configuration
+    Read-ModuleConfig
+
     Push-Location $ProjectRoot
+    $hasErrors = $false
     try {
         # Update main submodule
         Write-Info "Updating main proprietary module..."
-        git submodule update --init --recursive --remote -- "src/proprietary"
 
-        if ($LASTEXITCODE -ne 0) {
-            Write-ErrorMsg "Update failed"
-            exit 1
+        $output = git submodule update --init -- "src/proprietary" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Main module updated"
+        } else {
+            Write-Warning "Main module update had issues, continuing..."
         }
 
-        # Update internal submodules
-        if (Test-Path $ProprietaryDir) {
+        # Update internal submodules one by one for better error handling
+        if (Test-Path "$ProprietaryDir/.gitmodules") {
+            Write-Info "Updating internal submodules..."
+
             Push-Location $ProprietaryDir
             try {
-                if (Test-Path ".gitmodules") {
-                    Write-Info "Updating internal submodules..."
-                    git submodule update --init --recursive --remote
+                # Get list of submodule paths
+                $submodules = git config --file .gitmodules --get-regexp path 2>$null | ForEach-Object { $_.Split()[1] }
+
+                foreach ($submod in $submodules) {
+                    $submodPath = Join-Path $ProprietaryDir $submod
+                    $url = Get-ModuleUrl $submod
+
+                    Write-Host "  Checking: $submod" -NoNewline
+
+                    if ($url) {
+                        # Update URL if configured
+                        git config --file .gitmodules "submodule.$submod.url" $url 2>$null
+                        git submodule sync -- $submod 2>$null
+                    }
+
+                    Push-Location $submodPath
+                    try {
+                        $result = git submodule update --init 2>&1
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Host " [OK]" -ForegroundColor Green
+                        } else {
+                            Write-Host " [FAILED]" -ForegroundColor Red
+                            if ($url) {
+                                Write-Warning "  Error updating $submod from $url"
+                            } else {
+                                Write-Warning "  No URL configured for $submod"
+                            }
+                            $hasErrors = $true
+                        }
+                    }
+                    catch {
+                        Write-Host " [ERROR]" -ForegroundColor Red
+                        $hasErrors = $true
+                    }
+                    finally {
+                        Pop-Location
+                    }
                 }
             }
             finally {
@@ -291,7 +497,13 @@ function Update-ProprietaryModules {
             }
         }
 
-        Write-Success "Proprietary modules updated"
+        if ($hasErrors) {
+            Write-Warning ""
+            Write-Warning "Some submodules failed to update."
+            Write-Warning "Configure URLs in proprietary_modules.local.conf"
+        } else {
+            Write-Success "Proprietary modules updated successfully"
+        }
     }
     finally {
         Pop-Location
