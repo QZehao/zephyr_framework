@@ -96,32 +96,48 @@ Zephyr 在 **Inter Processor Communication** 菜单下有 **`CONFIG_IPC_SERVICE`
 | Kconfig 符号 | 类型 | 默认值 | 含义 |
 |--------------|------|--------|------|
 | `THREAD_IPC_SERVICE` | bool | n | 总开关 → `CONFIG_THREAD_IPC_SERVICE` |
-| `THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS` | int | 16 | 最大并发未完成请求数（4–64） |
-| `THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE` | int | 8 | 请求消息队列深度（2–32） |
-| `THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE` | int | 8 | 响应消息队列深度（2–32） |
-| `THREAD_IPC_SERVICE_STACK_SIZE` | int | 2048 | Worker / Dispatcher **各自**栈大小（字节，512–8192） |
+| `THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS` | int | 8 | 最大并发未完成请求数（2–64） |
+| `THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE` | int | 4 | 请求消息队列深度（2–32） |
+| `THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE` | int | 4 | 响应消息队列深度（2–32） |
+| `THREAD_IPC_SERVICE_STACK_SIZE` | int | 1024 | Worker / Dispatcher **各自**栈大小（字节，512–8192） |
 | `THREAD_IPC_SERVICE_PRIORITY` | int | 5 | 两线程优先级（-16–15） |
-| `THREAD_IPC_SERVICE_LOG_LEVEL` | int | 3 | 模块日志级别（0–4） |
+| `THREAD_IPC_SERVICE_LOG_LEVEL` | int | 1 | 模块日志级别（0–4），生产环境建议 0 或 1 |
 | `THREAD_IPC_SERVICE_EXAMPLE` | bool | n | 是否编译内置示例 |
 | `THREAD_IPC_SERVICE_EVENT_BRIDGE` | bool | n | 编译 `ipc_service_event.c`：向事件总线发布 IPC 结果（依赖 `EVENT_SYSTEM`） |
 | `EXAMPLE_MODULE_THREAD_IPC` | bool | n | 编译 `example_module_ipc` 并与 `module_manager` 集成（依赖 `THREAD_IPC_SERVICE` + `MODULE_MANAGER`） |
 
-`prj.conf` 示例（与仓库当前工程一致；**事件桥 / 事件系统依赖 `k_malloc`，须保留非零堆**）：
+`prj.conf` 示例（默认配置，适合 64KB SRAM；**事件桥 / 事件系统依赖 `k_malloc`，须保留非零堆**）：
 
 ```conf
-CONFIG_HEAP_MEM_POOL_SIZE=8192
 CONFIG_THREAD_IPC_SERVICE=y
 CONFIG_THREAD_IPC_SERVICE_EXAMPLE=n
 CONFIG_THREAD_IPC_SERVICE_EVENT_BRIDGE=y
 CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS=8
-CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE=6
-CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE=6
-CONFIG_THREAD_IPC_SERVICE_STACK_SIZE=1280
+CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE=4
+CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE=4
+CONFIG_THREAD_IPC_SERVICE_STACK_SIZE=1024
 CONFIG_THREAD_IPC_SERVICE_PRIORITY=5
-CONFIG_THREAD_IPC_SERVICE_LOG_LEVEL=3
+CONFIG_THREAD_IPC_SERVICE_LOG_LEVEL=1
 ```
 
-**重要：** `ipc_service_t` 内部的缓冲区与栈大小由上述宏 **在编译期固定**。运行时 `ipc_service_init()` 会校验传入的 `stack_size`、`request_queue_size`、`response_queue_size` 与 Kconfig **必须完全一致**，否则返回 `-EINVAL`。
+**20KB SRAM 极小配置示例**（总占用约 2KB）：
+
+```conf
+CONFIG_THREAD_IPC_SERVICE=y
+CONFIG_THREAD_IPC_SERVICE_STACK_SIZE=512
+CONFIG_THREAD_IPC_SERVICE_PRIORITY=6
+CONFIG_THREAD_IPC_SERVICE_LOG_LEVEL=0
+CONFIG_THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS=4
+CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE=2
+CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE=2
+CONFIG_THREAD_IPC_SERVICE_SHARED_MEM=y
+CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE=2
+CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_BLOCK_SIZE=128
+CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_LOG_LEVEL=0
+CONFIG_THREAD_IPC_SERVICE_EXAMPLE=n
+```
+
+**重要：** `ipc_service_t` 内部的缓冲区与栈大小由上述宏 **在编译期固定**。`ipc_service_init()` 只需传入 `service`、`name`、`service_func`、`priority` 参数，栈大小和队列大小由 Kconfig 配置决定。
 
 ---
 

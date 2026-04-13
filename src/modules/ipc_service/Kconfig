@@ -15,36 +15,52 @@ menuconfig THREAD_IPC_SERVICE
 	  Name THREAD_IPC_SERVICE avoids Kconfig symbol collision with upstream
 	  CONFIG_IPC_SERVICE.
 
+	  Memory footprint (default config):
+	    - Base: ~2.5 KB (stacks, queues, pending table, futures)
+	    - Shared mem: ~4 KB (4 blocks × 256B + metadata)
+	    - Total: ~6.5 KB
+
+	  For 20KB SRAM systems, use minimal config:
+	    - STACK_SIZE=1024, MAX_PENDING=4, QUEUE_SIZE=4
+	    - SHARED_MEM_POOL_SIZE=4, SHARED_MEM_BLOCK_SIZE=128
+	    - Total: ~3 KB
+
 if THREAD_IPC_SERVICE
 
 config THREAD_IPC_SERVICE_MAX_PENDING_REQUESTS
     int "Maximum pending requests"
-    default 16
-    range 4 64
+    default 8
+    range 2 64
     help
       Maximum number of pending requests that can be tracked at any time.
+      Each slot uses ~76 bytes. Reduce for memory-constrained systems.
 
 config THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE
     int "Request queue depth"
-    default 8
+    default 4
     range 2 32
     help
       Number of request messages the worker queue can hold (static buffer).
+      Each message uses ~56 bytes. Reduce for memory-constrained systems.
 
 config THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE
     int "Response queue depth"
-    default 8
+    default 4
     range 2 32
     help
       Number of response messages the dispatcher queue can hold (static buffer).
+      Each message uses ~48 bytes. Reduce for memory-constrained systems.
 
 config THREAD_IPC_SERVICE_STACK_SIZE
     int "Per-thread stack size (worker + dispatcher)"
-    default 2048
+    default 1024
     range 512 8192
     help
       Stack size in bytes for each of the two internal threads (embedded in
       ipc_service_t). No kernel heap is required.
+
+      For simple services: 512-1024 bytes may be sufficient.
+      For complex services with deep call chains: 2048+ bytes recommended.
 
 config THREAD_IPC_SERVICE_PRIORITY
     int "Thread priority (worker and dispatcher)"
@@ -55,10 +71,11 @@ config THREAD_IPC_SERVICE_PRIORITY
 
 config THREAD_IPC_SERVICE_LOG_LEVEL
     int "Log level"
-    default 3
+    default 1
     range 0 4
     help
       0=OFF, 1=ERROR, 2=WARNING, 3=INFO, 4=DEBUG
+      Set to 0 or 1 for production to reduce code size.
 
 config THREAD_IPC_SERVICE_EXAMPLE
     bool "Build thread IPC example"
@@ -66,6 +83,7 @@ config THREAD_IPC_SERVICE_EXAMPLE
     depends on THREAD_IPC_SERVICE
     help
       Example SYS_INIT + demo thread (sync/async/future).
+      Disable for production builds.
 
 config THREAD_IPC_SERVICE_EVENT_BRIDGE
     bool "Bridge: publish IPC results to event system"
@@ -86,29 +104,41 @@ config THREAD_IPC_SERVICE_SHARED_MEM
       2. No reference counting - caller must guarantee buffer validity
       3. No safe sharing mechanism - no protection for cross-thread data
 
+      Disable to save ~500 bytes code + pool memory if not needed.
+
 config THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE
     int "Shared memory pool block count"
-    default 32
-    range 8 128
+    default 4
+    range 2 128
     depends on THREAD_IPC_SERVICE_SHARED_MEM
     help
       Number of shared memory blocks in the static pool.
+      Each block adds ~48 bytes metadata overhead.
+
+      For 20KB SRAM: 2-4 blocks recommended.
+      For 64KB+ SRAM: 8-16 blocks may be appropriate.
 
 config THREAD_IPC_SERVICE_SHARED_MEM_BLOCK_SIZE
     int "Shared memory block size (bytes)"
-    default 512
+    default 256
     range 64 4096
     depends on THREAD_IPC_SERVICE_SHARED_MEM
     help
       Size of each shared memory block in bytes.
 
+      For small payloads (<100 bytes): 128-256 bytes.
+      For larger payloads: 512-1024 bytes.
+
+      Total shared memory = POOL_SIZE × BLOCK_SIZE.
+
 config THREAD_IPC_SERVICE_SHARED_MEM_LOG_LEVEL
     int "Shared memory log level"
-    default 3
+    default 1
     range 0 4
     depends on THREAD_IPC_SERVICE_SHARED_MEM
     help
       0=OFF, 1=ERROR, 2=WARNING, 3=INFO, 4=DEBUG
+      Set to 0 or 1 for production to reduce code size.
 
 config EXAMPLE_MODULE_THREAD_IPC
     bool "Example: business module integrating Thread IPC (module_manager)"

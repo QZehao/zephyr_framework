@@ -116,8 +116,7 @@ ZTEST(ipc_service, test_init_start_sync_stop) {
     size_t     outsz = 0;
     int        r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -141,8 +140,7 @@ ZTEST(ipc_service, test_sync_call_with_large_data) {
     memset(large_payload, 'A', sizeof(large_payload) - 1);
     large_payload[sizeof(large_payload) - 1] = '\0';
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -162,8 +160,7 @@ ZTEST(ipc_service, test_sync_call_error_handler) {
     size_t outsz = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_error_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_error_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -188,8 +185,7 @@ ZTEST(ipc_service, test_async_call) {
     g_async_callback_result = 0;
     g_async_callback_data_size = 0;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -217,8 +213,7 @@ ZTEST(ipc_service, test_async_call_with_delayed_handler) {
 
     g_async_callback_count = 0;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -247,8 +242,7 @@ ZTEST(ipc_service, test_future_call) {
     size_t out_size = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -275,8 +269,7 @@ ZTEST(ipc_service, test_future_is_ready) {
     ipc_future_t* future = NULL;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -307,8 +300,7 @@ ZTEST(ipc_service, test_future_wait_timeout) {
     size_t out_size = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -337,8 +329,7 @@ ZTEST(ipc_service, test_get_pending_count) {
     ipc_request_id_t request_id = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -373,8 +364,7 @@ ZTEST(ipc_service, test_cancel_request) {
     ipc_request_id_t request_id = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -416,20 +406,17 @@ ZTEST(ipc_service, test_generate_request_id) {
  * ============================================================================= */
 
 ZTEST(ipc_service, test_null_service_init) {
-    int r = ipc_service_init(NULL, "test", ipc_ut_handler,
-                             CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5, 8, 8);
+    int r = ipc_service_init(NULL, "test", ipc_ut_handler, 5);
     zassert_not_equal(r, 0, "NULL service 应失败");
 }
 
 ZTEST(ipc_service, test_null_handler_init) {
-    int r = ipc_service_init(&g_ipc, "test", NULL,
-                             CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5, 8, 8);
+    int r = ipc_service_init(&g_ipc, "test", NULL, 5);
     zassert_not_equal(r, 0, "NULL handler 应失败");
 }
 
 ZTEST(ipc_service, test_stop_without_start) {
-    int r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                             CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    int r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     /* 未启动直接停止 */
@@ -442,8 +429,7 @@ ZTEST(ipc_service, test_sync_call_before_start) {
     void* out = NULL;
     size_t outsz = 0;
 
-    int r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                             CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    int r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_call_sync(&g_ipc, payload, sizeof(payload), &out, &outsz, K_MSEC(100));
@@ -456,8 +442,7 @@ ZTEST(ipc_service, test_multiple_start_stop_cycles) {
     size_t outsz = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     for (int i = 0; i < 3; i++) {
@@ -488,8 +473,7 @@ ZTEST(ipc_service, test_concurrent_requests) {
 
     g_handler_call_count = 0;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_counting_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_counting_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -516,8 +500,7 @@ ZTEST(ipc_service, test_sync_call_timeout) {
     size_t outsz = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_delayed_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -538,8 +521,7 @@ ZTEST(ipc_service, test_async_null_callback) {
     ipc_request_id_t request_id = 0;
     int r;
 
-    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "ut_ipc", ipc_ut_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -580,8 +562,7 @@ static int ipc_shm_alloc_handler(ipc_request_id_t request_id, const void* data, 
 ZTEST(ipc_service, test_shared_memory_basic) {
     int r;
 
-    r = ipc_service_init(&g_ipc, "shm_test", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "shm_test", ipc_shm_alloc_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     r = ipc_service_start(&g_ipc);
@@ -621,8 +602,7 @@ ZTEST(ipc_service, test_shared_memory_stats) {
     int r;
     uint32_t active, peak, free;
 
-    r = ipc_service_init(&g_ipc, "shm_stats", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "shm_stats", ipc_shm_alloc_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     /* 初始状态 */
@@ -657,8 +637,7 @@ ZTEST(ipc_service, test_shared_memory_exhaustion) {
     uint32_t pool_size = CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE;
     ipc_shm_handle_t handles[16]; /* 假设池大小至少 8 */
 
-    r = ipc_service_init(&g_ipc, "shm_exhaust", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "shm_exhaust", ipc_shm_alloc_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     /* 分配直到池满 */
@@ -694,8 +673,7 @@ ZTEST(ipc_service, test_shared_memory_exhaustion) {
 ZTEST(ipc_service, test_shared_memory_invalid_params) {
     int r;
 
-    r = ipc_service_init(&g_ipc, "shm_invalid", ipc_shm_alloc_handler, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, 5,
-                         CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+    r = ipc_service_init(&g_ipc, "shm_invalid", ipc_shm_alloc_handler, 5);
     zassert_equal(r, 0, "ipc_service_init failed: %d", r);
 
     /* NULL service */

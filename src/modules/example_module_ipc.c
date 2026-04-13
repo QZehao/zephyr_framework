@@ -99,11 +99,9 @@ int example_module_ipc_init(void* config) {
 
     memset(&g_mod_ipc, 0, sizeof(g_mod_ipc));
 
-    /* 参数须与 Kconfig 中队列/栈大小一致，否则 ipc_service_init 返回 -EINVAL */
+    /* 线程栈大小和队列大小通过 Kconfig 配置，无需传入参数 */
     int ret =
-        ipc_service_init(&g_mod_ipc.ipc, "mod_ipc_svc", mod_ipc_service_func, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE,
-                         CONFIG_THREAD_IPC_SERVICE_PRIORITY, CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE,
-                         CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+        ipc_service_init(&g_mod_ipc.ipc, "mod_ipc_svc", mod_ipc_service_func, CONFIG_THREAD_IPC_SERVICE_PRIORITY);
 
     if (ret != 0) {
         LOG_ERR("ipc_service_init failed: %d", ret);
@@ -121,7 +119,7 @@ int example_module_ipc_init(void* config) {
 }
 
 int example_module_ipc_start(void) {
-    /* 仅允许从“已初始化”或“已停止”进入运行 */
+    /* 仅允许从”已初始化”或”已停止”进入运行 */
     if (g_mod_ipc.status != MODULE_STATUS_INITIALIZED && g_mod_ipc.status != MODULE_STATUS_STOPPED) {
         return -EINVAL;
     }
@@ -129,11 +127,9 @@ int example_module_ipc_start(void) {
     /* stop 后需重新 init（队列/线程元数据由 init 重置） */
     if (g_mod_ipc.status == MODULE_STATUS_STOPPED) {
         int ret =
-            ipc_service_init(&g_mod_ipc.ipc, "mod_ipc_svc", mod_ipc_service_func, CONFIG_THREAD_IPC_SERVICE_STACK_SIZE,
-                             CONFIG_THREAD_IPC_SERVICE_PRIORITY, CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE,
-                             CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+            ipc_service_init(&g_mod_ipc.ipc, “mod_ipc_svc”, mod_ipc_service_func, CONFIG_THREAD_IPC_SERVICE_PRIORITY);
         if (ret != 0) {
-            LOG_ERR("ipc_service_init (restart) failed: %d", ret);
+            LOG_ERR(“ipc_service_init (restart) failed: %d”, ret);
             return ret;
         }
 #if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_EVENT_BRIDGE)
