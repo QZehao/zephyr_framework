@@ -34,8 +34,8 @@ LOG_MODULE_REGISTER(event_system, CONFIG_SYS_LOG_LEVEL);
  * 内部定义 (Internal Definitions)
  * ============================================================================= */
 
-/** 最大支持的事件类型数量 */
-#define MAX_EVENT_TYPES    256
+/** 最大支持的事件类型数量（从 Kconfig 获取） */
+#define MAX_EVENT_TYPES    CONFIG_EVENT_MAX_TYPES
 
 /** 魔术字，用于验证控制块有效性 ("EVNT") */
 #define EVENT_SYSTEM_MAGIC 0x45564E54

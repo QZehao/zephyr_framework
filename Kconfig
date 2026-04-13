@@ -13,6 +13,15 @@ config EVENT_SYSTEM
 	help
 	  Enable the core event-driven architecture for the application.
 
+config EVENT_MAX_TYPES
+	int "Maximum Event Types"
+	default 256
+	range 8 256
+	help
+	  Maximum number of event types supported.
+	  Each type uses approximately 288 bytes (with 16 subscribers).
+	  For 32KB SRAM systems, use 16 or less to save memory.
+
 config EVENT_QUEUE_SIZE
 	int "Event Queue Size"
 	default 64

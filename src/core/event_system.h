@@ -42,6 +42,14 @@ extern "C" {
  * ============================================================================= */
 
 /**
+ * @brief 最大支持的事件类型数量
+ * @note 可通过 CONFIG_EVENT_MAX_TYPES 配置，默认 256
+ */
+#ifndef CONFIG_EVENT_MAX_TYPES
+#define CONFIG_EVENT_MAX_TYPES 256
+#endif
+
+/**
  * @brief 事件队列大小（最多容纳的事件数量）
  * @note 队列满时，新事件将被丢弃
  */
