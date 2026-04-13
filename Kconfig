@@ -16,7 +16,7 @@ config EVENT_SYSTEM
 config EVENT_MAX_TYPES
 	int "Maximum Event Types"
 	default 256
-	range 8 256
+	range 4 256
 	help
 	  Maximum number of event types supported.
 	  Each type uses approximately 288 bytes (with 16 subscribers).
@@ -25,14 +25,14 @@ config EVENT_MAX_TYPES
 config EVENT_QUEUE_SIZE
 	int "Event Queue Size"
 	default 64
-	range 16 512
+	range 4 512
 	help
 	  Maximum number of events that can be queued.
 
 config EVENT_MAX_SUBSCRIBERS
 	int "Maximum Event Subscribers"
 	default 16
-	range 4 64
+	range 1 64
 	help
 	  Maximum number of subscribers per event type.
 
@@ -194,9 +194,10 @@ config SYS_LOG_ENABLE
 config SYS_MEMORY_POOL_SIZE
 	int "System Memory Pool Size"
 	default 8192
-	range 1024 65536
+	range 0 65536
 	help
 	  Size of the system memory pool for event allocations.
+	  Set to 0 to disable the memory pool service.
 
 config SYS_MEMORY_ENABLE
 	bool "Enable System Memory Service"
@@ -283,9 +284,10 @@ config APP_ENABLE_LOG_DUMP
 config APP_HEARTBEAT_INTERVAL_MS
 	int "Application Heartbeat Interval (ms)"
 	default 1000
-	range 100 10000
+	range 0 10000
 	help
 	  Interval for application heartbeat timer.
+	  Set to 0 to disable heartbeat.
 
 endmenu
 
