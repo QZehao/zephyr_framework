@@ -243,8 +243,7 @@ static int ipc_service_example_init(void) {
 
     /* 初始化服务 */
     ret = ipc_service_init(&g_example_service, "example_service", example_service_func,
-                           CONFIG_THREAD_IPC_SERVICE_STACK_SIZE, CONFIG_THREAD_IPC_SERVICE_PRIORITY,
-                           CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE, CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE);
+                           CONFIG_THREAD_IPC_SERVICE_PRIORITY);
 
     if (ret != 0) {
         LOG_ERR("Failed to initialize IPC service: %d", ret);

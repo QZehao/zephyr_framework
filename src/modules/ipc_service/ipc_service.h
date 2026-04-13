@@ -226,17 +226,17 @@ typedef struct ipc_service {
  * @param service 服务实例指针
  * @param name 服务名称
  * @param service_func 服务处理函数
- * @param stack_size 工作线程栈大小
  * @param priority 线程优先级
- * @param request_queue_size 请求队列大小
- * @param response_queue_size 响应队列大小
  * @return 0 成功，负值错误码失败
  *
  * @note 此函数只初始化资源，不启动线程
  * @note 必须在使用服务前调用
+ * @note 线程栈大小、队列大小通过 Kconfig 配置：
+ *       - CONFIG_THREAD_IPC_SERVICE_STACK_SIZE
+ *       - CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE
+ *       - CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE
  */
-int ipc_service_init(ipc_service_t* service, const char* name, ipc_service_func_t service_func, size_t stack_size,
-                     int priority, size_t request_queue_size, size_t response_queue_size);
+int ipc_service_init(ipc_service_t* service, const char* name, ipc_service_func_t service_func, int priority);
 
 /**
  * @brief 启动 IPC 服务
@@ -268,15 +268,16 @@ int ipc_service_stop(ipc_service_t* service);
  * 发送请求并阻塞等待响应。
  *
  * @param service 服务实例指针
- * @param data 输入数据
- * @param data_size 输入数据大小
+ * @param data 输入数据（可为 NULL，表示无输入数据）
+ * @param data_size 输入数据大小（data 为 NULL 时应为 0）
  * @param out_data 输出数据指针
  * @param out_data_size 输出数据大小
- * @param timeout 超时时间
- * @return 服务函数返回值，或负值错误码
+ * @param timeout 超时时间（K_NO_WAIT 和零超时无效，会返回 -EINVAL）
+ * @return 服务函数返回值，或负值错误码（-EINVAL 参数无效，-ENOMEM 无空闲槽位，-EAGAIN 超时）
  *
  * @note 调用线程将阻塞直到收到响应或超时
  * @note 如果服务返回的是共享内存，调用者需要通过 ipc_shm_release() 释放
+ * @warning 超时返回后，out_data 指向的数据可能已被释放，调用者不应使用超时返回后的数据
  */
 int ipc_call_sync(ipc_service_t* service, const void* data, size_t data_size, void** out_data, size_t* out_data_size,
                   k_timeout_t timeout);
@@ -308,11 +309,11 @@ int ipc_call_sync_shm(ipc_service_t* service, const void* data, size_t data_size
  * 发送请求并立即返回，结果通过回调通知。
  *
  * @param service 服务实例指针
- * @param data 输入数据
- * @param data_size 输入数据大小
+ * @param data 输入数据（可为 NULL，表示无输入数据）
+ * @param data_size 输入数据大小（data 为 NULL 时应为 0）
  * @param callback 回调函数
  * @param user_data 回调用户数据
- * @param out_request_id 输出：请求 ID
+ * @param out_request_id 输出：请求 ID（可为 NULL）
  * @return 0 成功，负值错误码失败
  *
  * @note 调用线程立即返回，不阻塞
@@ -327,8 +328,8 @@ int ipc_call_async(ipc_service_t* service, const void* data, size_t data_size, i
  * 发送请求并返回 future 对象，用于后续获取结果。
  *
  * @param service 服务实例指针
- * @param data 输入数据
- * @param data_size 输入数据大小
+ * @param data 输入数据（可为 NULL，表示无输入数据）
+ * @param data_size 输入数据大小（data 为 NULL 时应为 0）
  * @param out_future 输出：future 对象指针
  * @return 0 成功，负值错误码失败
  *

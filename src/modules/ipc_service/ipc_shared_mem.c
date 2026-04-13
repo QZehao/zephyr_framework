@@ -142,12 +142,12 @@ static bool is_block_valid(const ipc_shm_pool_t* pool, uint32_t index) {
 
     /* 验证指针在池范围内 */
     void* ptr = block->ptr;
-    void* pool_start = (void*)pool->mem_pool;
-    void* pool_end = pool_start + sizeof(pool->mem_pool);
+    uint8_t* pool_start = pool->mem_pool;
+    uint8_t* pool_end = pool_start + sizeof(pool->mem_pool);
 
-    if (ptr < pool_start || ptr >= pool_end) {
+    if (ptr < (void*)pool_start || ptr >= (void*)pool_end) {
         LOG_ERR("Block %u: ptr %p out of pool range [%p, %p)",
-                index, ptr, pool_start, pool_end);
+                index, ptr, (void*)pool_start, (void*)pool_end);
         return false;
     }
 

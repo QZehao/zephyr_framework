@@ -75,23 +75,18 @@ static atomic_t s_request_id_counter = ATOMIC_INIT(1);
  *
  * @return 非零的请求 ID
  *
- * @note SIL-2: 添加溢出保护，计数器达到上限时回绕到 1
+ * @note SIL-2: 使用原子递增操作，避免竞态条件
+ * @note 计数器达到 UINT32_MAX 后自动回绕，跳过 0 值
  */
 ipc_request_id_t ipc_generate_request_id(void) {
     ipc_request_id_t id;
-    ipc_request_id_t old_val;
 
     do {
-        old_val = (ipc_request_id_t) atomic_get(&s_request_id_counter);
-
-        /* SIL-2: 防止计数器溢出 */
-        if (old_val == UINT32_MAX) {
-            atomic_set(&s_request_id_counter, 1);
-            LOG_WRN("Request ID counter wrapped around");
-            return 1U;
+        id = (ipc_request_id_t)atomic_inc(&s_request_id_counter);
+        /* SIL-2: 跳过 0 值（跳过一次意味着需要再次递增） */
+        if (id == 0U) {
+            id = (ipc_request_id_t)atomic_inc(&s_request_id_counter);
         }
-
-        id = (ipc_request_id_t) atomic_inc(&s_request_id_counter);
     } while (id == 0U);
 
     return id;
@@ -320,6 +315,12 @@ static void service_thread_func(void* p1, void* p2, void* p3) {
             break;
         }
 
+        /* SIL-2: 检查是否为哑消息（用于唤醒线程），request_id=0 表示无效请求 */
+        if (request_msg.request_id == 0U) {
+            LOG_DBG("Received dummy request, ignoring");
+            continue;
+        }
+
         /* SIL-2: 验证 service_func 非空 */
         if (service->service_func == NULL) {
             LOG_ERR("Service function is NULL, dropping request %u", request_msg.request_id);
@@ -430,6 +431,12 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
             break;
         }
 
+        /* SIL-2: 检查是否为哑消息（用于唤醒线程），request_id=0 表示无效响应 */
+        if (response_msg.request_id == 0U) {
+            LOG_DBG("Received dummy response, ignoring");
+            continue;
+        }
+
         k_mutex_lock(&service->pending_lock, K_FOREVER);
 
         /* 根据 request_id 查找对应的待处理请求 */
@@ -510,16 +517,8 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
 /**
  * @brief 初始化 IPC 服务实例
  */
-int ipc_service_init(ipc_service_t* service, const char* name, ipc_service_func_t service_func, size_t stack_size,
-                     int priority, size_t request_queue_size, size_t response_queue_size) {
+int ipc_service_init(ipc_service_t* service, const char* name, ipc_service_func_t service_func, int priority) {
     if (service == NULL || name == NULL || service_func == NULL) {
-        return -EINVAL;
-    }
-
-    /* 验证配置参数必须与 Kconfig 一致（静态分配要求） */
-    if (stack_size != (size_t) CONFIG_THREAD_IPC_SERVICE_STACK_SIZE ||
-        request_queue_size != (size_t) CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE ||
-        response_queue_size != (size_t) CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE) {
         return -EINVAL;
     }
 
@@ -574,6 +573,9 @@ int ipc_service_init(ipc_service_t* service, const char* name, ipc_service_func_
 
 /**
  * @brief 启动 IPC 服务
+ *
+ * @note SIL-2: k_thread_create 无返回值，线程创建失败无法检测
+ *              静态分配的栈和控制块使得失败概率极低
  */
 int ipc_service_start(ipc_service_t* service) {
     if (service == NULL || !service->service_func) {
@@ -875,7 +877,12 @@ int ipc_call_async(ipc_service_t* service, const void* data, size_t data_size, i
         return -EINVAL;
     }
 
-    if (data == NULL || callback == NULL) {
+    /* SIL-2: data 可以为 NULL（某些服务可能不需要输入数据），但 data_size 必须为 0 */
+    if (data == NULL && data_size != 0) {
+        return -EINVAL;
+    }
+
+    if (callback == NULL) {
         return -EINVAL;
     }
 
@@ -931,7 +938,12 @@ int ipc_call_future(ipc_service_t* service, const void* data, size_t data_size, 
         return -EINVAL;
     }
 
-    if (data == NULL || out_future == NULL) {
+    /* SIL-2: data 可以为 NULL（某些服务可能不需要输入数据），但 data_size 必须为 0 */
+    if (data == NULL && data_size != 0) {
+        return -EINVAL;
+    }
+
+    if (out_future == NULL) {
         return -EINVAL;
     }
 
