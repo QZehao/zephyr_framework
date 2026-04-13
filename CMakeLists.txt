@@ -292,16 +292,30 @@ endif()
 # 切换方式（在主 CMakeLists.txt 开头设置）：
 #   set(PROPRIETARY_MODULE_EVENT_SYSTEM_PRO_USE_PREBUILT ON)
 #   set(PROPRIETARY_MODULE_EVENT_SYSTEM_PRO_LIB_PATH "/path/to/libevent_pro.a")
+#
+# 注意：商业模块目录是可选的，运行 scripts/proprietary_manage.ps1 启用
 # =============================================================================
 
-# 加载商业模块公共函数
-include(src/proprietary/proprietary_modules_common.cmake)
+# 检查商业模块目录是否存在
+set(PROPRIETARY_MODULES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/proprietary")
+set(PROPRIETARY_MODULES_ENABLED OFF)
 
-# Proprietary Modules Framework
-target_sources(app PRIVATE
-    src/proprietary/proprietary_modules.c
-    src/proprietary/proprietary_modules.h
-)
+if(EXISTS "${PROPRIETARY_MODULES_DIR}/proprietary_modules_common.cmake")
+    set(PROPRIETARY_MODULES_ENABLED ON)
+    message(STATUS "Proprietary modules: Enabled")
+
+    # 加载商业模块公共函数
+    include("${PROPRIETARY_MODULES_DIR}/proprietary_modules_common.cmake")
+
+    # Proprietary Modules Framework
+    target_sources(app PRIVATE
+        "${PROPRIETARY_MODULES_DIR}/proprietary_modules.c"
+        "${PROPRIETARY_MODULES_DIR}/proprietary_modules.h"
+    )
+else()
+    message(STATUS "Proprietary modules: Disabled (directory not found)")
+    message(STATUS "  To enable: Run scripts/proprietary_manage.ps1 -Enable")
+endif()
 
 # =============================================================================
 # 商业模块加载（统一使用 add_proprietary_module 函数）
@@ -312,52 +326,54 @@ target_sources(app PRIVATE
 #   - 编译定义
 # =============================================================================
 
-# Mesh Communication Module (商业模块)
-if(CONFIG_MESH_COMMUNICATION)
-    add_proprietary_module(MESH_COMMUNICATION)
-endif()
+if(PROPRIETARY_MODULES_ENABLED)
+    # Mesh Communication Module (商业模块)
+    if(CONFIG_MESH_COMMUNICATION)
+        add_proprietary_module(MESH_COMMUNICATION)
+    endif()
 
-# Event System Pro Module (商业模块)
-if(CONFIG_EVENT_SYSTEM_PRO)
-    add_proprietary_module(EVENT_SYSTEM_PRO)
-endif()
+    # Event System Pro Module (商业模块)
+    if(CONFIG_EVENT_SYSTEM_PRO)
+        add_proprietary_module(EVENT_SYSTEM_PRO)
+    endif()
 
-# Module Manager Pro Module (商业模块)
-if(CONFIG_MODULE_MANAGER_PRO)
-    add_proprietary_module(MODULE_MANAGER_PRO)
-endif()
+    # Module Manager Pro Module (商业模块)
+    if(CONFIG_MODULE_MANAGER_PRO)
+        add_proprietary_module(MODULE_MANAGER_PRO)
+    endif()
 
-# Security Crypto Module (商业模块)
-if(CONFIG_SECURITY_CRYPTO)
-    add_proprietary_module(SECURITY_CRYPTO)
-endif()
+    # Security Crypto Module (商业模块)
+    if(CONFIG_SECURITY_CRYPTO)
+        add_proprietary_module(SECURITY_CRYPTO)
+    endif()
 
-# OTA Manager Module (商业模块)
-if(CONFIG_OTA_MANAGER)
-    add_proprietary_module(OTA_MANAGER)
-endif()
+    # OTA Manager Module (商业模块)
+    if(CONFIG_OTA_MANAGER)
+        add_proprietary_module(OTA_MANAGER)
+    endif()
 
-# Cellular 5G USB CDC ECM Module (商业模块)
-if(CONFIG_CELLULAR_5G_USB)
-    add_proprietary_module(CELLULAR_5G_USB)
-endif()
+    # Cellular 5G USB CDC ECM Module (商业模块)
+    if(CONFIG_CELLULAR_5G_USB)
+        add_proprietary_module(CELLULAR_5G_USB)
+    endif()
 
-# USB Host CDC ECM Module (商业模块)
-if(CONFIG_USB_HOST_CDC_ECM)
-    add_proprietary_module(USB_HOST_CDC_ECM)
-endif()
+    # USB Host CDC ECM Module (商业模块)
+    if(CONFIG_USB_HOST_CDC_ECM)
+        add_proprietary_module(USB_HOST_CDC_ECM)
+    endif()
 
-# USB Host RNDIS Module (商业模块)
-if(CONFIG_USB_HOST_RNDIS)
-    add_proprietary_module(USB_HOST_RNDIS)
-endif()
+    # USB Host RNDIS Module (商业模块)
+    if(CONFIG_USB_HOST_RNDIS)
+        add_proprietary_module(USB_HOST_RNDIS)
+    endif()
 
-# Cloud Connector Module (商业模块)
-if(CONFIG_CLOUD_CONNECTOR)
-    add_proprietary_module(CLOUD_CONNECTOR)
-endif()
+    # Cloud Connector Module (商业模块)
+    if(CONFIG_CLOUD_CONNECTOR)
+        add_proprietary_module(CLOUD_CONNECTOR)
+    endif()
 
-# 后续商业模块在此添加
+    # 后续商业模块在此添加
+endif()
 
 # =============================================================================
 # Compiler Definitions
