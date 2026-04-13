@@ -34,8 +34,15 @@ LOG_MODULE_REGISTER(sys_memory, CONFIG_SYS_LOG_LEVEL);
 #define CONFIG_SYS_MEMORY_POOL_SIZE 8192
 #endif
 
+/* 当内存池禁用时，减少跟踪记录数以节省内存 */
+#if defined(CONFIG_SYS_MEMORY_ENABLE) && (CONFIG_SYS_MEMORY_POOL_SIZE > 0)
 #define DEFAULT_POOL_SIZE  CONFIG_SYS_MEMORY_POOL_SIZE                 ///< 默认池大小（字节）
 #define MAX_ALLOCATIONS    256                                         ///< 最大跟踪分配数
+#else
+#define DEFAULT_POOL_SIZE  0                                           ///< 内存池禁用
+#define MAX_ALLOCATIONS    8                                           ///< 最小跟踪记录数
+#endif
+
 #define MEMORY_MAGIC       0x4D454D30U                                 ///< 魔数 - 有效分配标识（"MEM0"）
 #define MEMORY_FREED_MAGIC 0x46524545U                                 ///< 魔数 - 已释放块标识（"FREE"）
 #define MEMORY_ALIGN_BYTES 8U                                          ///< 内存对齐字节数（保证对齐到8字节）
@@ -108,8 +115,13 @@ typedef struct sys_mem_cb {
 
 static sys_mem_cb_t g_sys_mem;
 
-/** 静态分配的内存池缓冲区（每个池 DEFAULT_POOL_SIZE 字节） */
+/** 静态分配的内存池缓冲区（仅当 SYS_MEMORY_ENABLE 时分配） */
+#if defined(CONFIG_SYS_MEMORY_ENABLE) && (DEFAULT_POOL_SIZE > 0)
 static uint8_t g_mem_buffer[SYS_MEM_POOL_COUNT][DEFAULT_POOL_SIZE];
+#else
+/* 当内存池禁用或大小为0时，不分配缓冲区 */
+static uint8_t (*g_mem_buffer)[DEFAULT_POOL_SIZE] = NULL;
+#endif
 
 /* =============================================================================
  * 内部辅助函数

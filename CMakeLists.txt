@@ -194,16 +194,33 @@ target_sources(app PRIVATE
 )
 
 # System Services
-target_sources(app PRIVATE
-    src/services/sys_log.c
-    src/services/sys_log.h
-    src/services/sys_memory.c
-    src/services/sys_memory.h
-    src/services/sys_watchdog.c
-    src/services/sys_watchdog.h
-    src/services/sys_timer.c
-    src/services/sys_timer.h
-)
+if(CONFIG_SYS_LOG_ENABLE)
+    target_sources(app PRIVATE
+        src/services/sys_log.c
+        src/services/sys_log.h
+    )
+endif()
+
+if(CONFIG_SYS_MEMORY_ENABLE)
+    target_sources(app PRIVATE
+        src/services/sys_memory.c
+        src/services/sys_memory.h
+    )
+endif()
+
+if(CONFIG_SYS_WATCHDOG_ENABLE)
+    target_sources(app PRIVATE
+        src/services/sys_watchdog.c
+        src/services/sys_watchdog.h
+    )
+endif()
+
+if(CONFIG_SYS_TIMER_ENABLE)
+    target_sources(app PRIVATE
+        src/services/sys_timer.c
+        src/services/sys_timer.h
+    )
+endif()
 
 # Application Layer - Base
 target_sources(app PRIVATE
@@ -217,18 +234,30 @@ target_sources(app PRIVATE
 )
 
 # Business Modules (Example - Extendable)
-target_sources(app PRIVATE
-    src/modules/module_manager.c
-    src/modules/module_manager.h
-    src/modules/module_base.h
-    src/modules/module_manager_compat.c
-    src/modules/module_manager_compat.h
-    # Example modules
-    src/modules/example_module_a.c
-    src/modules/example_module_a.h
-    src/modules/example_module_b.c
-    src/modules/example_module_b.h
-)
+if(CONFIG_MODULE_MANAGER)
+    target_sources(app PRIVATE
+        src/modules/module_manager.c
+        src/modules/module_manager.h
+        src/modules/module_base.h
+        src/modules/module_manager_compat.c
+        src/modules/module_manager_compat.h
+    )
+endif()
+
+# Example modules (conditionally compiled)
+if(CONFIG_EXAMPLE_MODULE_A_ENABLE)
+    target_sources(app PRIVATE
+        src/modules/example_module_a.c
+        src/modules/example_module_a.h
+    )
+endif()
+
+if(CONFIG_EXAMPLE_MODULE_B_ENABLE)
+    target_sources(app PRIVATE
+        src/modules/example_module_b.c
+        src/modules/example_module_b.h
+    )
+endif()
 
 # Thread IPC service (Kconfig: CONFIG_THREAD_IPC_SERVICE; avoids Zephyr IPC_SERVICE name clash)
 if(CONFIG_THREAD_IPC_SERVICE)
@@ -294,13 +323,30 @@ endif()
 #   set(PROPRIETARY_MODULE_EVENT_SYSTEM_PRO_LIB_PATH "/path/to/libevent_pro.a")
 #
 # 注意：商业模块目录是可选的，运行 scripts/proprietary_manage.ps1 启用
+#
+# 极限内存模式：当 CONFIG_SIZE_OPTIMIZATIONS=y 且模块禁用时，跳过商业模块框架
 # =============================================================================
 
 # 检查商业模块目录是否存在
 set(PROPRIETARY_MODULES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/proprietary")
 set(PROPRIETARY_MODULES_ENABLED OFF)
 
-if(EXISTS "${PROPRIETARY_MODULES_DIR}/proprietary_modules_common.cmake")
+# 检查是否应该跳过商业模块（极限内存模式）
+if(CONFIG_SIZE_OPTIMIZATIONS)
+    # 检查是否有任何商业模块被启用
+    set(SKIP_PROPRIETARY ON)
+    if(CONFIG_MESH_COMMUNICATION OR CONFIG_EVENT_SYSTEM_PRO OR CONFIG_MODULE_MANAGER_PRO OR
+       CONFIG_SECURITY_CRYPTO OR CONFIG_OTA_MANAGER OR CONFIG_CELLULAR_5G_USB OR
+       CONFIG_USB_HOST_CDC_ECM OR CONFIG_USB_HOST_RNDIS OR CONFIG_CLOUD_CONNECTOR)
+        set(SKIP_PROPRIETARY OFF)
+    endif()
+else()
+    set(SKIP_PROPRIETARY OFF)
+endif()
+
+if(SKIP_PROPRIETARY)
+    message(STATUS "Proprietary modules: Skipped (size optimization mode, all modules disabled)")
+elseif(EXISTS "${PROPRIETARY_MODULES_DIR}/proprietary_modules_common.cmake")
     set(PROPRIETARY_MODULES_ENABLED ON)
     message(STATUS "Proprietary modules: Enabled")
 

@@ -437,7 +437,8 @@ int app_start(void) {
     sys_wdt_start();
 #endif
 
-    /* Create heartbeat timer */
+    /* Create heartbeat timer (only if timer service is enabled and interval > 0) */
+#if APP_CONFIG_ENABLE_TIMER_SVC && (APP_HEARTBEAT_INTERVAL_MS > 0)
     sys_timer_config_t heartbeat_config = {.mode = SYS_TIMER_PERIODIC,
                                            .delay_ms = APP_HEARTBEAT_INTERVAL_MS,
                                            .period_ms = APP_HEARTBEAT_INTERVAL_MS,
@@ -449,6 +450,7 @@ int app_start(void) {
     if (heartbeat != NULL) {
         sys_timer_start(heartbeat);
     }
+#endif
 
     g_app.running = true;
 

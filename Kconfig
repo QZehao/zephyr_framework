@@ -39,7 +39,7 @@ config EVENT_MAX_SUBSCRIBERS
 config EVENT_DISPATCHER_STACK_SIZE
 	int "Event Dispatcher Stack Size"
 	default 2048
-	range 512 8192
+	range 256 8192
 	help
 	  Stack size for the event dispatcher thread.
 
@@ -63,7 +63,7 @@ config MODULE_MANAGER
 config MAX_MODULES
 	int "Maximum Number of Modules"
 	default 16
-	range 4 32
+	range 1 32
 	help
 	  Maximum number of modules that can be registered.
 
