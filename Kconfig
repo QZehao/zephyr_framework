@@ -142,16 +142,25 @@ config EVENT_DISPATCHER_PRIORITY
 		int "256-byte data block count"
 		default 8
 		range 0 32
+		help
+		  Number of 256-byte blocks for event data (up to 256 bytes).
+		  Each block consumes 256 bytes. Set to 0 to disable this tier.
 
 	config EVENT_SLAB_LARGE_1K_COUNT
 		int "1KB data block count"
 		default 4
 		range 0 16
+		help
+		  Number of 1KB blocks for event data (up to 1KB).
+		  Each block consumes 1024 bytes. Set to 0 to disable this tier.
 
 	config EVENT_SLAB_LARGE_4K_COUNT
 		int "4KB data block count"
 		default 2
 		range 0 8
+		help
+		  Number of 4KB blocks for large event data (up to 4KB).
+		  Each block consumes 4096 bytes. Set to 0 to disable this tier.
 
 	endif # EVENT_SLAB_LARGE_ENABLE
 
