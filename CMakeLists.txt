@@ -193,6 +193,14 @@ target_sources(app PRIVATE
     src/core/event_system_compat.h
 )
 
+# Event Memory Module (conditional on CONFIG_EVENT_SLAB_ENABLE)
+if(CONFIG_EVENT_SLAB_ENABLE)
+    target_sources(app PRIVATE
+        src/core/event_memory.c
+        src/core/event_memory.h
+    )
+endif()
+
 # System Services
 if(CONFIG_SYS_LOG_ENABLE)
     target_sources(app PRIVATE
