@@ -541,18 +541,12 @@ event_status_t event_publish_copy(event_type_t type, event_priority_t priority, 
 
     event_status_t status = event_publish(event);
 
-    if (status != EVENT_OK) {
-        /* SIL-2: 发布失败时，数据所有权仍在调用者，释放整个事件（包括 data） */
-        event_free(event);
-    } else {
-        /* SIL-2: 发布成功，k_msgq_put 已复制 event_t（含 data 指针）。
-         * 数据所有权已转移到队列中的副本，只释放外壳，不释放 data。
-         */
-        event->data = NULL;
-        event->is_dynamic = false;
-        k_free(event);
+    /* 发布成功后，数据所有权已转移到队列副本 */
+    if (status == EVENT_OK) {
+        event->flags &= ~EVENT_FLAG_DATA_DYNAMIC;
     }
 
+    event_free(event);
     return status;
 }
 
@@ -704,27 +698,27 @@ event_status_t event_publish_copy_rt(event_type_t type, event_priority_t priorit
  * @return 指向新事件的指针，失败返回 NULL
  */
 event_t* event_create(event_type_t type, event_priority_t priority) {
-    if (!g_event_system.initialized) {
-        return NULL;
+    /* 优先尝试实时安全路径 */
+    event_t* event = event_create_rt(type, priority);
+    if (event != NULL) {
+        return event;
     }
 
-    /* SIL-2: 验证参数范围 */
-    if (type >= MAX_EVENT_TYPES) {
-        LOG_ERR("Invalid event type: %d", type);
-        return NULL;
-    }
-
-    event_t* event = k_malloc(sizeof(event_t));
+    /* 回退 k_malloc */
+    event = k_malloc(sizeof(event_t));
     if (event == NULL) {
-        LOG_ERR("Failed to allocate event");
+        LOG_ERR("k_malloc failed for event_t");
         return NULL;
     }
 
-    memset(event, 0, sizeof(event_t));
     event->type = type;
     event->priority = priority;
-    event->timestamp = k_uptime_get_32(); /* 毫秒时间戳 */
-    event->is_dynamic = true;
+    event->timestamp = k_uptime_get_32();
+    event->source_id = 0;
+    event->data_len = 0;
+    event->flags = 0;  /* 非 FROM_SLAB */
+    event->reserved = 0;
+    memset(event->data.inline_data, 0, CONFIG_EVENT_INLINE_DATA_SIZE);
 
     return event;
 }
@@ -739,36 +733,65 @@ event_t* event_create(event_type_t type, event_priority_t priority) {
  * @return 指向新事件的指针，失败返回 NULL
  */
 event_t* event_create_with_data(event_type_t type, event_priority_t priority, const void* data, size_t data_len) {
-    /* SIL-2: 验证参数 */
     if (data == NULL || data_len == 0) {
+        return event_create(type, priority);
+    }
+
+    /* 验证数据长度 */
+    if (data_len > 65535) {
+        LOG_ERR("Event data length %zu exceeds maximum 64KB", data_len);
+        return NULL;
+    }
+
+    /* 小数据：尝试内联 */
+    if (data_len <= CONFIG_EVENT_INLINE_DATA_SIZE) {
         event_t* event = event_create(type, priority);
-        if (event != NULL) {
-            /* 没有数据时，is_dynamic 应为 false */
-            event->is_dynamic = false;
+        if (event == NULL) {
+            return NULL;
         }
+        event->data_len = (uint32_t)data_len;
+        memcpy(event->data.inline_data, data, data_len);
+        event->flags |= EVENT_FLAG_DATA_INLINE;
         return event;
     }
 
-    /* SIL-2: 验证数据长度合理性 */
-    if (data_len > 65535) { /* 64KB 限制 */
-        LOG_ERR("Event data length %zu exceeds maximum allowed", data_len);
-        return NULL;
+    /* 大数据：尝试 slab */
+#if EVENT_SLAB_ENABLED && EVENT_SLAB_LARGE_AVAILABLE
+    struct k_mem_slab* data_slab = event_memory_select_data_slab(data_len);
+    if (data_slab != NULL) {
+        event_t* event = event_create(type, priority);
+        if (event != NULL) {
+            if (k_mem_slab_alloc(data_slab, &event->data.ptr, K_NO_WAIT) == 0) {
+                memcpy(event->data.ptr, data, data_len);
+                event->data_len = (uint32_t)data_len;
+                event->flags |= EVENT_FLAG_DATA_DYNAMIC;
+                return event;
+            }
+            /* slab 满，继续回退 */
+            event_free(event);
+        }
     }
+#endif
 
-    event_t* event = event_create(type, priority);
+    /* 回退 k_malloc */
+    event_t* event = k_malloc(sizeof(event_t));
     if (event == NULL) {
         return NULL;
     }
-
-    event->data = k_malloc(data_len);
-    if (event->data == NULL) {
-        LOG_ERR("Failed to allocate event data of size %zu", data_len);
+    event->data.ptr = k_malloc(data_len);
+    if (event->data.ptr == NULL) {
         k_free(event);
         return NULL;
     }
 
-    memcpy(event->data, data, data_len);
-    event->data_len = data_len;
+    event->type = type;
+    event->priority = priority;
+    event->timestamp = k_uptime_get_32();
+    event->source_id = 0;
+    event->data_len = (uint32_t)data_len;
+    event->flags = EVENT_FLAG_DATA_DYNAMIC;  /* 非 FROM_SLAB */
+    event->reserved = 0;
+    memcpy(event->data.ptr, data, data_len);
 
     return event;
 }
@@ -783,14 +806,21 @@ void event_free(event_t* event) {
         return;
     }
 
-    /* SIL-2: 防止重复释放 */
-    if (event->is_dynamic && event->data != NULL) {
-        k_free(event->data);
-        event->data = NULL;
-        event->is_dynamic = false;
+    /* 释放动态数据 */
+    if (event->flags & EVENT_FLAG_DATA_DYNAMIC) {
+        k_free(event->data.ptr);
+        event->flags &= ~EVENT_FLAG_DATA_DYNAMIC;
     }
 
-    k_free(event);
+    /* 释放 event_t */
+    if (event->flags & EVENT_FLAG_FROM_SLAB) {
+#if EVENT_SLAB_ENABLED
+        struct k_mem_slab* slab = event_memory_select_event_slab(event->priority);
+        k_mem_slab_free(slab, (void*)event);
+#endif
+    } else {
+        k_free(event);
+    }
 }
 
 /* =============================================================================
@@ -964,9 +994,8 @@ static void purge_event_queue_and_free_payload(struct k_msgq* queue) {
     event_t ev;
 
     while (k_msgq_get(queue, &ev, K_NO_WAIT) == 0) {
-        if (ev.is_dynamic && ev.data != NULL) {
-            k_free(ev.data);
-            ev.data = NULL;
+        if (ev.flags & EVENT_FLAG_DATA_DYNAMIC) {
+            k_free(ev.data.ptr);
         }
     }
 }
