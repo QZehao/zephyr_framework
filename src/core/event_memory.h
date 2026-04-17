@@ -37,20 +37,47 @@ extern "C" {
  * 用于条件编译，检查各 Slab 池是否启用
  * ============================================================================= */
 
-/** Slab 内存管理是否启用 */
-#define EVENT_SLAB_ENABLED            IS_ENABLED(CONFIG_EVENT_SLAB_ENABLE)
+#ifdef CONFIG_EVENT_SLAB_ENABLE
+#define EVENT_SLAB_ENABLED 1
+#else
+#define EVENT_SLAB_ENABLED 0
+#endif
 
-/** CRITICAL 优先级 Slab 是否可用 */
-#define EVENT_SLAB_CRITICAL_AVAILABLE (EVENT_SLAB_ENABLED && (CONFIG_EVENT_SLAB_CRITICAL_COUNT > 0))
+#if EVENT_SLAB_ENABLED && defined(CONFIG_EVENT_SLAB_CRITICAL_COUNT) && (CONFIG_EVENT_SLAB_CRITICAL_COUNT > 0)
+#define EVENT_SLAB_CRITICAL_AVAILABLE 1
+#else
+#define EVENT_SLAB_CRITICAL_AVAILABLE 0
+#endif
 
-/** HIGH 优先级 Slab 是否可用 */
-#define EVENT_SLAB_HIGH_AVAILABLE     (EVENT_SLAB_ENABLED && (CONFIG_EVENT_SLAB_HIGH_COUNT > 0))
+#if EVENT_SLAB_ENABLED && defined(CONFIG_EVENT_SLAB_HIGH_COUNT) && (CONFIG_EVENT_SLAB_HIGH_COUNT > 0)
+#define EVENT_SLAB_HIGH_AVAILABLE 1
+#else
+#define EVENT_SLAB_HIGH_AVAILABLE 0
+#endif
 
-/** LARGE 数据 Slab 是否可用 */
-#define EVENT_SLAB_LARGE_AVAILABLE    IS_ENABLED(CONFIG_EVENT_SLAB_LARGE_ENABLE)
+#ifdef CONFIG_EVENT_SLAB_LARGE_ENABLE
+#define EVENT_SLAB_LARGE_AVAILABLE 1
+#else
+#define EVENT_SLAB_LARGE_AVAILABLE 0
+#endif
 
-/** 256 字节数据 Slab 是否可用 */
-#define EVENT_SLAB_256_AVAILABLE      (EVENT_SLAB_LARGE_AVAILABLE && (CONFIG_EVENT_SLAB_LARGE_256_COUNT > 0))
+#if EVENT_SLAB_LARGE_AVAILABLE && defined(CONFIG_EVENT_SLAB_LARGE_256_COUNT) && (CONFIG_EVENT_SLAB_LARGE_256_COUNT > 0)
+#define EVENT_SLAB_256_AVAILABLE 1
+#else
+#define EVENT_SLAB_256_AVAILABLE 0
+#endif
+
+#if EVENT_SLAB_LARGE_AVAILABLE && defined(CONFIG_EVENT_SLAB_LARGE_1K_COUNT) && (CONFIG_EVENT_SLAB_LARGE_1K_COUNT > 0)
+#define EVENT_SLAB_1K_AVAILABLE 1
+#else
+#define EVENT_SLAB_1K_AVAILABLE 0
+#endif
+
+#if EVENT_SLAB_LARGE_AVAILABLE && defined(CONFIG_EVENT_SLAB_LARGE_4K_COUNT) && (CONFIG_EVENT_SLAB_LARGE_4K_COUNT > 0)
+#define EVENT_SLAB_4K_AVAILABLE 1
+#else
+#define EVENT_SLAB_4K_AVAILABLE 0
+#endif
 
 /** 1KB 数据 Slab 是否可用 */
 #define EVENT_SLAB_1K_AVAILABLE       (EVENT_SLAB_LARGE_AVAILABLE && (CONFIG_EVENT_SLAB_LARGE_1K_COUNT > 0))
@@ -76,39 +103,39 @@ BUILD_ASSERT(CONFIG_EVENT_INLINE_DATA_SIZE <= 128,
 
 /* =============================================================================
  * Slab 池声明 (Slab Pool Declarations)
- * 使用 K_MEM_SLAB_DECLARE 声明外部可访问的 Slab 池
+ * 使用 extern 声明外部可访问的 Slab 池
  * ============================================================================= */
 
 #if EVENT_SLAB_ENABLED
 
 #if EVENT_SLAB_CRITICAL_AVAILABLE
 /** CRITICAL 优先级事件 Slab 池 */
-K_MEM_SLAB_DECLARE(event_slab_critical);
+extern struct k_mem_slab event_slab_critical;
 #endif
 
 #if EVENT_SLAB_HIGH_AVAILABLE
 /** HIGH 优先级事件 Slab 池 */
-K_MEM_SLAB_DECLARE(event_slab_high);
+extern struct k_mem_slab event_slab_high;
 #endif
 
 /** NORMAL/LOW 优先级事件 Slab 池（必须存在） */
-K_MEM_SLAB_DECLARE(event_slab_normal);
+extern struct k_mem_slab event_slab_normal;
 
 #if EVENT_SLAB_LARGE_AVAILABLE
 
 #if EVENT_SLAB_256_AVAILABLE
 /** 256 字节数据块 Slab 池 */
-K_MEM_SLAB_DECLARE(event_slab_data_256);
+extern struct k_mem_slab event_slab_data_256;
 #endif
 
 #if EVENT_SLAB_1K_AVAILABLE
 /** 1KB 数据块 Slab 池 */
-K_MEM_SLAB_DECLARE(event_slab_data_1k);
+extern struct k_mem_slab event_slab_data_1k;
 #endif
 
 #if EVENT_SLAB_4K_AVAILABLE
 /** 4KB 数据块 Slab 池 */
-K_MEM_SLAB_DECLARE(event_slab_data_4k);
+extern struct k_mem_slab event_slab_data_4k;
 #endif
 
 #endif /* EVENT_SLAB_LARGE_AVAILABLE */
