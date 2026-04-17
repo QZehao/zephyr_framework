@@ -80,6 +80,33 @@ extern "C" {
 #endif
 
 /* =============================================================================
+ * 内存配置宏 (Memory Configuration Macros)
+ * ============================================================================= */
+
+/** 内联数据大小（从 Kconfig 获取，默认 48 字节） */
+#ifndef CONFIG_EVENT_INLINE_DATA_SIZE
+#define CONFIG_EVENT_INLINE_DATA_SIZE   48
+#endif
+
+/** 事件结构体大小（从 Kconfig 获取，默认 64 字节） */
+#ifndef CONFIG_EVENT_STRUCT_SIZE
+#define CONFIG_EVENT_STRUCT_SIZE        64
+#endif
+
+/* =============================================================================
+ * 事件标志位定义 (Event Flags)
+ * ============================================================================= */
+
+/** 数据内联存储 */
+#define EVENT_FLAG_DATA_INLINE   0x01U
+
+/** 数据动态分配 */
+#define EVENT_FLAG_DATA_DYNAMIC  0x02U
+
+/** event_t 来自 slab 池 */
+#define EVENT_FLAG_FROM_SLAB     0x04U
+
+/* =============================================================================
  * 类型定义 (Type Definitions)
  * ============================================================================= */
 
@@ -131,23 +158,39 @@ typedef enum {
 /**
  * @brief 事件数据结构
  *
- * 所有通过事件系统传递的数据都封装在此结构中。
- * 支持静态和动态数据两种方式：
- * - 静态数据：data 指向外部管理的内存，is_dynamic = false
- * - 动态数据：data 通过 k_malloc 分配，is_dynamic = true，由 event_free() 释放
+ * 内存布局（以 64B 为例）：
+ * ┌────────────────────────────────┐
+ * │ type(1) priority(1) flags(1) ? │  4B
+ * │ timestamp                      │  4B
+ * │ source_id                      │  4B
+ * │ data_len                       │  4B
+ * ├────────────────────────────────┤  16B 头部
+ * │ inline_data[48] 或 ptr(8)      │ 48B
+ * └────────────────────────────────┘  64B 总计
  *
- * @note 事件对象本身不直接放入队列，队列中存储的是 event_t 的副本
- * @note 如果 data 是动态分配的，确保在事件处理后正确释放
+ * 数据存储策略：
+ * - data_len ≤ INLINE_DATA_SIZE: 内联存储，无额外分配
+ * - data_len > INLINE_DATA_SIZE: 从 slab/k_malloc 分配
+ *
+ * @note 结构体大小由 CONFIG_EVENT_STRUCT_SIZE 控制
  */
 typedef struct {
-    event_type_t     type;       /**< 事件类型标识符 */
-    event_priority_t priority;   /**< 事件优先级 */
-    uint32_t         timestamp;  /**< 事件创建时间戳（毫秒 uptime） */
-    uint32_t         source_id;  /**< 源模块/组件 ID */
-    uint32_t         data_len;   /**< 事件数据长度（字节） */
-    void*            data;       /**< 事件数据指针 */
-    bool             is_dynamic; /**< true 表示 data 是动态分配的 */
+    uint8_t          type;           /**< 事件类型标识符 */
+    uint8_t          priority;       /**< 事件优先级 */
+    uint8_t          flags;          /**< 标志位 (EVENT_FLAG_*) */
+    uint8_t          reserved;       /**< 预留扩展 */
+    uint32_t         timestamp;      /**< 事件创建时间戳（毫秒 uptime） */
+    uint32_t         source_id;      /**< 源模块/组件 ID */
+    uint32_t         data_len;       /**< 事件数据长度（字节） */
+    union {
+        uint8_t  inline_data[CONFIG_EVENT_INLINE_DATA_SIZE]; /**< 内联数据 */
+        void*    ptr;                                             /**< 外部数据指针 */
+    } data;
 } event_t;
+
+/* 编译时验证结构体大小 */
+BUILD_ASSERT(sizeof(event_t) == CONFIG_EVENT_STRUCT_SIZE,
+             "event_t size mismatch with CONFIG_EVENT_STRUCT_SIZE");
 
 /**
  * @brief 事件回调函数类型
