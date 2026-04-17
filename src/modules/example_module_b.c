@@ -158,8 +158,13 @@ void example_module_b_on_event(const event_t* event, void* user_data) {
     /* Handle all events generically */
     LOG_DBG("Received event type: %d", event->type);
 
-    if (event->data != NULL && event->data_len >= sizeof(int32_t)) {
-        int32_t sensor_value = *(int32_t*) event->data;
+    if (event->data_len >= sizeof(int32_t)) {
+        int32_t sensor_value;
+        if (event->flags & EVENT_FLAG_DATA_INLINE) {
+            memcpy(&sensor_value, event->data.inline_data, sizeof(int32_t));
+        } else {
+            sensor_value = *(int32_t*) event->data.ptr;
+        }
         LOG_DBG("Event data: %d", sensor_value);
     }
 }
@@ -241,8 +246,13 @@ static void on_sensor_data(const event_t* event, void* user_data) {
     LOG_DBG("Received sensor data");
 
     /* Process sensor data and potentially send response */
-    if (event->data != NULL && event->data_len >= sizeof(int32_t)) {
-        int32_t sensor_value = *(int32_t*) event->data;
+    if (event->data_len >= sizeof(int32_t)) {
+        int32_t sensor_value;
+        if (event->flags & EVENT_FLAG_DATA_INLINE) {
+            memcpy(&sensor_value, event->data.inline_data, sizeof(int32_t));
+        } else {
+            sensor_value = *(int32_t*) event->data.ptr;
+        }
 
         /* Example: Send acknowledgment */
         uint32_t ack = sensor_value * 2; /* Simple transformation */

@@ -172,8 +172,13 @@ void example_module_a_on_event(const event_t* event, void* user_data) {
     switch (event->type) {
     case EVENT_TYPE_SENSOR_CONFIG:
         /* Handle configuration change */
-        if (event->data != NULL && event->data_len >= sizeof(uint32_t)) {
-            uint32_t new_rate = *(uint32_t*) event->data;
+        if (event->data_len >= sizeof(uint32_t)) {
+            uint32_t new_rate;
+            if (event->flags & EVENT_FLAG_DATA_INLINE) {
+                memcpy(&new_rate, event->data.inline_data, sizeof(uint32_t));
+            } else {
+                new_rate = *(uint32_t*) event->data.ptr;
+            }
             cb->config.sample_rate_ms = new_rate;
             LOG_INF("Sensor rate updated to %dms", new_rate);
         }
@@ -307,8 +312,9 @@ static void publish_sensor_data(int32_t value, uint32_t timestamp) {
                      .timestamp = timestamp,
                      .source_id = 1, /* Module A ID */
                      .data_len = sizeof(int32_t),
-                     .data = &value,
-                     .is_dynamic = false};
+                     .flags = EVENT_FLAG_DATA_INLINE};
+
+    memcpy(event.data.inline_data, &value, sizeof(int32_t));
 
     event_publish(&event);
 }

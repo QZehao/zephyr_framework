@@ -569,11 +569,15 @@ event_t* event_create_rt(event_type_t type, event_priority_t priority) {
     int ret = k_mem_slab_alloc(slab, (void**)&event, K_NO_WAIT);
 
     /* 尝试降级借用低优先级池 */
-    if (ret != 0 && priority == EVENT_PRIORITY_CRITICAL && EVENT_SLAB_HIGH_AVAILABLE) {
-        ret = k_mem_slab_alloc(&event_slab_high, (void**)&event, K_NO_WAIT);
+#if EVENT_SLAB_HIGH_AVAILABLE
+    if (ret != 0 && priority == EVENT_PRIORITY_CRITICAL) {
+        slab = event_memory_select_event_slab(EVENT_PRIORITY_HIGH);
+        ret = k_mem_slab_alloc(slab, (void**)&event, K_NO_WAIT);
     }
+#endif
     if (ret != 0 && priority <= EVENT_PRIORITY_HIGH) {
-        ret = k_mem_slab_alloc(&event_slab_normal, (void**)&event, K_NO_WAIT);
+        slab = event_memory_select_event_slab(EVENT_PRIORITY_NORMAL);
+        ret = k_mem_slab_alloc(slab, (void**)&event, K_NO_WAIT);
     }
 
     if (ret != 0) {
