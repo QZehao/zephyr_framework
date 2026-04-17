@@ -182,8 +182,14 @@ void example_module_gpio_on_event(const event_t* event, void* user_data) {
 
     switch (event->type) {
     case EVENT_TYPE_GPIO_LED_STATE:
-        if (event->data != NULL && event->data_len >= sizeof(bool)) {
-            example_module_gpio_set_led(*(bool*) event->data);
+        if (event->data_len >= sizeof(bool)) {
+            bool led_state;
+            if (event->flags & EVENT_FLAG_DATA_INLINE) {
+                memcpy(&led_state, event->data.inline_data, sizeof(bool));
+            } else {
+                led_state = *(bool*) event->data.ptr;
+            }
+            example_module_gpio_set_led(led_state);
         }
         break;
     }
