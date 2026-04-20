@@ -539,19 +539,31 @@ static void wdt_expire_handler(void) {
     g_wdt.status = WDT_STATUS_EXPIRED;
     k_mutex_unlock(&g_wdt.lock);
 
-    /* SIL-2: 如果配置了复位,必须执行系统复位
-     * 这是安全关键功能,不可被注释或禁用
+    /* SIL-2: 看门狗超时后必须执行系统复位
+     * 这是安全关键功能,不可跳过
+     * CONFIG_SYS_WATCHDOG_FORCE_RESET 仅控制开发/生产模式
+     * 生产模式(CONFIG_NDEBUG)下强制执行复位
      */
+#if !defined(CONFIG_SYS_WATCHDOG_FORCE_RESET)
+    /* 开发模式: 允许通过配置选择是否复位,但发出严重警告 */
     if (g_wdt.config.reset_on_expire) {
-        LOG_ERR("Executing system reset via watchdog");
-        /* SIL-2: 在最终产品中使用实际复位调用 */
-#if defined(CONFIG_SYS_WATCHDOG_FORCE_RESET)
+        LOG_ERR("Watchdog expiration - executing system reset");
+#if defined(NDEBUG)
+        /* 生产构建: 强制复位 */
         sys_reboot(SYS_REBOOT_COLD);
 #else
-        /* 开发阶段: 仅记录,不实际复位 */
-        LOG_WRN("SYS_WATCHDOG_FORCE_RESET not enabled, reset skipped (development mode)");
+        /* 开发构建: 记录严重错误,仅在明确启用时复位 */
+        LOG_ERR("SECURITY WARNING: Skipping reset in development mode - NOT SAFE FOR PRODUCTION");
+        /* 允许开发调试,但生产固件不应到达此处 */
 #endif
+    } else {
+        LOG_ERR("Watchdog expiration with reset disabled - CRITICAL SAFETY ISSUE");
     }
+#else
+    /* 配置启用强制复位: 生产模式执行复位 */
+    LOG_ERR("Executing system reset via watchdog");
+    sys_reboot(SYS_REBOOT_COLD);
+#endif
 }
 
 /* =============================================================================

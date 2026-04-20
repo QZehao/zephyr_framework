@@ -45,8 +45,8 @@ typedef struct {
 } event_queue_cb_t;
 
 /* 静态队列控制块数组，用于跟踪统计信息 */
-/* SIL-2: 增加数组大小以支持测试场景，最多支持 16 个独立队列 */
-#define MAX_QUEUE_CB_ENTRIES 16
+/* SIL-2: 增加数组大小以支持更多测试场景和并发队列 */
+#define MAX_QUEUE_CB_ENTRIES 32
 
 static event_queue_cb_t g_queue_cb[MAX_QUEUE_CB_ENTRIES];
 

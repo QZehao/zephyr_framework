@@ -810,9 +810,10 @@ void event_free(event_t* event) {
         return;
     }
 
-    /* 释放动态数据 */
-    if (event->flags & EVENT_FLAG_DATA_DYNAMIC) {
+    /* 释放动态数据 - SIL-2: 增加空指针检查防止悬垂指针 */
+    if ((event->flags & EVENT_FLAG_DATA_DYNAMIC) && event->data.ptr != NULL) {
         k_free(event->data.ptr);
+        event->data.ptr = NULL;
         event->flags &= ~EVENT_FLAG_DATA_DYNAMIC;
     }
 
