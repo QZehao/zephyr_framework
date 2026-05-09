@@ -19,12 +19,11 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
- *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description
  * 2026-04-01       1.0            zeh            正式发布
+ * 2026-05-09       1.1            zeh            register_types 幂等说明；头文件整理
  *
  */
 
@@ -63,7 +62,7 @@ typedef struct {
  *
  * @return EVENT_OK 成功，或 event_register_type 错误码
  *
- * @note 此函数是幂等的，可多次调用
+ * @note 此函数是幂等的，可多次调用（委托 event_register_type：同类型 ID 已注册时仍返回 EVENT_OK）
  * @note 应在系统初始化时调用一次
  */
 event_status_t thread_ipc_event_register_types(void);

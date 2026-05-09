@@ -15,12 +15,13 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
+ * @note 本文件仅应在 CONFIG_THREAD_IPC_SERVICE_EXAMPLE=y 时编入（见 CMakeLists / Kconfig）。
  *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description
  * 2026-04-01       1.0            zeh            正式发布
+ * 2026-05-09       1.1            zeh            文档：Kconfig 编入说明；Future 示例简化
  *
  */
 
@@ -166,12 +167,6 @@ static void example_future_call(void) {
     if (result == 0 && future != NULL) {
         LOG_INF("FUTURE call sent, waiting for result...");
 
-        /* 方式 1：轮询检查 */
-        while (!ipc_future_is_ready(future)) {
-            k_msleep(10);
-        }
-
-        /* 方式 2：阻塞等待 */
         int         future_result;
         const void* output_data;
         size_t      output_size;
@@ -267,5 +262,7 @@ static int ipc_service_example_init(void) {
     return 0;
 }
 
-/* 系统启动时自动初始化 */
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_EXAMPLE)
+/* 系统启动时自动初始化（仅当 CONFIG_THREAD_IPC_SERVICE_EXAMPLE=y 编入本文件） */
 SYS_INIT(ipc_service_example_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+#endif

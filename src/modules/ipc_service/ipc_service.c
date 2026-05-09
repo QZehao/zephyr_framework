@@ -21,12 +21,11 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
- *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description
  * 2026-04-01       1.0            zeh            正式发布
+ * 2026-05-09       1.1            zeh            stop：join 超时后 abort 并重试 join；worker：取消后跳过请求；dispatcher：无 pending 降级日志
  *
  */
 
@@ -333,6 +332,22 @@ static void service_thread_func(void* p1, void* p2, void* p3) {
             continue;
         }
 
+        /* 取消/超时已释放 pending 后，队列里仍可能有该 request_id：跳过业务并释放随请求传递的 shm 引用 */
+        k_mutex_lock(&service->pending_lock, K_FOREVER);
+        ipc_pending_request_t* tracked = find_pending_entry(service, request_msg.request_id);
+        bool                   still_tracked = (tracked != NULL && tracked->in_use);
+        k_mutex_unlock(&service->pending_lock);
+
+        if (!still_tracked) {
+#if IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
+            if (request_msg.shm_handle != 0) {
+                ipc_shm_release(service, request_msg.shm_handle);
+            }
+#endif
+            LOG_DBG("Skipping request %u (pending slot released)", request_msg.request_id);
+            continue;
+        }
+
         void*  out_data = NULL;
         size_t out_data_size = 0;
 
@@ -501,7 +516,8 @@ static void response_dispatcher_thread(void* p1, void* p2, void* p3) {
                 k_sem_give(&entry->response_sem);
             }
         } else {
-            LOG_WRN("No pending entry for response %u", response_msg.request_id);
+            /* 常见于 cancel/stop 与响应竞态；worker 侧已尽量避免投递孤立响应 */
+            LOG_DBG("No pending entry for response %u", response_msg.request_id);
         }
 
         k_mutex_unlock(&service->pending_lock);
@@ -643,15 +659,26 @@ int ipc_service_stop(ipc_service_t* service) {
     memset(&dummy_response, 0, sizeof(dummy_response));
     (void) k_msgq_put(&service->response_queue, &dummy_response, K_NO_WAIT);
 
-    /* SIL-2: 使用有限超时等待线程退出，避免永久阻塞 */
+    /* SIL-2: 使用有限超时等待线程退出；超时则 abort 后再 join，避免 running=false 时线程仍访问 service */
     int ret1 = k_thread_join(&service->thread, K_MSEC(IPC_SERVICE_THREAD_JOIN_TIMEOUT_MS));
-    int ret2 = k_thread_join(&service->response_thread, K_MSEC(IPC_SERVICE_THREAD_JOIN_TIMEOUT_MS));
-
     if (ret1 != 0) {
-        LOG_ERR("Worker thread join failed: %d", ret1);
+        LOG_ERR("Worker thread join failed: %d, aborting", ret1);
+        k_thread_abort(&service->thread);
+        ret1 = k_thread_join(&service->thread, K_MSEC(IPC_SERVICE_THREAD_JOIN_TIMEOUT_MS));
     }
+
+    int ret2 = k_thread_join(&service->response_thread, K_MSEC(IPC_SERVICE_THREAD_JOIN_TIMEOUT_MS));
     if (ret2 != 0) {
-        LOG_ERR("Dispatcher thread join failed: %d", ret2);
+        LOG_ERR("Dispatcher thread join failed: %d, aborting", ret2);
+        k_thread_abort(&service->response_thread);
+        ret2 = k_thread_join(&service->response_thread, K_MSEC(IPC_SERVICE_THREAD_JOIN_TIMEOUT_MS));
+    }
+
+    int stop_err = 0;
+    if (ret1 != 0 || ret2 != 0) {
+        LOG_ERR("IPC service '%s': thread did not terminate after abort (worker_ret=%d, disp_ret=%d)", service->name,
+                ret1, ret2);
+        stop_err = -EIO;
     }
 
     /* SIL-2: 无论线程是否成功退出，都清理状态 */
@@ -679,9 +706,10 @@ int ipc_service_stop(ipc_service_t* service) {
     ipc_shm_deinit(service);
 #endif
 
-    LOG_INF("IPC service '%s' stopped (worker_ret=%d, dispatcher_ret=%d)", service->name, ret1, ret2);
+    LOG_INF("IPC service '%s' stopped (worker_ret=%d, dispatcher_ret=%d, err=%d)", service->name, ret1, ret2,
+            stop_err);
 
-    return 0;
+    return stop_err;
 }
 
 /* =============================================================================

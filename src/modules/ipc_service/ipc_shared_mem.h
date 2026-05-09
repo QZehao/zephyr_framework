@@ -21,6 +21,7 @@
  * @par 修改日志:
  *    Date         Version        Author          Description
  *  2026-04-13     1.0            zeh            初始版本
+ *  2026-05-09     1.1            zeh            未启用时 stub 句柄与 active_count 字段说明
  */
 
 #ifndef ZEPHYR_IPC_SHARED_MEM_H_
@@ -32,12 +33,16 @@
 #include <stdbool.h>
 
 #if !IS_ENABLED(CONFIG_THREAD_IPC_SERVICE_SHARED_MEM)
-/* 当未启用共享内存时提供空实现 */
+/* 当未启用共享内存时提供空实现（编译占位；调用方应在 Kconfig 关闭 SHARED_MEM 时不走分配路径） */
 typedef uint32_t ipc_shm_handle_t;
 struct ipc_service;
 
+#define IPC_SHM_HANDLE_INVALID ((ipc_shm_handle_t)0xFFFFFFFFU)
+
 static inline ipc_shm_handle_t ipc_shm_alloc(struct ipc_service* service, size_t size) {
-    (void)service; (void)size; return (ipc_shm_handle_t)0;
+    (void)service;
+    (void)size;
+    return IPC_SHM_HANDLE_INVALID;
 }
 static inline void ipc_shm_acquire(struct ipc_service* service, ipc_shm_handle_t handle) {
     (void)service; (void)handle;
@@ -112,7 +117,7 @@ typedef struct ipc_shm_pool {
                              CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_BLOCK_SIZE]; /**< 实际内存池 */
     struct k_mutex  pool_lock;                                                 /**< 保护池分配的互斥锁 */
     uint32_t        alloc_counter;                                             /**< 分配计数器（用于生成唯一 ID） */
-    uint32_t        active_count;                                              /**< 当前活跃（已分配）块数量 */
+    atomic_t        active_count; /**< 当前活跃（已分配）块数量（原子：release 末路与 alloc 无需反向嵌套锁） */
     uint32_t        peak_count;                                                /**< 峰值活跃块数量 */
 } ipc_shm_pool_t;
 
@@ -147,6 +152,8 @@ int ipc_shm_init(struct ipc_service* service);
  * @param service IPC 服务实例指针
  *
  * SIL-2: 安全清理，检查泄漏
+ *
+ * @note 仅打印泄漏诊断；不强制回收仍被持有的块（依赖 ipc_shm_release 配对）
  */
 void ipc_shm_deinit(struct ipc_service* service);
 
@@ -176,7 +183,7 @@ ipc_shm_handle_t ipc_shm_alloc(struct ipc_service* service, size_t size);
  * @param service IPC 服务实例指针
  * @param handle 共享内存句柄
  *
- * @note 原子操作，无需额外锁保护
+ * @note 引用计数用原子更新；块状态与合法性由块互斥锁 ipc_shm_block_t::lock 保护
  * @note 如果句柄无效则静默忽略（SIL-2 防御性编程）
  */
 void ipc_shm_acquire(struct ipc_service* service, ipc_shm_handle_t handle);

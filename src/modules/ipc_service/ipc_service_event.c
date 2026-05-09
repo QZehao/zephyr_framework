@@ -14,14 +14,14 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
- *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description
  * 2026-04-01       1.0            zeh            正式发布
+ * 2026-05-09       1.1            zeh            头文件整理
  *
  */
+
 #include "ipc_service_event.h"
 #include <zephyr/logging/log.h>
 

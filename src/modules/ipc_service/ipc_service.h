@@ -23,12 +23,11 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
- *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description
  * 2026-04-01       1.0            zeh            正式发布
+ * 2026-05-09       1.1            zeh            stop/cancel 语义与 ipc_call_sync 超时文档
  *
  */
 
@@ -256,9 +255,10 @@ int ipc_service_start(ipc_service_t* service);
  * 停止工作线程和响应分发线程。
  *
  * @param service 服务实例指针
- * @return 0 成功，负值错误码失败
+ * @return 0 成功；-EINVAL 参数无效；-EIO 任一线程在 abort 后仍未能 join（实例不宜再 start，除非另行约定复位）
  *
- * @note 停止后不再处理新请求
+ * @note 停止后不再处理新请求；已在请求队列中的条目可能被 worker 丢弃（若对应 pending 已释放）
+ * @note join 超时后将 k_thread_abort 对应线程并重试 join，以降低 running=false 但线程仍存活的风险
  */
 int ipc_service_stop(ipc_service_t* service);
 
@@ -273,7 +273,8 @@ int ipc_service_stop(ipc_service_t* service);
  * @param out_data 输出数据指针
  * @param out_data_size 输出数据大小
  * @param timeout 超时时间（K_NO_WAIT 和零超时无效，会返回 -EINVAL）
- * @return 服务函数返回值，或负值错误码（-EINVAL 参数无效，-ENOMEM 无空闲槽位，-EAGAIN 超时）
+ * @return 成功时为服务函数返回值；参数/资源错误时为 -EINVAL、-ENOMEM 等；阻塞等待失败时为
+ *         k_sem_take 返回值（Zephyr 下超时常见 -EAGAIN，以所用内核版本为准）
  *
  * @note 调用线程将阻塞直到收到响应或超时
  * @note 如果服务返回的是共享内存，调用者需要通过 ipc_shm_release() 释放
@@ -295,7 +296,7 @@ int ipc_call_sync(ipc_service_t* service, const void* data, size_t data_size, vo
  * @param out_data_size 输出数据大小
  * @param out_shm_handle 输出：共享内存句柄（可为 NULL）
  * @param timeout 超时时间
- * @return 服务函数返回值，或负值错误码
+ * @return 语义同 ipc_call_sync；额外通过 out_shm_handle 返回共享内存句柄（若有）
  *
  * @note 如果 out_shm_handle 非零，调用者必须在使用完 out_data 后调用 ipc_shm_release()
  */
@@ -389,6 +390,7 @@ size_t ipc_service_get_pending_count(ipc_service_t* service);
  * @return 0 成功，-ENOENT 未找到请求
  *
  * @note 仅当请求仍在 pending 表中时可取消；已完成并出表后不可取消
+ * @note 取消成功后 worker 若稍后从队列取出该 request_id，将跳过 service_func（不再投递响应）
  */
 int ipc_service_cancel(ipc_service_t* service, ipc_request_id_t request_id);
 

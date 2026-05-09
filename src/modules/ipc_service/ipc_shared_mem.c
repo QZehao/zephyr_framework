@@ -16,6 +16,7 @@
  * @par 修改日志:
  *    Date         Version        Author          Description
  *  2026-04-13     1.0            zeh            初始版本
+ *  2026-05-09     1.1            zeh            active_count 原子化避免与 block 锁逆向嵌套 pool 锁；k_mutex_init 用法修正
  */
 
 #include "ipc_shared_mem.h"
@@ -185,12 +186,8 @@ int ipc_shm_init(ipc_service_t* service) {
     /* SIL-2: 清零所有状态 */
     memset(pool, 0, sizeof(ipc_shm_pool_t));
 
-    /* SIL-2: 初始化互斥锁 */
-    int ret = k_mutex_init(&pool->pool_lock);
-    if (ret != 0) {
-        LOG_ERR("Failed to init pool lock: %d", ret);
-        return ret;
-    }
+    /* SIL-2: 初始化互斥锁（Zephyr k_mutex_init 无返回值） */
+    k_mutex_init(&pool->pool_lock);
 
     /* SIL-2: 初始化所有块 */
     for (uint32_t i = 0; i < CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE; i++) {
@@ -202,19 +199,11 @@ int ipc_shm_init(ipc_service_t* service) {
         block->state = IPC_SHM_STATE_FREE;
         block->alloc_id = 0;
 
-        ret = k_mutex_init(&block->lock);
-        if (ret != 0) {
-            LOG_ERR("Failed to init block %u lock: %d", i, ret);
-            /* SIL-2: 回滚已初始化的锁 */
-            for (uint32_t j = 0; j < i; j++) {
-                /* Zephyr 没有 k_mutex_destroy，依赖后续清理 */
-            }
-            return ret;
-        }
+        k_mutex_init(&block->lock);
     }
 
     pool->alloc_counter = 0;
-    pool->active_count = 0;
+    atomic_set(&pool->active_count, 0);
     pool->peak_count = 0;
 
     LOG_INF("Shared memory pool initialized: %u blocks x %u bytes",
@@ -234,10 +223,8 @@ void ipc_shm_deinit(ipc_service_t* service) {
 
     ipc_shm_pool_t* pool = &service->shm_pool;
 
-    /* SIL-2: 检查是否有未释放的块 */
-    k_mutex_lock(&pool->pool_lock, K_FOREVER);
-    uint32_t leaked = pool->active_count;
-    k_mutex_unlock(&pool->pool_lock);
+    /* SIL-2: 检查是否有未释放的块（active_count 为原子，无需先取 pool_lock） */
+    uint32_t leaked = (uint32_t)atomic_get(&pool->active_count);
 
     if (leaked > 0) {
         LOG_WRN("Shared memory pool has %u leaked blocks on deinit", leaked);
@@ -297,9 +284,12 @@ ipc_shm_handle_t ipc_shm_alloc(ipc_service_t* service, size_t size) {
             pool->alloc_counter++;
             block->alloc_id = pool->alloc_counter;
 
-            pool->active_count++;
-            if (pool->active_count > pool->peak_count) {
-                pool->peak_count = pool->active_count;
+            {
+                uint32_t prev = (uint32_t)atomic_inc(&pool->active_count);
+                uint32_t now  = prev + 1U;
+                if (now > pool->peak_count) {
+                    pool->peak_count = now;
+                }
             }
 
             handle = encode_handle(i);
@@ -316,7 +306,7 @@ ipc_shm_handle_t ipc_shm_alloc(ipc_service_t* service, size_t size) {
 
     if (handle == IPC_SHM_HANDLE_INVALID) {
         LOG_WRN("Shared memory pool exhausted (active=%u, peak=%u)",
-                pool->active_count, pool->peak_count);
+                (unsigned int)atomic_get(&pool->active_count), (unsigned int)pool->peak_count);
     }
 
     return handle;
@@ -427,9 +417,8 @@ int ipc_shm_release(ipc_service_t* service, ipc_shm_handle_t handle) {
         memset(block->ptr, 0, block->size);
         block->size = CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_BLOCK_SIZE;
 
-        k_mutex_lock(&pool->pool_lock, K_FOREVER);
-        pool->active_count--;
-        k_mutex_unlock(&pool->pool_lock);
+        /* active_count 原子递减：避免在持有 block->lock 时再取 pool_lock（与 ipc_shm_alloc 锁序冲突） */
+        (void)atomic_dec(&pool->active_count);
 
         LOG_DBG("Block %u recycled (alloc_id=%u)", index, block->alloc_id);
     } else if (new_ref == 1) {
@@ -538,7 +527,7 @@ void ipc_shm_get_stats(ipc_service_t* service, uint32_t* out_active_count,
     k_mutex_lock(&pool->pool_lock, K_FOREVER);
 
     if (out_active_count != NULL) {
-        *out_active_count = pool->active_count;
+        *out_active_count = (uint32_t)atomic_get(&pool->active_count);
     }
 
     if (out_peak_count != NULL) {
@@ -546,7 +535,8 @@ void ipc_shm_get_stats(ipc_service_t* service, uint32_t* out_active_count,
     }
 
     if (out_free_count != NULL) {
-        *out_free_count = CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE - pool->active_count;
+        *out_free_count =
+            CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE - (uint32_t)atomic_get(&pool->active_count);
     }
 
     k_mutex_unlock(&pool->pool_lock);
