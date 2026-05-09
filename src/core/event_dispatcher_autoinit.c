@@ -26,6 +26,20 @@ LOG_MODULE_REGISTER(event_dispatcher_autoinit, CONFIG_SYS_LOG_LEVEL);
  * ============================================================================= */
 
 static int event_dispatcher_auto_init(void) {
+    /* 如果事件系统尚未初始化，先自初始化 */
+    struct k_msgq* queue = event_system_get_queue();
+    if (queue == NULL) {
+        if (event_system_init() != EVENT_OK) {
+            LOG_ERR("event_system_init failed");
+            return -EIO;
+        }
+        if (event_system_start() != EVENT_OK) {
+            LOG_ERR("event_system_start failed");
+            return -EIO;
+        }
+        LOG_INF("Event system auto-initialized by dispatcher");
+    }
+
     dispatcher_config_t dispatcher_config = {.stack_size = CONFIG_EVENT_DISPATCHER_STACK_SIZE,
                                              .priority = CONFIG_EVENT_DISPATCHER_PRIORITY,
                                              .thread_name = "event_disp",

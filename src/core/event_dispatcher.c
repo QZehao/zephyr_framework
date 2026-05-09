@@ -570,10 +570,11 @@ static void process_event(const event_t* event) {
         LOG_ERR("sys_clock_hw_cycles_per_sec() returned 0");
     }
 
-    /* 更新统计信息 */
-    if (g_dispatcher.config.enable_stats) {
-        k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
+    /* 更新统计信息，同时将 last_event_time 合并到同一锁区间以减少锁开销 */
+    k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
+    g_dispatcher.last_event_time = k_uptime_get();
 
+    if (g_dispatcher.config.enable_stats) {
         g_dispatcher.stats.events_processed++;
 
         if (status != EVENT_OK) {
@@ -592,12 +593,8 @@ static void process_event(const event_t* event) {
             g_dispatcher.stats.avg_latency_us =
                 (g_dispatcher.stats.avg_latency_us * 7 + latency_us) / 8;
         }
-
-        k_mutex_unlock(&g_dispatcher.lock);
     }
 
-    k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
-    g_dispatcher.last_event_time = k_uptime_get();
     k_mutex_unlock(&g_dispatcher.lock);
 
     LOG_DBG("Processed event type=%d, latency=%dus", event->type, latency_us);
@@ -611,6 +608,9 @@ static void process_event(const event_t* event) {
  */
 static uint32_t calculate_latency_us(uint64_t event_timestamp) {
     uint64_t now = k_uptime_get();
+    if (event_timestamp > now) {
+        return 0U; /* 防止时间回绕或异常时间戳导致下溢 */
+    }
     uint64_t delta_ms = now - event_timestamp;
-    return (uint32_t) (delta_ms * 1000); /* 毫秒转微秒 */
+    return (uint32_t) (delta_ms * 1000U); /* 毫秒转微秒 */
 }

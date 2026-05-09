@@ -275,14 +275,25 @@ K_MEM_SLAB_DEFINE(debug_track_slab, sizeof(debug_track_entry_t),
 /** 调试模块是否已初始化 */
 static bool g_debug_initialized = false;
 
+/** 调试模块初始化保护标志 */
+static atomic_flag g_debug_init_flag = ATOMIC_FLAG_INIT;
+
 /**
  * @brief 初始化调试模块（内部函数）
+ *
+ * 使用原子标志保护，防止多线程竞争初始化。
  */
 static void event_debug_init(void)
 {
     if (!g_debug_initialized) {
-        k_mutex_init(&g_debug_track_lock);
-        g_debug_initialized = true;
+        while (atomic_flag_test_and_set(&g_debug_init_flag)) {
+            k_yield();
+        }
+        if (!g_debug_initialized) {
+            k_mutex_init(&g_debug_track_lock);
+            g_debug_initialized = true;
+        }
+        atomic_flag_clear(&g_debug_init_flag);
     }
 }
 

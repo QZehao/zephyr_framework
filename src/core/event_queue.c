@@ -51,6 +51,9 @@ typedef struct {
 
 static event_queue_cb_t g_queue_cb[MAX_QUEUE_CB_ENTRIES];
 
+/** 保护队列控制块数组的全局互斥锁 */
+static K_MUTEX_DEFINE(g_queue_cb_lock);
+
 /**
  * @brief 验证事件有效性
  */
@@ -58,10 +61,7 @@ static bool event_is_valid(const event_t* event) {
     if (event == NULL) {
         return false;
     }
-    /* SIL-2: 验证事件类型范围 */
-    if (event->type >= 256) {
-        return false;
-    }
+    /* event->type 是 uint8_t，值域天然为 0-255，无需额外范围检查 */
     return true;
 }
 
@@ -209,19 +209,24 @@ static void msgq_get_attrs_const(const struct k_msgq* queue, struct k_msgq_attrs
 }
 
 static event_queue_cb_t* event_queue_find_cb(const struct k_msgq* queue) {
+    k_mutex_lock(&g_queue_cb_lock, K_FOREVER);
     for (size_t i = 0; i < MAX_QUEUE_CB_ENTRIES; i++) {
         if (g_queue_cb[i].msgq == queue) {
+            k_mutex_unlock(&g_queue_cb_lock);
             return &g_queue_cb[i];
         }
     }
+    k_mutex_unlock(&g_queue_cb_lock);
     return NULL;
 }
 
 static event_queue_cb_t* event_queue_alloc_cb(struct k_msgq* queue) {
+    k_mutex_lock(&g_queue_cb_lock, K_FOREVER);
     event_queue_cb_t* free_cb = NULL;
 
     for (size_t i = 0; i < MAX_QUEUE_CB_ENTRIES; i++) {
         if (g_queue_cb[i].msgq == queue) {
+            k_mutex_unlock(&g_queue_cb_lock);
             return &g_queue_cb[i];
         }
         if (g_queue_cb[i].msgq == NULL && free_cb == NULL) {
@@ -229,6 +234,7 @@ static event_queue_cb_t* event_queue_alloc_cb(struct k_msgq* queue) {
         }
     }
 
+    k_mutex_unlock(&g_queue_cb_lock);
     return free_cb;
 }
 
@@ -296,35 +302,32 @@ event_status_t event_queue_enqueue(struct k_msgq* queue, const event_t* event, q
         return EVENT_ERR_INVALID_ARG;
     }
 
-    /* SIL-2: 验证事件类型有效性 */
-    if (event->type >= 256) {
-        LOG_ERR("Invalid event type in enqueue: %d", event->type);
-        return EVENT_ERR_INVALID_ARG;
-    }
-
     /* SIL-2: 先尝试入队，使用返回值判断真实结果，避免 TOCTOU 竞态。
      * 之前的实现先检查 used_msgs >= max_msgs 再调用 k_msgq_put，
      * 在这两个操作之间其他线程可能出队，导致 overflow_count 被错误递增。 */
     int ret = k_msgq_put(queue, event, timeout);
     if (ret == 0) {
-        /* 入队成功，更新统计 */
-        k_mutex_lock(&cb->stats_lock, K_FOREVER);
-        cb->stats.enqueue_count++;
+        /* 入队成功，更新统计（ISR 中跳过锁保护） */
+        if (!k_is_in_isr()) {
+            k_mutex_lock(&cb->stats_lock, K_FOREVER);
+            cb->stats.enqueue_count++;
 
-        uint32_t current_depth = k_msgq_num_used_get(queue);
-        if (current_depth > cb->stats.high_watermark) {
-            cb->stats.high_watermark = current_depth;
+            uint32_t current_depth = k_msgq_num_used_get(queue);
+            if (current_depth > cb->stats.high_watermark) {
+                cb->stats.high_watermark = current_depth;
+            }
+            k_mutex_unlock(&cb->stats_lock);
         }
-        k_mutex_unlock(&cb->stats_lock);
-
         return EVENT_OK;
     }
 
-    /* 入队失败：所有失败情况都增加溢出计数（与原始行为一致）。
-     * 先统一增加计数，再区分超时和队列满。 */
-    k_mutex_lock(&cb->stats_lock, K_FOREVER);
-    cb->stats.overflow_count++;
-    k_mutex_unlock(&cb->stats_lock);
+    /* 入队失败：仅队列满（-ENOMSG）计入 overflow_count，超时（-EAGAIN）不计入。
+     * ISR 中跳过需要互斥锁的统计更新。 */
+    if (ret == -ENOMSG && !k_is_in_isr()) {
+        k_mutex_lock(&cb->stats_lock, K_FOREVER);
+        cb->stats.overflow_count++;
+        k_mutex_unlock(&cb->stats_lock);
+    }
 
     /* 区分超时和队列满 */
     if (ret == -EAGAIN) {

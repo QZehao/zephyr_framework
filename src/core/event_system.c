@@ -95,7 +95,6 @@ static atomic_t g_event_dropped_count;
  * @return 指向订阅者条目的指针，未找到返回 NULL
  */
 static subscriber_entry_t* find_subscriber(event_type_entry_t* entry, uint32_t subscriber_id);
-static void                purge_event_queue_and_free_payload(struct k_msgq* queue);
 
 /* =============================================================================
  * 核心实现 (Core Implementation)
@@ -146,6 +145,13 @@ event_status_t event_system_init(void) {
     k_msgq_init(&g_event_msgq, g_event_msgq_buffer, sizeof(event_t), CONFIG_EVENT_QUEUE_SIZE);
     g_event_system.event_queue = &g_event_msgq;
 
+    /* 注册队列到 event_queue 管理层，启用溢出策略和统计 */
+    event_status_t qret = event_queue_init(&g_event_msgq, g_event_msgq_buffer, CONFIG_EVENT_QUEUE_SIZE);
+    if (qret != EVENT_OK) {
+        atomic_flag_clear(&g_init_lock);
+        return qret;
+    }
+
     g_event_system.next_subscriber_id = 1;
     atomic_set(&g_event_system.running, 0);
     g_event_system.initialized = true;
@@ -194,7 +200,7 @@ event_status_t event_system_stop(void) {
 
     atomic_set(&g_event_system.running, 0);
 
-    purge_event_queue_and_free_payload(g_event_system.event_queue);
+    event_queue_purge(g_event_system.event_queue);
 
     LOG_INF("Event system stopped");
     return EVENT_OK;
@@ -217,10 +223,7 @@ event_status_t event_system_shutdown(void) {
     /* SIL-2: 先停止运行状态，防止新事件入队 */
     atomic_set(&g_event_system.running, 0);
 
-    /* SIL-2: 清空队列并释放动态负载，防止内存泄漏 */
-    purge_event_queue_and_free_payload(g_event_system.event_queue);
-
-    /* SIL-2: 反初始化事件队列，释放 DROP_LOWEST scratch 缓冲区（CRIT-1 修复） */
+    /* SIL-2: 反初始化事件队列，释放动态负载和 DROP_LOWEST scratch 缓冲区 */
     event_queue_deinit(g_event_system.event_queue);
 
     /* SIL-2: 无条件清理所有事件类型条目（不以 name!=NULL 为条件），
@@ -495,15 +498,7 @@ event_status_t event_publish(const event_t* event) {
         LOG_WRN("Publishing to unregistered event type: %d", event->type);
     }
 
-    int ret = k_msgq_put(g_event_system.event_queue, event, K_NO_WAIT);
-    if (ret != 0) {
-        atomic_add(&g_event_dropped_count, 1);
-
-        LOG_WRN("Event queue full, event dropped (type=%d)", event->type);
-        return EVENT_ERR_QUEUE_FULL;
-    }
-
-    return EVENT_OK;
+    return event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
 }
 
 /**
@@ -521,13 +516,7 @@ event_status_t event_publish_from_isr(const event_t* event) {
         return EVENT_ERR_INVALID_ARG;
     }
 
-    int ret = k_msgq_put(g_event_system.event_queue, event, K_NO_WAIT);
-    if (ret != 0) {
-        atomic_add(&g_event_dropped_count, 1);
-        return EVENT_ERR_QUEUE_FULL;
-    }
-
-    return EVENT_OK;
+    return event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
 }
 
 /**
@@ -573,18 +562,6 @@ event_t* event_create_rt(event_type_t type, event_priority_t priority) {
 #if EVENT_SLAB_ENABLED
     struct k_mem_slab* slab = event_memory_select_event_slab(priority);
     int                ret = k_mem_slab_alloc(slab, (void**) &event, K_NO_WAIT);
-
-    /* 尝试降级借用低优先级池 */
-#if EVENT_SLAB_HIGH_AVAILABLE
-    if (ret != 0 && priority == EVENT_PRIORITY_CRITICAL) {
-        slab = event_memory_select_event_slab(EVENT_PRIORITY_HIGH);
-        ret = k_mem_slab_alloc(slab, (void**) &event, K_NO_WAIT);
-    }
-#endif
-    if (ret != 0 && priority <= EVENT_PRIORITY_HIGH) {
-        slab = event_memory_select_event_slab(EVENT_PRIORITY_NORMAL);
-        ret = k_mem_slab_alloc(slab, (void**) &event, K_NO_WAIT);
-    }
 
     if (ret != 0) {
         LOG_WRN("Event slab exhausted for priority %d", priority);
@@ -1046,18 +1023,6 @@ static subscriber_entry_t* find_subscriber(event_type_entry_t* entry, uint32_t s
         }
     }
     return NULL;
-}
-
-static void purge_event_queue_and_free_payload(struct k_msgq* queue) {
-    if (queue == NULL) {
-        return;
-    }
-
-    event_t ev;
-
-    while (k_msgq_get(queue, &ev, K_NO_WAIT) == 0) {
-        event_free_data(&ev);
-    }
 }
 
 /* =============================================================================
