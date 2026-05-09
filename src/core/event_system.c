@@ -223,18 +223,32 @@ event_status_t event_system_stop(void) {
 event_status_t event_system_shutdown(void) {
     LOG_INF("Shutting down event system...");
 
-    if (!g_event_system.initialized) {
-        return EVENT_OK;
+    /* SIL-2: 使用 g_init_lock 防止与 init/shutdown 并发执行（NEW-1）。
+     * 与 event_system_init 共用同一原子标志，串行化整个生命周期变更。 */
+    while (atomic_test_and_set_bit(&g_init_lock, 0)) {
+        k_yield();
     }
 
-    /* SIL-2: 防御性检查：分发器必须先停止，避免线程悬挂访问已释放资源 */
-    if (event_dispatcher_get_state() != DISPATCHER_STOPPED) {
-        LOG_ERR("Dispatcher must be stopped before event_system_shutdown");
-        return EVENT_ERR_INVALID_ARG;
+    if (!g_event_system.initialized) {
+        atomic_clear_bit(&g_init_lock, 0);
+        return EVENT_OK;
     }
 
     /* SIL-2: 先停止运行状态，防止新事件入队 */
     atomic_set(&g_event_system.running, 0);
+
+    /* SIL-2: 主动停止 dispatcher 而非仅做防御性检查（HIGH-1）。
+     * event_dispatcher_stop 内部 join 线程，返回后线程已退出，
+     * 之后释放队列资源不会与悬挂线程产生竞态。 */
+    event_status_t dret = event_dispatcher_stop();
+    if (dret != EVENT_OK) {
+        LOG_ERR("Failed to stop dispatcher during shutdown: %d", dret);
+        /* 恢复 running 状态以便上层可重试或继续运行；
+         * 不释放任何资源，保持系统可用 */
+        atomic_set(&g_event_system.running, 1);
+        atomic_clear_bit(&g_init_lock, 0);
+        return dret;
+    }
 
     /* SIL-2: 反初始化事件队列，释放动态负载和 DROP_LOWEST scratch 缓冲区 */
     event_queue_deinit(g_event_system.event_queue);
@@ -259,6 +273,7 @@ event_status_t event_system_shutdown(void) {
     atomic_set(&g_event_system.next_subscriber_id, 1);
     g_event_system.event_queue = NULL;
 
+    atomic_clear_bit(&g_init_lock, 0);
     LOG_INF("Event system shutdown complete");
     return EVENT_OK;
 }
@@ -461,7 +476,7 @@ event_status_t event_unsubscribe(event_type_t type, uint32_t subscriber_id) {
  * @param subscriber_id 订阅者 ID
  */
 void event_unsubscribe_all(uint32_t subscriber_id) {
-    if (!g_event_system.initialized || subscriber_id == 0) {
+    if (!g_event_system.initialized || subscriber_id == EVENT_SUBSCRIBER_ID_INVALID) {
         return;
     }
 
@@ -512,9 +527,12 @@ event_status_t event_publish(const event_t* event) {
         return EVENT_ERR_NOT_RUNNING;
     }
 
-    /* 验证事件类型是否已注册 */
+    /* SIL-2: 拒绝向未注册类型发布事件，避免占用队列槽位（MED-1）。
+     * name 读取无锁，与 unregister 的最坏情况是少量边缘事件仍允许入队，
+     * 分发时 notify_subscribers 返回 NO_SUBSCRIBER，不会泄漏事件数据。 */
     if (g_event_system.event_types[event->type].name == NULL) {
         LOG_WRN("Publishing to unregistered event type: %d", event->type);
+        return EVENT_ERR_NOT_FOUND;
     }
 
     return event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
@@ -535,9 +553,10 @@ event_status_t event_publish_from_isr(const event_t* event) {
         return EVENT_ERR_NOT_RUNNING;
     }
 
-    /* 验证事件类型是否已注册（ISR 中不打印日志，仅做静默检查） */
+    /* SIL-2: 拒绝向未注册类型发布事件（MED-1，ISR 路径同步处理）。
+     * ISR 中不打印日志，但仍返回错误使调用方可感知；name 无锁读取的考量同非 ISR 路径。 */
     if (g_event_system.event_types[event->type].name == NULL) {
-        /* 静默跳过：ISR 路径假定调用方已确保类型有效 */
+        return EVENT_ERR_NOT_FOUND;
     }
 
     return event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
@@ -876,6 +895,15 @@ void event_free(event_t* event) {
 #if EVENT_SLAB_ENABLED
         struct k_mem_slab* slab = event_memory_select_event_slab(event->priority);
         k_mem_slab_free(slab, (void*) event);
+#else
+        /* SIL-2: NEW-3 防御性回退 —— FROM_SLAB 标志置位但 slab 在本编译单元中已禁用。
+         * 正常构建中 event_create 不会设置该标志，触发此分支说明：
+         *   1) 调用方传入的 event 来自启用 slab 的旁路路径（如跨固件迁移）；
+         *   2) 内存被异常修改导致 flags 损坏。
+         * 任一情况下都应记录错误供诊断；尝试 k_free 回退避免泄漏，
+         * 但若 event 实际来自 slab 池，k_free 行为未定义。 */
+        LOG_ERR("Event %p has FROM_SLAB flag but slab is disabled; falling back to k_free", event);
+        k_free(event);
 #endif
     } else {
         k_free(event);

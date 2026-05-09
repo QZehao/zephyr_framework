@@ -23,6 +23,7 @@
 
 #include "event_queue.h"
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(event_queue, CONFIG_SYS_LOG_LEVEL);
@@ -38,12 +39,18 @@ extern void event_system_inc_dropped_count(void);
  * @brief 扩展队列控制块
  *
  * 包含队列的统计信息和管理数据。
+ *
+ * SIL-2: HIGH-3 修复 —— 统计计数器改为 atomic_t，使 ISR 路径可正确累计
+ * （k_msgq_put 在 ISR 中合法，但互斥锁不可用，原子操作填补此空白）。
  */
 typedef struct {
     struct k_msgq* msgq;                /**< 消息队列指针 */
-    queue_stats_t  stats;               /**< 队列统计信息 */
+    atomic_t       enqueue_count;       /**< 入队成功计数（ISR 安全） */
+    atomic_t       dequeue_count;       /**< 出队成功计数 */
+    atomic_t       overflow_count;      /**< 溢出（队列满）计数（ISR 安全） */
+    atomic_t       drop_count;          /**< 显式丢弃计数（DROP_LOWEST/purge） */
+    atomic_t       high_watermark;      /**< 队列深度历史最大值（CAS 更新） */
     uint32_t       capacity;            /**< 队列容量 */
-    struct k_mutex stats_lock;          /**< 保护统计信息的互斥锁 */
     struct k_mutex reorder_lock;        /**< DROP_LOWEST 排空/回灌时与并发入队互斥 */
     event_t*       drop_lowest_scratch; /**< DROP_LOWEST 独立临时缓冲区 */
 } event_queue_cb_t;
@@ -71,6 +78,26 @@ static bool event_is_valid(const event_t* event) {
 static void event_free_queued_payload(event_t* ev) {
     /* SIL-2: 使用统一接口释放动态数据，正确处理 slab 来源 */
     event_free_data(ev);
+}
+
+/**
+ * @brief 原子更新水位线（仅当新值大于当前值时更新）
+ *
+ * SIL-2: HIGH-3 修复后的 CAS 循环实现，避免并发更新丢失。
+ * ISR 安全：原子操作不依赖互斥锁。
+ *
+ * @param hw 水位线 atomic 指针
+ * @param depth 当前深度
+ */
+static inline void update_high_watermark(atomic_t* hw, uint32_t depth) {
+    atomic_val_t old_hw;
+
+    do {
+        old_hw = atomic_get(hw);
+        if ((atomic_val_t) depth <= old_hw) {
+            return;
+        }
+    } while (!atomic_cas(hw, old_hw, (atomic_val_t) depth));
 }
 
 /**
@@ -122,16 +149,8 @@ static event_status_t enqueue_drop_lowest(struct k_msgq* queue, const event_t* e
             return EVENT_ERR_TIMEOUT;
         }
 
-        k_mutex_lock(&cb->stats_lock, K_FOREVER);
-        cb->stats.enqueue_count++;
-        {
-            uint32_t depth = k_msgq_num_used_get(queue);
-
-            if (depth > cb->stats.high_watermark) {
-                cb->stats.high_watermark = depth;
-            }
-        }
-        k_mutex_unlock(&cb->stats_lock);
+        atomic_inc(&cb->enqueue_count);
+        update_high_watermark(&cb->high_watermark, k_msgq_num_used_get(queue));
 
         return EVENT_OK;
     }
@@ -164,9 +183,7 @@ static event_status_t enqueue_drop_lowest(struct k_msgq* queue, const event_t* e
             (void) k_msgq_put(queue, &cb->drop_lowest_scratch[i], K_NO_WAIT);
         }
         k_mutex_unlock(&cb->reorder_lock);
-        k_mutex_lock(&cb->stats_lock, K_FOREVER);
-        cb->stats.drop_count++;
-        k_mutex_unlock(&cb->stats_lock);
+        atomic_inc(&cb->drop_count);
         event_system_inc_dropped_count();
         LOG_DBG("Queue full, incoming lower than worst queued; drop newest");
         return EVENT_ERR_QUEUE_FULL;
@@ -174,9 +191,7 @@ static event_status_t enqueue_drop_lowest(struct k_msgq* queue, const event_t* e
 
     event_free_queued_payload(&cb->drop_lowest_scratch[worst]);
 
-    k_mutex_lock(&cb->stats_lock, K_FOREVER);
-    cb->stats.drop_count++;
-    k_mutex_unlock(&cb->stats_lock);
+    atomic_inc(&cb->drop_count);
     event_system_inc_dropped_count();
 
     for (uint32_t i = 0; i < n; i++) {
@@ -196,16 +211,8 @@ static event_status_t enqueue_drop_lowest(struct k_msgq* queue, const event_t* e
         return EVENT_ERR_TIMEOUT;
     }
 
-    k_mutex_lock(&cb->stats_lock, K_FOREVER);
-    cb->stats.enqueue_count++;
-    {
-        uint32_t depth = k_msgq_num_used_get(queue);
-
-        if (depth > cb->stats.high_watermark) {
-            cb->stats.high_watermark = depth;
-        }
-    }
-    k_mutex_unlock(&cb->stats_lock);
+    atomic_inc(&cb->enqueue_count);
+    update_high_watermark(&cb->high_watermark, k_msgq_num_used_get(queue));
 
     return EVENT_OK;
 }
@@ -285,8 +292,11 @@ event_status_t event_queue_init(struct k_msgq* queue, void* buffer, size_t capac
 
     cb->msgq = queue;
     cb->capacity = capacity;
-    cb->stats = (queue_stats_t) {0};
-    k_mutex_init(&cb->stats_lock);
+    atomic_set(&cb->enqueue_count, 0);
+    atomic_set(&cb->dequeue_count, 0);
+    atomic_set(&cb->overflow_count, 0);
+    atomic_set(&cb->drop_count, 0);
+    atomic_set(&cb->high_watermark, 0);
     k_mutex_init(&cb->reorder_lock);
 
     /* SIL-2: 为每个队列独立分配 DROP_LOWEST scratch 缓冲区，消除全局并发瓶颈 */
@@ -326,26 +336,16 @@ event_status_t event_queue_enqueue(struct k_msgq* queue, const event_t* event, q
      * 在这两个操作之间其他线程可能出队，导致 overflow_count 被错误递增。 */
     int ret = k_msgq_put(queue, event, timeout);
     if (ret == 0) {
-        /* 入队成功，更新统计（ISR 中跳过锁保护） */
-        if (!k_is_in_isr()) {
-            k_mutex_lock(&cb->stats_lock, K_FOREVER);
-            cb->stats.enqueue_count++;
-
-            uint32_t current_depth = k_msgq_num_used_get(queue);
-            if (current_depth > cb->stats.high_watermark) {
-                cb->stats.high_watermark = current_depth;
-            }
-            k_mutex_unlock(&cb->stats_lock);
-        }
+        /* SIL-2: HIGH-3 修复后使用原子操作，ISR 路径也能正确累计统计。 */
+        atomic_inc(&cb->enqueue_count);
+        update_high_watermark(&cb->high_watermark, k_msgq_num_used_get(queue));
         return EVENT_OK;
     }
 
     /* 入队失败：仅队列满（-ENOMSG）计入 overflow_count，超时（-EAGAIN）不计入。
-     * ISR 中跳过需要互斥锁的统计更新。 */
-    if (ret == -ENOMSG && !k_is_in_isr()) {
-        k_mutex_lock(&cb->stats_lock, K_FOREVER);
-        cb->stats.overflow_count++;
-        k_mutex_unlock(&cb->stats_lock);
+     * SIL-2: HIGH-3 修复后使用原子操作，ISR 路径安全。 */
+    if (ret == -ENOMSG) {
+        atomic_inc(&cb->overflow_count);
         event_system_inc_dropped_count();
     }
 
@@ -406,9 +406,7 @@ event_status_t event_queue_dequeue(struct k_msgq* queue, event_t* event, k_timeo
         return EVENT_ERR_INVALID_ARG;
     }
 
-    k_mutex_lock(&cb->stats_lock, K_FOREVER);
-    cb->stats.dequeue_count++;
-    k_mutex_unlock(&cb->stats_lock);
+    atomic_inc(&cb->dequeue_count);
 
     return EVENT_OK;
 }
@@ -512,9 +510,7 @@ void event_queue_purge(struct k_msgq* queue) {
     }
 
     if (cb != NULL && purged > 0U) {
-        k_mutex_lock(&cb->stats_lock, K_FOREVER);
-        cb->stats.drop_count += purged;
-        k_mutex_unlock(&cb->stats_lock);
+        atomic_add(&cb->drop_count, (atomic_val_t) purged);
     }
 
     LOG_DBG("Event queue purged, dropped=%u", purged);
@@ -537,9 +533,14 @@ void event_queue_get_stats(const struct k_msgq* queue, queue_stats_t* stats) {
         return;
     }
 
-    k_mutex_lock(&cb->stats_lock, K_FOREVER);
-    *stats = cb->stats;
-    k_mutex_unlock(&cb->stats_lock);
+    /* SIL-2: HIGH-3 修复后从 atomic 计数器重建快照。
+     * 各计数器独立读取，整体快照非原子（不同字段对应不同瞬时值），
+     * 但相比丢失 ISR 路径统计，此妥协可接受。 */
+    stats->enqueue_count = (uint32_t) atomic_get(&cb->enqueue_count);
+    stats->dequeue_count = (uint32_t) atomic_get(&cb->dequeue_count);
+    stats->overflow_count = (uint32_t) atomic_get(&cb->overflow_count);
+    stats->drop_count = (uint32_t) atomic_get(&cb->drop_count);
+    stats->high_watermark = (uint32_t) atomic_get(&cb->high_watermark);
 }
 
 /**
@@ -557,9 +558,11 @@ void event_queue_reset_stats(struct k_msgq* queue) {
         return;
     }
 
-    k_mutex_lock(&cb->stats_lock, K_FOREVER);
-    cb->stats = (queue_stats_t) {0};
-    k_mutex_unlock(&cb->stats_lock);
+    atomic_set(&cb->enqueue_count, 0);
+    atomic_set(&cb->dequeue_count, 0);
+    atomic_set(&cb->overflow_count, 0);
+    atomic_set(&cb->drop_count, 0);
+    atomic_set(&cb->high_watermark, 0);
 
     LOG_DBG("Queue statistics reset");
 }
@@ -594,7 +597,11 @@ void event_queue_deinit(struct k_msgq* queue) {
     /* 清理控制块状态 */
     cb->msgq = NULL;
     cb->capacity = 0;
-    cb->stats = (queue_stats_t) {0};
+    atomic_set(&cb->enqueue_count, 0);
+    atomic_set(&cb->dequeue_count, 0);
+    atomic_set(&cb->overflow_count, 0);
+    atomic_set(&cb->drop_count, 0);
+    atomic_set(&cb->high_watermark, 0);
 
     LOG_DBG("Event queue deinitialized");
 }

@@ -250,13 +250,23 @@ event_status_t event_dispatcher_stop(void) {
             /* SIL-2: join 超时后备方案：强制终止线程（IMP-3 修复）。
              * 必须先 abort 再清理 thread_started，防止线程在 stop 返回后继续运行。 */
             k_thread_abort(&g_dispatcher.thread);
+
+            /* SIL-2: 验证 abort 后线程确实终止（HIGH-2）。
+             * Zephyr 的 k_thread_abort 是同步的，此处再次 join 应立即返回 0；
+             * 若验证仍失败，说明线程异常，保留 thread_started=true 以防止
+             * 后续 start() 创建新线程时与残留线程产生队列竞争。 */
+            int jret2 = k_thread_join(&g_dispatcher.thread, K_MSEC(EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS));
+            if (jret2 != 0) {
+                LOG_ERR("Dispatcher thread abort verification failed: %d; keeping thread_started=true", jret2);
+                return EVENT_ERR_TIMEOUT;
+            }
             LOG_WRN("Dispatcher thread aborted after join timeout");
         } else {
             LOG_INF("Dispatcher thread joined successfully");
         }
     }
 
-    /* SIL-2: join 成功或 abort 后清理状态 */
+    /* SIL-2: join 成功或 abort 验证成功后清理状态 */
     k_mutex_lock(&g_dispatcher.lock, K_FOREVER);
     g_dispatcher.thread_started = false;
     k_mutex_unlock(&g_dispatcher.lock);
@@ -515,6 +525,14 @@ static void dispatcher_thread_func(void* p1, void* p2, void* p3) {
     LOG_INF("Dispatcher thread running");
 
     while (1) {
+        /* SIL-2: 防御性检查 g_event_queue（NEW-2），防止队列指针在异常情况下
+         * 被清理（如未来扩展支持 dispatcher_deinit）后线程仍尝试访问。
+         * 正常生命周期下不会触发，触发即代表错误的关闭顺序。 */
+        if (g_event_queue == NULL) {
+            LOG_ERR("Dispatcher queue is NULL, exiting thread");
+            break;
+        }
+
         dispatcher_state_t st;
         uint32_t           max_events;
 
