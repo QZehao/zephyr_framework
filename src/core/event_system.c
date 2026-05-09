@@ -292,6 +292,9 @@ event_status_t event_system_stop(void) {
  * 完全关闭事件系统，清理所有资源，重置所有状态。
  *
  * @return EVENT_OK 成功
+ *
+ * @note MED-7: 不要在持有任何 subscriber callback 可能也需要获取的锁时调用此函数，
+ *       否则可能因分发器线程正在执行该 callback 而产生死锁。
  */
 event_status_t event_system_shutdown(void) {
     EVENT_SYSTEM_VALIDATE();
@@ -1118,6 +1121,17 @@ uint32_t event_get_subscriber_count(event_type_t type) {
  * @param dropped_events 输出：被丢弃的事件数量
  */
 void event_get_statistics(uint32_t* total_events, uint32_t* queue_depth, uint32_t* dropped_events) {
+    /* LOW-9: 始终先初始化为 0，使调用方在任何返回路径下都能读到确定值。 */
+    if (total_events != NULL) {
+        *total_events = 0U;
+    }
+    if (queue_depth != NULL) {
+        *queue_depth = 0U;
+    }
+    if (dropped_events != NULL) {
+        *dropped_events = 0U;
+    }
+
     if (g_event_system.magic != EVENT_SYSTEM_MAGIC) {
         return;
     }

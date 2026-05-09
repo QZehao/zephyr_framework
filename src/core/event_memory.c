@@ -317,6 +317,11 @@ static bool g_debug_initialized = false;
 /** 调试模块初始化保护标志 */
 static atomic_t g_debug_init_flag = ATOMIC_INIT(0);
 
+/** LOW-1: 调试跟踪 slab 耗尽时被丢弃的分配次数。
+ * 当 debug_track_slab 满时，event_check_leaks 报告的数量会偏低；
+ * 此计数器记录追踪缺口，使诊断者可识别"统计不完整"的情况。 */
+static atomic_t g_debug_track_misses = ATOMIC_INIT(0);
+
 /**
  * @brief 初始化调试模块（内部函数）
  *
@@ -354,6 +359,8 @@ void event_debug_track_alloc(void* ptr, size_t size, event_priority_t priority)
     debug_track_entry_t* entry = NULL;
 
     if (k_mem_slab_alloc(&debug_track_slab, (void**)&entry, K_NO_WAIT) != 0) {
+        /* LOW-1: 累计追踪缺口，使 dump_leaks 可暴露统计不完整的事实 */
+        atomic_inc(&g_debug_track_misses);
         LOG_WRN("Debug track slab exhausted");
         return;
     }
@@ -415,6 +422,13 @@ uint32_t event_check_leaks(void)
     }
     k_mutex_unlock(&g_debug_track_lock);
 
+    /* LOW-1: 若曾发生追踪缺口，警告调用方：返回值低估真实泄漏数 */
+    uint32_t misses = (uint32_t) atomic_get(&g_debug_track_misses);
+    if (misses > 0) {
+        LOG_WRN("Leak count may be incomplete: %u allocations untracked due to slab exhaustion",
+                misses);
+    }
+
     return count;
 }
 
@@ -426,9 +440,16 @@ void event_dump_leaks(void)
 
     debug_track_entry_t* entry = g_debug_track_head;
     uint32_t count = 0;
+    /* LOW-1: 在锁外读取原子计数器即可，但放在此处便于与 leak 报告关联输出 */
+    uint32_t misses = (uint32_t) atomic_get(&g_debug_track_misses);
 
     if (entry == NULL) {
-        LOG_INF("No memory leaks detected");
+        if (misses > 0) {
+            LOG_WRN("No tracked leaks, but %u allocations were untracked (slab exhausted)",
+                    misses);
+        } else {
+            LOG_INF("No memory leaks detected");
+        }
         k_mutex_unlock(&g_debug_track_lock);
         return;
     }
@@ -444,6 +465,10 @@ void event_dump_leaks(void)
     }
 
     LOG_INF("Total leaks: %u", count);
+    if (misses > 0) {
+        LOG_WRN("Untracked allocations (slab exhausted): %u — total leaks may exceed %u",
+                misses, count);
+    }
     k_mutex_unlock(&g_debug_track_lock);
 }
 

@@ -83,9 +83,13 @@ extern "C" {
  * 编译时验证 (Compile-time Assertions)
  * ============================================================================= */
 
+/* CRIT-1: NORMAL Slab 计数仅在启用 slab 时强制约束。
+ * 禁用 slab 时该 Kconfig 可能未定义或为 0，无条件断言会破坏构建。 */
+#if EVENT_SLAB_ENABLED
 /** NORMAL Slab 数量至少为 4 */
 BUILD_ASSERT(CONFIG_EVENT_SLAB_NORMAL_COUNT >= 4,
              "CONFIG_EVENT_SLAB_NORMAL_COUNT must be at least 4");
+#endif
 
 /** 内联数据大小至少为 4 字节 */
 BUILD_ASSERT(CONFIG_EVENT_INLINE_DATA_SIZE >= 4,

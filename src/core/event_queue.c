@@ -158,11 +158,17 @@ static event_status_t enqueue_drop_lowest(struct k_msgq* queue, const event_t* e
     for (uint32_t i = 0; i < n; i++) {
         if (k_msgq_get(queue, &cb->drop_lowest_scratch[i], K_NO_WAIT) != 0) {
             LOG_ERR("DROP_LOWEST drain failed at %u, restoring %u events", i, i);
-            /* SIL-2: 回灌已出队的事件，避免事件丢失和内存泄漏 */
+            /* SIL-2: 回灌已出队的事件，避免事件丢失和内存泄漏。
+             * LOW-3: 每次迭代访问独立的 scratch[j]，不存在 double-free 风险。
+             * 持有 reorder_lock 时 k_msgq_put 失败是异常情况；为最大化恢复事件，
+             * 单条失败仅释放该条负载并继续处理其余事件，而不是 break 提前退出
+             * （break 会导致剩余 scratch 中的动态负载泄漏）。 */
             for (uint32_t j = 0; j < i; j++) {
                 if (k_msgq_put(queue, &cb->drop_lowest_scratch[j], K_NO_WAIT) != 0) {
                     /* 队列在我们持有 reorder_lock 时变满，理论不应发生 */
                     event_free_queued_payload(&cb->drop_lowest_scratch[j]);
+                    atomic_inc(&cb->drop_count);
+                    event_system_inc_dropped_count();
                 }
             }
             k_mutex_unlock(&cb->reorder_lock);
@@ -220,6 +226,10 @@ static event_status_t enqueue_drop_lowest(struct k_msgq* queue, const event_t* e
 /**
  * @brief 获取消息队列属性（常量版本）
  *
+ * LOW-2: Zephyr 不提供 k_msgq_get_attrs_const()，因此需要移除 const 修饰
+ * 以调用其非 const API。此处的 const cast 是 Zephyr 内核 API 设计限制所致，
+ * 函数内部不会修改 queue 内容，调用方可安全地传入 const 指针。
+ *
  * @param queue 队列指针（只读）
  * @param attrs 输出：属性结构
  */
@@ -264,6 +274,14 @@ event_status_t event_queue_init(struct k_msgq* queue, void* buffer, size_t capac
     /* 在持锁状态下完成所有检查与初始化 */
     for (size_t i = 0; i < MAX_QUEUE_CB_ENTRIES; i++) {
         if (g_queue_cb[i].msgq == queue) {
+            /* MED-1: 拒绝以不同 capacity 重新初始化已注册队列。
+             * 容量决定 drop_lowest_scratch 大小，静默忽略会在 enqueue_drop_lowest 中越界。 */
+            if (g_queue_cb[i].capacity != capacity) {
+                k_mutex_unlock(&g_queue_cb_lock);
+                LOG_ERR("Queue already initialized with capacity %u, refusing %zu",
+                        g_queue_cb[i].capacity, capacity);
+                return EVENT_ERR_INVALID_ARG;
+            }
             k_mutex_unlock(&g_queue_cb_lock);
             LOG_WRN("Queue already initialized, skipping");
             return EVENT_OK; /* 已初始化 */
@@ -507,6 +525,13 @@ void event_queue_purge(struct k_msgq* queue) {
     event_queue_cb_t* cb = event_queue_find_cb(queue);
     event_t           ev;
     uint32_t          purged = 0U;
+
+    /* MED-2: 队列未通过 event_queue_init() 注册时，event_free_queued_payload
+     * 可能对裸 k_msgq_put 投递的事件错误地解释 EVENT_FLAG_DATA_DYNAMIC。
+     * 此处仍执行清空避免内存泄漏，但记录警告便于诊断违反契约的调用。 */
+    if (cb == NULL) {
+        LOG_WRN("Purge on queue %p without event_queue_init(); payload free may be unsafe", queue);
+    }
 
     /* SIL-2: 获取 reorder_lock，与 enqueue_drop_lowest 互斥，防止 drain-refill 窗口竞态 */
     if (cb != NULL) {

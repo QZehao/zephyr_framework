@@ -91,11 +91,16 @@ static void dispatcher_thread_func(void* p1, void* p2, void* p3);
 static void process_event(const event_t* event);
 
 /**
- * @brief 计算事件处理延迟
- * @param event_timestamp 事件时间戳
- * @return 延迟时间（微秒）
+ * @brief 计算距上一个事件处理的空闲时间（微秒）
+ *
+ * MED-4: 参数实际传入的是 last_event_time（上一次 process_event 结束时刻），
+ * 因此计算的是"系统空闲了多久"，而非事件从创建到处理的延迟。
+ * 为保持向后兼容，外部接口 event_dispatcher_get_current_latency 名称未做更改。
+ *
+ * @param last_event_time 上一次事件处理完成的时间戳
+ * @return 距上次事件处理的空闲时间（微秒）
  */
-static uint32_t calculate_latency_us(uint64_t event_timestamp);
+static uint32_t calculate_idle_time_us(uint64_t last_event_time);
 
 /* =============================================================================
  * 分发器控制 API (Dispatcher Control API)
@@ -118,7 +123,16 @@ event_status_t event_dispatcher_init(const dispatcher_config_t* config) {
         return EVENT_ERR_INVALID_ARG;
     }
 
+    /* LOW-5: memset 会清除已设置的 filter 与 user_data，导致 stop->init 序列后
+     * 用户先前注册的过滤器静默失效。在重置前保存，重置后恢复以保持幂等性；
+     * 如需主动清除过滤器，调用方应显式 event_dispatcher_clear_filter()。 */
+    event_filter_t saved_filter = g_dispatcher.filter;
+    void*          saved_filter_ud = g_dispatcher.filter_user_data;
+
     memset(&g_dispatcher, 0, sizeof(g_dispatcher));
+
+    g_dispatcher.filter = saved_filter;
+    g_dispatcher.filter_user_data = saved_filter_ud;
 
     /* 设置默认配置或用户提供的配置 */
     if (config != NULL) {
@@ -266,7 +280,9 @@ event_status_t event_dispatcher_stop(void) {
             /* SIL-2: 验证 abort 后线程确实终止（HIGH-2）。
              * Zephyr 的 k_thread_abort 是同步的，此处再次 join 应立即返回 0；
              * 若验证仍失败，说明线程异常，保留 thread_started=true 以防止
-             * 后续 start() 创建新线程时与残留线程产生队列竞争。 */
+             * 后续 start() 创建新线程时与残留线程产生队列竞争。
+             * MED-3: 此状态下 dispatcher 无法再重启成功，通常需要系统复位。
+             * 不建议在 abort 失败后再次调用 event_dispatcher_start()。 */
             int jret2 = k_thread_join(&g_dispatcher.thread, K_MSEC(EVENT_DISPATCHER_THREAD_JOIN_TIMEOUT_MS));
             if (jret2 != 0) {
                 LOG_ERR("Dispatcher thread abort verification failed: %d; keeping thread_started=true", jret2);
@@ -525,7 +541,7 @@ uint32_t event_dispatcher_get_current_latency(void) {
     last_event_time = g_dispatcher.last_event_time;
     k_mutex_unlock(&g_dispatcher.lock);
 
-    return calculate_latency_us(last_event_time);
+    return calculate_idle_time_us(last_event_time);
 }
 
 /* =============================================================================
@@ -611,7 +627,10 @@ static void process_event(const event_t* event) {
     event_status_t status = event_notify_subscribers(event);
 
     uint64_t end_time = k_cycle_get_64();
-    /* SIL-2: 使用安全的除法计算延迟，避免溢出；防御极端情况下的 cycle counter 回绕 */
+    /* SIL-2: 使用安全的除法计算延迟，避免溢出；防御极端情况下的 cycle counter 回绕。
+     * LOW-6: sys_clock_hw_cycles_per_sec() 在 Zephyr 各平台下通常为编译时常量，
+     * 不可能返回 0，但保留防御性分支可在移植到新硬件时提供额外保护，
+     * 且分支极小（返回编译时常量），不会引入运行时开销。 */
     uint32_t latency_us;
     if (sys_clock_hw_cycles_per_sec() != 0) {
         uint64_t delta = (end_time >= start_time) ? (end_time - start_time) : 0;
@@ -653,16 +672,20 @@ static void process_event(const event_t* event) {
 }
 
 /**
- * @brief 计算延迟（微秒）
+ * @brief 计算距上一次事件处理的空闲时间（微秒）
  *
- * @param event_timestamp 事件时间戳
- * @return 延迟时间（微秒）
+ * MED-4: 此函数计算的是"距上一个事件处理完成过去了多久"，
+ * 而非事件从创建到分发的处理延迟。若需真实的"事件创建到处理"延迟，
+ * 应使用 event->timestamp（来自 event_create）而非 last_event_time。
+ *
+ * @param last_event_time 上一次事件处理完成的时间戳
+ * @return 距上次事件处理的空闲时间（微秒）
  */
-static uint32_t calculate_latency_us(uint64_t event_timestamp) {
+static uint32_t calculate_idle_time_us(uint64_t last_event_time) {
     uint64_t now = k_uptime_get();
-    if (event_timestamp > now) {
+    if (last_event_time > now) {
         return 0U; /* 防止时间回绕或异常时间戳导致下溢 */
     }
-    uint64_t delta_ms = now - event_timestamp;
+    uint64_t delta_ms = now - last_event_time;
     return (uint32_t) (delta_ms * 1000U); /* 毫秒转微秒 */
 }
