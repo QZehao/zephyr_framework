@@ -30,7 +30,7 @@ static int event_dispatcher_auto_init(void) {
                                              .priority = CONFIG_EVENT_DISPATCHER_PRIORITY,
                                              .thread_name = "event_disp",
                                              .enable_stats = APP_CONFIG_ENABLE_STATS,
-                                             .max_events_per_cycle = 100};
+                                             .max_events_per_cycle = CONFIG_EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE};
     if (event_dispatcher_init(&dispatcher_config) != EVENT_OK) {
         LOG_ERR("event_dispatcher_init failed");
         return -EIO;

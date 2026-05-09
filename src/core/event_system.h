@@ -181,7 +181,7 @@ typedef struct {
     uint8_t          type;           /**< 事件类型标识符 */
     uint8_t          priority;       /**< 事件优先级 */
     uint8_t          flags;          /**< 标志位 (EVENT_FLAG_*) */
-    uint8_t          reserved;       /**< 预留扩展 */
+    uint8_t          reserved;       /**< 预留扩展：必须初始化为 0，为未来版本保留 */
     uint32_t         timestamp;      /**< 事件创建时间戳（毫秒 uptime） */
     uint32_t         source_id;      /**< 源模块/组件 ID */
     uint32_t         data_len;       /**< 事件数据长度（字节） */
@@ -598,6 +598,14 @@ uint32_t event_get_subscriber_count(event_type_t type);
  * @note 所有输出参数都可以为 NULL，表示不关心该值
  */
 void event_get_statistics(uint32_t* total_events, uint32_t* queue_depth, uint32_t* dropped_events);
+
+/**
+ * @brief 重置事件系统统计信息
+ *
+ * 清零所有累积统计值，防止长期运行后溢出。
+ * 由兼容层的 event_compat_reset_statistics() 调用。
+ */
+void event_system_reset_statistics(void);
 
 /**
  * @brief 获取全局事件队列指针

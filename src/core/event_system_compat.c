@@ -141,7 +141,9 @@ void event_compat_reset_statistics(void) {
 #if EVENT_COMPAT_USE_PRO
     event_system_pro_reset_statistics();
 #else
-    /* 标准版没有 reset_statistics，统计自动重置 */
+    /* SIL-2: 标准版实现统计重置，避免统计值累积溢出（IMP-5 修复） */
+    extern void event_system_reset_statistics(void);
+    event_system_reset_statistics();
 #endif
 }
 

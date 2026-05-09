@@ -296,61 +296,61 @@ event_status_t event_queue_enqueue(struct k_msgq* queue, const event_t* event, q
         return EVENT_ERR_INVALID_ARG;
     }
 
-    struct k_msgq_attrs qattrs;
-
-    msgq_get_attrs_const(queue, &qattrs);
-
     /* SIL-2: 验证事件类型有效性 */
     if (event->type >= 256) {
         LOG_ERR("Invalid event type in enqueue: %d", event->type);
         return EVENT_ERR_INVALID_ARG;
     }
 
-    /* 检查队列是否已满（用 msgq 属性，避免未调用 event_queue_init 时 capacity 为 0） */
-    if (qattrs.used_msgs >= qattrs.max_msgs) {
+    /* SIL-2: 先尝试入队，使用返回值判断真实结果，避免 TOCTOU 竞态。
+     * 之前的实现先检查 used_msgs >= max_msgs 再调用 k_msgq_put，
+     * 在这两个操作之间其他线程可能出队，导致 overflow_count 被错误递增。 */
+    int ret = k_msgq_put(queue, event, timeout);
+    if (ret == 0) {
+        /* 入队成功，更新统计 */
         k_mutex_lock(&cb->stats_lock, K_FOREVER);
-        cb->stats.overflow_count++;
+        cb->stats.enqueue_count++;
+
+        uint32_t current_depth = k_msgq_num_used_get(queue);
+        if (current_depth > cb->stats.high_watermark) {
+            cb->stats.high_watermark = current_depth;
+        }
         k_mutex_unlock(&cb->stats_lock);
 
-        switch (policy) {
-        case QUEUE_OVERFLOW_DROP_NEWEST:
-            LOG_DBG("Queue full, dropping newest event");
-            return EVENT_ERR_QUEUE_FULL;
-
-        case QUEUE_OVERFLOW_DROP_LOWEST:
-            return enqueue_drop_lowest(queue, event, timeout, cb);
-
-        case QUEUE_OVERFLOW_BLOCK:
-            /* SIL-2: 阻塞等待，添加日志 */
-            LOG_DBG("Queue full, blocking until space available");
-            break;
-
-        default:
-            /* SIL-2: 防御性编程，处理未知策略 */
-            LOG_ERR("Unknown overflow policy: %d", policy);
-            return EVENT_ERR_INVALID_ARG;
-        }
+        return EVENT_OK;
     }
 
-    int ret = k_msgq_put(queue, event, timeout);
-    if (ret != 0) {
-        if (ret == -ENOMSG) {
-            return EVENT_ERR_QUEUE_FULL;
-        }
+    /* 入队失败：所有失败情况都增加溢出计数（与原始行为一致）。
+     * 先统一增加计数，再区分超时和队列满。 */
+    k_mutex_lock(&cb->stats_lock, K_FOREVER);
+    cb->stats.overflow_count++;
+    k_mutex_unlock(&cb->stats_lock);
+
+    /* 区分超时和队列满 */
+    if (ret == -EAGAIN) {
         return EVENT_ERR_TIMEOUT;
     }
 
-    /* 更新统计信息 */
-    k_mutex_lock(&cb->stats_lock, K_FOREVER);
-    cb->stats.enqueue_count++;
+    switch (policy) {
+    case QUEUE_OVERFLOW_DROP_NEWEST:
+        LOG_DBG("Queue full, dropping newest event");
+        return EVENT_ERR_QUEUE_FULL;
 
-    uint32_t current_depth = k_msgq_num_used_get(queue);
-    if (current_depth > cb->stats.high_watermark) {
-        cb->stats.high_watermark = current_depth;
+    case QUEUE_OVERFLOW_DROP_LOWEST:
+        return enqueue_drop_lowest(queue, event, timeout, cb);
+
+    case QUEUE_OVERFLOW_BLOCK:
+        /* SIL-2: BLOCK 策略下 k_msgq_put 已使用 timeout 阻塞等待。
+         * 如果 k_msgq_put 返回非 0，说明阻塞期间仍未获得空间（超时或中断）。
+         * 此时返回队列满错误。 */
+        LOG_DBG("Queue full, blocking timed out");
+        return EVENT_ERR_QUEUE_FULL;
+
+    default:
+        /* SIL-2: 防御性编程，处理未知策略 */
+        LOG_ERR("Unknown overflow policy: %d", policy);
+        return EVENT_ERR_INVALID_ARG;
     }
-    k_mutex_unlock(&cb->stats_lock);
-
-    return EVENT_OK;
 }
 
 /**
@@ -374,9 +374,11 @@ event_status_t event_queue_dequeue(struct k_msgq* queue, event_t* event, k_timeo
         return EVENT_ERR_TIMEOUT;
     }
 
-    /* SIL-2: find_cb 失败时，事件已从队列移除，需要释放动态负载防止泄漏 */
+    /* SIL-2: find_cb 失败时，事件已从队列移除，需要释放动态负载防止泄漏。
+     * 此情况说明队列未通过 event_queue_init() 初始化，属于编程错误。 */
     event_queue_cb_t* cb = event_queue_find_cb(queue);
     if (cb == NULL) {
+        LOG_ERR("Queue not initialized via event_queue_init(); event lost, data freed");
         event_free_queued_payload(event);
         return EVENT_ERR_INVALID_ARG;
     }
@@ -528,4 +530,39 @@ void event_queue_reset_stats(struct k_msgq* queue) {
     k_mutex_unlock(&cb->stats_lock);
 
     LOG_DBG("Queue statistics reset");
+}
+
+/**
+ * @brief 反初始化事件队列
+ *
+ * SIL-2: 释放队列初始化时分配的所有动态资源，防止内存泄漏。
+ * 包括 DROP_LOWEST scratch 缓冲区和控制块状态清理。
+ *
+ * @param queue 队列实例
+ */
+void event_queue_deinit(struct k_msgq* queue) {
+    if (queue == NULL) {
+        return;
+    }
+
+    event_queue_cb_t* cb = event_queue_find_cb(queue);
+    if (cb == NULL) {
+        return;
+    }
+
+    /* SIL-2: 先清空队列中剩余的事件，防止动态负载泄漏 */
+    event_queue_purge(queue);
+
+    /* SIL-2: 释放 DROP_LOWEST scratch 缓冲区（CRIT-1 修复） */
+    if (cb->drop_lowest_scratch != NULL) {
+        k_free(cb->drop_lowest_scratch);
+        cb->drop_lowest_scratch = NULL;
+    }
+
+    /* 清理控制块状态 */
+    cb->msgq = NULL;
+    cb->capacity = 0;
+    cb->stats = (queue_stats_t) {0};
+
+    LOG_DBG("Event queue deinitialized");
 }

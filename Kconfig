@@ -50,6 +50,14 @@ config EVENT_DISPATCHER_PRIORITY
 	help
 	  Priority of the event dispatcher thread (lower = higher priority).
 
+config EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE
+	int "Max Events Per Cycle"
+	default 100
+	range 1 10000
+	help
+	  Maximum number of events processed in a single dispatcher cycle.
+	  Limits processing time per cycle to prevent starving other threads.
+
 	# =============================================================================
 	# Event Structure Size Configuration
 	# =============================================================================

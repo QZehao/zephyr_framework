@@ -166,6 +166,18 @@ void event_queue_get_stats(const struct k_msgq* queue, queue_stats_t* stats);
  */
 void event_queue_reset_stats(struct k_msgq* queue);
 
+/**
+ * @brief 反初始化事件队列
+ *
+ * 释放队列相关的所有动态分配资源，包括 DROP_LOWEST scratch 缓冲区。
+ * 调用后队列控制块回到未初始化状态。
+ *
+ * @param queue 队列实例
+ * @note 调用前需确保队列中所有事件已被消费或清空
+ * @note 重复调用是安全的（幂等）
+ */
+void event_queue_deinit(struct k_msgq* queue);
+
 #ifdef __cplusplus
 }
 #endif

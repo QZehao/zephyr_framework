@@ -74,6 +74,11 @@ extern "C" {
 #define EVENT_DISPATCHER_PAUSE_SLEEP_MS 10U
 #endif
 
+/** 空闲时阻塞等待新事件的超时时间 (毫秒) */
+#ifndef EVENT_DISPATCHER_IDLE_TIMEOUT_MS
+#define EVENT_DISPATCHER_IDLE_TIMEOUT_MS 10U
+#endif
+
 /* =============================================================================
  * 类型定义 (Type Definitions)
  * ============================================================================= */

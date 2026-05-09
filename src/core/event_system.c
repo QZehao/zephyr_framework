@@ -23,11 +23,12 @@
  *
  */
 #include "event_system.h"
-#include "event_memory.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
 #include <stdatomic.h>
+#include "event_memory.h"
+#include "event_queue.h"
 
 LOG_MODULE_REGISTER(event_system, CONFIG_SYS_LOG_LEVEL);
 
@@ -79,9 +80,9 @@ static char g_event_msgq_buffer[CONFIG_EVENT_QUEUE_SIZE * sizeof(event_t)];
 
 /**
  * ISR 安全的丢弃计数器
- * 使用 atomic 避免在 event_publish_from_isr 中使用互斥锁
+ * 使用 Zephyr atomic_t 避免在 event_publish_from_isr 中使用互斥锁
  */
-static _Atomic uint32_t g_event_dropped_count;
+static atomic_t g_event_dropped_count;
 
 /* =============================================================================
  * 前置声明 (Forward Declarations)
@@ -218,6 +219,9 @@ event_status_t event_system_shutdown(void) {
 
     /* SIL-2: 清空队列并释放动态负载，防止内存泄漏 */
     purge_event_queue_and_free_payload(g_event_system.event_queue);
+
+    /* SIL-2: 反初始化事件队列，释放 DROP_LOWEST scratch 缓冲区（CRIT-1 修复） */
+    event_queue_deinit(g_event_system.event_queue);
 
     /* SIL-2: 无条件清理所有事件类型条目（不以 name!=NULL 为条件），
      * 避免 name 异常为 NULL 时订阅者数组不被清理 */
@@ -493,7 +497,7 @@ event_status_t event_publish(const event_t* event) {
 
     int ret = k_msgq_put(g_event_system.event_queue, event, K_NO_WAIT);
     if (ret != 0) {
-        atomic_fetch_add_explicit(&g_event_dropped_count, 1U, memory_order_relaxed);
+        atomic_add(&g_event_dropped_count, 1);
 
         LOG_WRN("Event queue full, event dropped (type=%d)", event->type);
         return EVENT_ERR_QUEUE_FULL;
@@ -519,7 +523,7 @@ event_status_t event_publish_from_isr(const event_t* event) {
 
     int ret = k_msgq_put(g_event_system.event_queue, event, K_NO_WAIT);
     if (ret != 0) {
-        atomic_fetch_add_explicit(&g_event_dropped_count, 1U, memory_order_relaxed);
+        atomic_add(&g_event_dropped_count, 1);
         return EVENT_ERR_QUEUE_FULL;
     }
 
@@ -568,18 +572,18 @@ event_t* event_create_rt(event_type_t type, event_priority_t priority) {
 
 #if EVENT_SLAB_ENABLED
     struct k_mem_slab* slab = event_memory_select_event_slab(priority);
-    int ret = k_mem_slab_alloc(slab, (void**)&event, K_NO_WAIT);
+    int                ret = k_mem_slab_alloc(slab, (void**) &event, K_NO_WAIT);
 
     /* 尝试降级借用低优先级池 */
 #if EVENT_SLAB_HIGH_AVAILABLE
     if (ret != 0 && priority == EVENT_PRIORITY_CRITICAL) {
         slab = event_memory_select_event_slab(EVENT_PRIORITY_HIGH);
-        ret = k_mem_slab_alloc(slab, (void**)&event, K_NO_WAIT);
+        ret = k_mem_slab_alloc(slab, (void**) &event, K_NO_WAIT);
     }
 #endif
     if (ret != 0 && priority <= EVENT_PRIORITY_HIGH) {
         slab = event_memory_select_event_slab(EVENT_PRIORITY_NORMAL);
-        ret = k_mem_slab_alloc(slab, (void**)&event, K_NO_WAIT);
+        ret = k_mem_slab_alloc(slab, (void**) &event, K_NO_WAIT);
     }
 
     if (ret != 0) {
@@ -614,8 +618,7 @@ event_t* event_create_rt(event_type_t type, event_priority_t priority) {
  * @param data_len 数据长度（字节）
  * @return 指向新事件的指针，失败返回 NULL
  */
-event_t* event_create_with_data_rt(event_type_t type, event_priority_t priority,
-                                    const void* data, size_t data_len) {
+event_t* event_create_with_data_rt(event_type_t type, event_priority_t priority, const void* data, size_t data_len) {
     if (data == NULL || data_len == 0) {
         return event_create_rt(type, priority);
     }
@@ -645,7 +648,7 @@ event_t* event_create_with_data_rt(event_type_t type, event_priority_t priority,
         return NULL;
     }
 
-    event->data_len = (uint32_t)data_len;
+    event->data_len = (uint32_t) data_len;
 
     /* 小数据：内联存储 */
     if (data_len <= CONFIG_EVENT_INLINE_DATA_SIZE) {
@@ -681,8 +684,7 @@ event_t* event_create_with_data_rt(event_type_t type, event_priority_t priority,
  * @param data_len 数据长度（字节）
  * @return EVENT_OK 成功，其他错误码见 event_status_t
  */
-event_status_t event_publish_copy_rt(event_type_t type, event_priority_t priority,
-                                      const void* data, size_t data_len) {
+event_status_t event_publish_copy_rt(event_type_t type, event_priority_t priority, const void* data, size_t data_len) {
     event_t* event = event_create_with_data_rt(type, priority, data, data_len);
     if (event == NULL) {
         return EVENT_ERR_NO_MEM;
@@ -729,7 +731,7 @@ event_t* event_create(event_type_t type, event_priority_t priority) {
     event->timestamp = k_uptime_get_32();
     event->source_id = 0;
     event->data_len = 0;
-    event->flags = 0;  /* 非 FROM_SLAB */
+    event->flags = 0; /* 非 FROM_SLAB */
     event->reserved = 0;
     memset(event->data.inline_data, 0, CONFIG_EVENT_INLINE_DATA_SIZE);
 
@@ -762,7 +764,7 @@ event_t* event_create_with_data(event_type_t type, event_priority_t priority, co
         if (event == NULL) {
             return NULL;
         }
-        event->data_len = (uint32_t)data_len;
+        event->data_len = (uint32_t) data_len;
         memcpy(event->data.inline_data, data, data_len);
         event->flags |= EVENT_FLAG_DATA_INLINE;
         return event;
@@ -776,7 +778,7 @@ event_t* event_create_with_data(event_type_t type, event_priority_t priority, co
         if (event != NULL) {
             if (k_mem_slab_alloc(data_slab, &event->data.ptr, K_NO_WAIT) == 0) {
                 memcpy(event->data.ptr, data, data_len);
-                event->data_len = (uint32_t)data_len;
+                event->data_len = (uint32_t) data_len;
                 event->flags |= EVENT_FLAG_DATA_DYNAMIC;
                 return event;
             }
@@ -801,8 +803,8 @@ event_t* event_create_with_data(event_type_t type, event_priority_t priority, co
     event->priority = priority;
     event->timestamp = k_uptime_get_32();
     event->source_id = 0;
-    event->data_len = (uint32_t)data_len;
-    event->flags = EVENT_FLAG_DATA_DYNAMIC;  /* 非 FROM_SLAB */
+    event->data_len = (uint32_t) data_len;
+    event->flags = EVENT_FLAG_DATA_DYNAMIC; /* 非 FROM_SLAB */
     event->reserved = 0;
     memcpy(event->data.ptr, data, data_len);
 
@@ -856,7 +858,7 @@ void event_free(event_t* event) {
     if (event->flags & EVENT_FLAG_FROM_SLAB) {
 #if EVENT_SLAB_ENABLED
         struct k_mem_slab* slab = event_memory_select_event_slab(event->priority);
-        k_mem_slab_free(slab, (void*)event);
+        k_mem_slab_free(slab, (void*) event);
 #endif
     } else {
         k_free(event);
@@ -922,10 +924,30 @@ void event_get_statistics(uint32_t* total_events, uint32_t* queue_depth, uint32_
         *queue_depth = k_msgq_num_used_get(g_event_system.event_queue);
     }
     if (dropped_events != NULL) {
-        *dropped_events = atomic_load_explicit(&g_event_dropped_count, memory_order_relaxed);
+        *dropped_events = (uint32_t) atomic_get(&g_event_dropped_count);
     }
 
     k_mutex_unlock(&g_event_system.stats_lock);
+}
+
+/**
+ * @brief 重置事件系统统计信息
+ *
+ * SIL-2: 标准版实现，清零所有累积统计值，防止溢出。
+ * 由 event_system_compat.c 的 event_compat_reset_statistics() 调用。
+ */
+void event_system_reset_statistics(void) {
+    if (!g_event_system.initialized) {
+        return;
+    }
+
+    k_mutex_lock(&g_event_system.stats_lock, K_FOREVER);
+    g_event_system.total_events = 0;
+    k_mutex_unlock(&g_event_system.stats_lock);
+
+    atomic_set(&g_event_dropped_count, 0);
+
+    LOG_DBG("Event system statistics reset");
 }
 
 /* =============================================================================
@@ -1039,27 +1061,14 @@ static void purge_event_queue_and_free_payload(struct k_msgq* queue) {
 }
 
 /* =============================================================================
- * 自动初始化 (Auto-initialization)
+ * 自动初始化说明 (Auto-initialization Note)
  * ============================================================================= */
 
-#include <zephyr/init.h>
-#include "app_config.h"
-
-/**
- * @brief 事件系统自动初始化入口
+/*
+ * SIL-2: 标准版事件系统的初始化由 event_system_compat.c 中的
+ * event_compat_auto_init() 统一处理。该函数调用 event_compat_init()
+ * -> event_system_init() 完成初始化，优先级为 APP_INIT_PRIO_EVENT_SYS。
  *
- * SIL-2: 标准版独立 SYS_INIT，解除对兼容层的初始化依赖。
- * 与 event_system_compat.c 中的 event_compat_auto_init 共存时，
- * event_system_init() 的幂等性保证多次调用安全。
+ * 为避免双重 SYS_INIT 竞态（CRIT-2 修复），event_system.c 中不再注册
+ * 独立的 SYS_INIT。event_system_init() 的幂等性保证多次调用安全。
  */
-static int event_system_auto_init(void) {
-    event_status_t ret = event_system_init();
-    if (ret != EVENT_OK) {
-        LOG_ERR("event_system_init failed: %d", ret);
-        return -EIO;
-    }
-    LOG_INF("Event system auto-initialized");
-    return 0;
-}
-
-SYS_INIT(event_system_auto_init, POST_KERNEL, APP_INIT_PRIO_EVENT_SYS);
