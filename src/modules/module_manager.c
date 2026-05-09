@@ -31,35 +31,12 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <errno.h>
 #include <stdint.h>
 #include <string.h>
 #include "event_system.h"
 
 LOG_MODULE_REGISTER(module_manager, CONFIG_SYS_LOG_LEVEL);
-
-/* =============================================================================
- * SIL-2: 配置验证宏
- * ============================================================================= */
-
-/** 模块初始化超时默认值（毫秒） */
-#ifndef MODULE_MGR_INIT_TIMEOUT_MS
-#define MODULE_MGR_INIT_TIMEOUT_MS 1000U
-#endif
-
-/** 模块操作超时（毫秒） */
-#ifndef MODULE_MGR_OPERATION_TIMEOUT_MS
-#define MODULE_MGR_OPERATION_TIMEOUT_MS 500U
-#endif
-
-/** 最大合理的模块数量 */
-#ifndef MODULE_MGR_MAX_MODULES
-#define MODULE_MGR_MAX_MODULES 64U
-#endif
-
-/** 最大模块名称长度 */
-#ifndef MODULE_MGR_MAX_NAME_LEN
-#define MODULE_MGR_MAX_NAME_LEN 32U
-#endif
 
 /* =============================================================================
  * 内部数据结构 (Internal Data Structures)
@@ -71,15 +48,14 @@ LOG_MODULE_REGISTER(module_manager, CONFIG_SYS_LOG_LEVEL);
  * 包含模块管理器的所有内部状态和数据。
  */
 typedef struct {
-    module_info_t         modules[CONFIG_MAX_MODULES]; /**< 模块信息数组 */
-    uint32_t              module_count;                /**< 已注册模块数量 */
-    uint32_t              next_module_id;              /**< 下一个可用的模块 ID */
-    module_mgr_stats_t    stats;                       /**< 统计信息 */
-    module_mgr_callback_t callback;                    /**< 状态变化回调 */
-    void*                 callback_user_data;          /**< 回调用户数据 */
-    struct k_mutex        lock;                        /**< 保护内部数据的互斥锁 */
-    bool                  initialized;                 /**< 管理器是否已初始化 */
-    bool                  running;                     /**< 管理器是否正在运行 */
+    module_info_t  modules[CONFIG_MAX_MODULES]; /**< 模块信息数组 */
+    uint32_t       module_count;                /**< 已注册模块数量 */
+    module_mgr_stats_t    stats;                /**< 统计信息 */
+    module_mgr_callback_t callback;             /**< 状态变化回调 */
+    void*                 callback_user_data;   /**< 回调用户数据 */
+    struct k_mutex        lock;                 /**< 保护内部数据的互斥锁 */
+    bool                  initialized;          /**< 管理器是否已初始化 */
+    bool                  running;              /**< 管理器是否正在运行 */
 } module_manager_cb_t;
 
 /**
@@ -117,24 +93,24 @@ static module_manager_cb_t g_module_mgr;
 static module_info_t* find_module_by_id_locked(uint32_t module_id);
 
 /**
- * @brief 清空模块槽位（内部使用，需持有锁）
+ * @brief 清空模块槽位（内部使用，调用方须已持有 g_module_mgr.lock）
  */
-static void clear_module_slot_unlocked(module_info_t* info);
+static void clear_module_slot_locked(module_info_t* info);
 
 /**
- * @brief 清除模块的所有事件订阅（内部使用，需持有锁）
+ * @brief 清除模块的所有事件订阅（内部使用，调用方须已持有 g_module_mgr.lock）
  */
-static void module_event_clear_all_unlocked(module_info_t* info);
+static void module_event_clear_all_locked(module_info_t* info);
+
+/**
+ * @brief 通知状态回调（内部获取回调指针需短暂加锁；可在已释放管理器锁后调用）
+ */
+static void module_mgr_notify_callback(uint32_t module_id, module_mgr_event_t evt);
 
 /**
  * @brief 模块事件处理函数（内部使用）
  */
 static void module_event_handler(const event_t* event, void* user_data);
-
-/**
- * @brief 通知回调（内部使用，可在持锁/无锁上下文调用）
- */
-static void notify_callback_unlocked(uint32_t module_id, module_mgr_event_t evt);
 
 /* =============================================================================
  * 内部辅助函数 (Internal Helpers)
@@ -182,6 +158,26 @@ static uint32_t find_module_id_by_name_locked(const char* name) {
 }
 
 /**
+ * @brief 分配不与现有活跃槽位冲突的最小正整数模块 ID（须已持有 g_module_mgr.lock）
+ */
+static uint32_t allocate_unique_module_id(void) {
+    for (uint32_t cand = 1U; cand != 0U; cand++) {
+        bool taken = false;
+
+        for (int i = 0; i < CONFIG_MAX_MODULES; i++) {
+            if (g_module_mgr.modules[i].status != MODULE_STATUS_UNINITIALIZED && g_module_mgr.modules[i].id == cand) {
+                taken = true;
+                break;
+            }
+        }
+        if (!taken) {
+            return cand;
+        }
+    }
+    return 0U;
+}
+
+/**
  * @brief 清空模块槽位
  *
  * 将模块信息重置为未初始化状态。
@@ -190,7 +186,7 @@ static uint32_t find_module_id_by_name_locked(const char* name) {
  *
  * @note 必须持有 g_module_mgr.lock
  */
-static void clear_module_slot_unlocked(module_info_t* info) {
+static void clear_module_slot_locked(module_info_t* info) {
     if (info == NULL) {
         return;
     }
@@ -211,7 +207,7 @@ static void clear_module_slot_unlocked(module_info_t* info) {
  *
  * @note 必须持有 g_module_mgr.lock
  */
-static void module_event_clear_all_unlocked(module_info_t* info) {
+static void module_event_clear_all_locked(module_info_t* info) {
     if (info == NULL) {
         return;
     }
@@ -232,7 +228,7 @@ static void module_event_clear_all_unlocked(module_info_t* info) {
  *
  * @note 函数内部自行加锁读取回调，不要求调用方预先持锁
  */
-static void notify_callback_unlocked(uint32_t module_id, module_mgr_event_t evt) {
+static void module_mgr_notify_callback(uint32_t module_id, module_mgr_event_t evt) {
     module_mgr_callback_t cb;
     void*                 ud;
 
@@ -314,6 +310,30 @@ static void sort_stop_entries_reverse_priority(start_order_entry_t* entries, int
     }
 }
 
+/** 依赖图邻接矩阵位压缩（行 j→列 i 表示 i 依赖 j），降低栈占用 */
+#define MM_ADJ_ROW_WORDS ((CONFIG_MAX_MODULES + 31) / 32)
+
+static void mm_adj_matrix_clear(uint32_t adj[][MM_ADJ_ROW_WORDS])
+{
+    (void) memset(adj, 0,
+                  sizeof(uint32_t) * (size_t) CONFIG_MAX_MODULES * (size_t) MM_ADJ_ROW_WORDS);
+}
+
+static void mm_adj_matrix_set(uint32_t adj[][MM_ADJ_ROW_WORDS], int row, int col)
+{
+    if (row >= 0 && col >= 0) {
+        adj[row][(unsigned int) col / 32U] |= 1U << ((unsigned int) col % 32U);
+    }
+}
+
+static bool mm_adj_matrix_test(const uint32_t adj[][MM_ADJ_ROW_WORDS], int row, int col)
+{
+    if (row < 0 || col < 0) {
+        return false;
+    }
+    return (adj[row][(unsigned int) col / 32U] & (1U << ((unsigned int) col % 32U))) != 0U;
+}
+
 /**
  * @brief 按依赖拓扑排序启动批次。
  *
@@ -324,7 +344,7 @@ static void sort_stop_entries_reverse_priority(start_order_entry_t* entries, int
  */
 static int dependency_order_start_batch(start_order_entry_t* entries, int n) {
     bool     valid[CONFIG_MAX_MODULES];
-    bool     adj[CONFIG_MAX_MODULES][CONFIG_MAX_MODULES];
+    uint32_t adj[CONFIG_MAX_MODULES][MM_ADJ_ROW_WORDS];
     int      indegree[CONFIG_MAX_MODULES];
     uint32_t pick_order[CONFIG_MAX_MODULES];
     int      n_work;
@@ -335,10 +355,10 @@ static int dependency_order_start_batch(start_order_entry_t* entries, int n) {
 
     n_work = n;
 
-    /* 不动点：剔除后重新校验，直到没有模块因「依赖已不在本批」而被新标记为无效 */
-    for (;;) {
-        k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
+    /* 不动点：全程持锁内校验并压缩，消除校验与压缩之间的 TOCTOU */
+    k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
 
+    for (;;) {
         for (int i = 0; i < n_work; i++) {
             valid[i] = true;
             if (entries[i].depends_on == NULL) {
@@ -395,8 +415,6 @@ static int dependency_order_start_batch(start_order_entry_t* entries, int n) {
             }
         }
 
-        k_mutex_unlock(&g_module_mgr.lock);
-
         int n2 = 0;
 
         for (int i = 0; i < n_work; i++) {
@@ -412,16 +430,19 @@ static int dependency_order_start_batch(start_order_entry_t* entries, int n) {
             break;
         }
         if (n2 <= 1) {
+            k_mutex_unlock(&g_module_mgr.lock);
             return n2;
         }
         n_work = n2;
     }
 
+    k_mutex_unlock(&g_module_mgr.lock);
+
     if (n_work <= 1) {
         return n_work;
     }
 
-    (void) memset(adj, 0, sizeof(adj));
+    mm_adj_matrix_clear(adj);
     (void) memset(indegree, 0, sizeof(indegree));
 
     k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
@@ -463,8 +484,8 @@ static int dependency_order_start_batch(start_order_entry_t* entries, int n) {
                 sort_start_entries(entries, n_work);
                 return n_work;
             }
-            if (!adj[j][i]) {
-                adj[j][i] = true;
+            if (!mm_adj_matrix_test(adj, j, i)) {
+                mm_adj_matrix_set(adj, j, i);
                 indegree[i]++;
             }
         }
@@ -497,7 +518,7 @@ static int dependency_order_start_batch(start_order_entry_t* entries, int n) {
         pick_order[out] = (uint32_t) best;
         remaining[best] = false;
         for (int i = 0; i < n_work; i++) {
-            if (adj[best][i]) {
+            if (mm_adj_matrix_test(adj, best, i)) {
                 indegree[i]--;
             }
         }
@@ -517,7 +538,7 @@ static int dependency_order_start_batch(start_order_entry_t* entries, int n) {
  *        使被依赖模块后停止。仅在本批 RUNNING 子集上建边；成环时退回 priority 降序。
  */
 static int dependency_order_stop_batch(start_order_entry_t* entries, int n) {
-    bool     adj[CONFIG_MAX_MODULES][CONFIG_MAX_MODULES];
+    uint32_t adj[CONFIG_MAX_MODULES][MM_ADJ_ROW_WORDS];
     int      indegree[CONFIG_MAX_MODULES];
     uint32_t pick_order[CONFIG_MAX_MODULES];
 
@@ -525,7 +546,7 @@ static int dependency_order_stop_batch(start_order_entry_t* entries, int n) {
         return n;
     }
 
-    (void) memset(adj, 0, sizeof(adj));
+    mm_adj_matrix_clear(adj);
     (void) memset(indegree, 0, sizeof(indegree));
 
     k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
@@ -565,8 +586,8 @@ static int dependency_order_stop_batch(start_order_entry_t* entries, int n) {
                         (unsigned int) entries[i].id, depn);
                 continue;
             }
-            if (!adj[j][i]) {
-                adj[j][i] = true;
+            if (!mm_adj_matrix_test(adj, j, i)) {
+                mm_adj_matrix_set(adj, j, i);
                 indegree[i]++;
             }
         }
@@ -599,7 +620,7 @@ static int dependency_order_stop_batch(start_order_entry_t* entries, int n) {
         pick_order[out] = (uint32_t) best;
         remaining[best] = false;
         for (int i = 0; i < n; i++) {
-            if (adj[best][i]) {
+            if (mm_adj_matrix_test(adj, best, i)) {
                 indegree[i]--;
             }
         }
@@ -648,9 +669,6 @@ int module_manager_init(void) {
         g_module_mgr.modules[i].status = MODULE_STATUS_UNINITIALIZED;
         g_module_mgr.modules[i].id = 0U;
     }
-
-    g_module_mgr.next_module_id = 1U;
-    g_module_mgr.initialized = true;
 
     LOG_INF("Module manager initialized");
     return 0;
@@ -732,7 +750,7 @@ int module_manager_shutdown(void) {
         module_info_t* info = &g_module_mgr.modules[i];
 
         /* 清除所有事件订阅 */
-        module_event_clear_all_unlocked(info);
+        module_event_clear_all_locked(info);
 
         /* 收集需要 shutdown 的模块 */
         if (info->status != MODULE_STATUS_UNINITIALIZED && info->interface != NULL &&
@@ -763,7 +781,7 @@ int module_manager_shutdown(void) {
 
     /* 清空所有模块槽位 */
     for (int i = 0; i < CONFIG_MAX_MODULES; i++) {
-        clear_module_slot_unlocked(&g_module_mgr.modules[i]);
+        clear_module_slot_locked(&g_module_mgr.modules[i]);
     }
 
     g_module_mgr.module_count = 0U;
@@ -848,56 +866,65 @@ int module_manager_register(const module_interface_t* interface, void* config, u
         return -ENOMEM;
     }
 
-    /* 初始化模块信息 */
+    /* 初始化模块信息（占位）；init() 在锁外调用，避免长时间持锁或重入死锁 */
+    const uint32_t new_id = allocate_unique_module_id();
+
+    if (new_id == 0U) {
+        k_mutex_unlock(&g_module_mgr.lock);
+        LOG_ERR("No free module ID available");
+        return -ENOMEM;
+    }
+
     info->interface = interface;
     info->config = config;
     info->internal_data = NULL;
     info->status = MODULE_STATUS_INITIALIZING;
-    info->id = g_module_mgr.next_module_id++;
+    info->id = new_id;
     info->event_subscription_count = 0U;
     (void) memset(info->event_subscriptions, 0, sizeof(info->event_subscriptions));
 
     if (module_id != NULL) {
-        *module_id = info->id;
+        *module_id = new_id;
     }
 
-    /* SIL-2: 验证模块 ID 未溢出 */
-    if (g_module_mgr.next_module_id == 0U) {
-        LOG_WRN("Module ID counter wrapped around");
-        g_module_mgr.next_module_id = 1U;
+    int (*init_fn)(void*) = interface->init;
+    void*              cfg = config;
+
+    k_mutex_unlock(&g_module_mgr.lock);
+
+    const uint32_t t0 = k_uptime_get_32();
+    const int      iret = init_fn(cfg);
+    const uint32_t elapsed = k_uptime_get_32() - t0;
+
+    k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
+
+    info = find_module_by_id_locked(new_id);
+    if (info == NULL || info->status != MODULE_STATUS_INITIALIZING || info->interface != interface) {
+        k_mutex_unlock(&g_module_mgr.lock);
+        LOG_ERR("Module '%s' slot lost or raced during init", interface->name);
+        return -EIO;
     }
 
-    /* 调用模块初始化函数 */
-    if (interface->init != NULL) {
-        const uint32_t t0 = k_uptime_get_32();
-        const int      ret = interface->init(config);
-        const uint32_t elapsed = k_uptime_get_32() - t0;
+    if (iret != 0) {
+        LOG_ERR("Module '%s' init failed: %d", interface->name, iret);
+        clear_module_slot_locked(info);
+        g_module_mgr.stats.error_modules++;
+        k_mutex_unlock(&g_module_mgr.lock);
+        return iret;
+    }
 
-        if (ret != 0) {
-            LOG_ERR("Module '%s' init failed: %d", interface->name, ret);
-            g_module_mgr.next_module_id--;
-            clear_module_slot_unlocked(info);
-            g_module_mgr.stats.error_modules++;
-            k_mutex_unlock(&g_module_mgr.lock);
-            return ret;
+    if (CONFIG_MODULE_INIT_TIMEOUT_MS > 0 && elapsed > (uint32_t) CONFIG_MODULE_INIT_TIMEOUT_MS) {
+        int (*shutdown_fn)(void) = interface->shutdown;
+
+        LOG_ERR("Module '%s' init exceeded timeout (%u ms)", interface->name, (unsigned int) elapsed);
+        clear_module_slot_locked(info);
+        g_module_mgr.stats.error_modules++;
+        k_mutex_unlock(&g_module_mgr.lock);
+
+        if (shutdown_fn != NULL) {
+            shutdown_fn();
         }
-
-        /* 检查初始化超时 */
-        if (CONFIG_MODULE_INIT_TIMEOUT_MS > 0 && elapsed > (uint32_t) CONFIG_MODULE_INIT_TIMEOUT_MS) {
-            int (*shutdown_fn)(void) = interface->shutdown;
-
-            LOG_ERR("Module '%s' init exceeded timeout (%u ms)", interface->name, (unsigned int) elapsed);
-            g_module_mgr.next_module_id--;
-            clear_module_slot_unlocked(info);
-            g_module_mgr.stats.error_modules++;
-            k_mutex_unlock(&g_module_mgr.lock);
-
-            /* 在锁外调用 shutdown，避免重入 module_manager_* 导致死锁 */
-            if (shutdown_fn != NULL) {
-                shutdown_fn();
-            }
-            return -1;
-        }
+        return -1;
     }
 
     info->status = MODULE_STATUS_INITIALIZED;
@@ -906,8 +933,8 @@ int module_manager_register(const module_interface_t* interface, void* config, u
 
     k_mutex_unlock(&g_module_mgr.lock);
 
-    LOG_INF("Module registered: %s (id=%d)", interface->name, info->id);
-    notify_callback_unlocked(info->id, MODULE_MGR_EVENT_REGISTERED);
+    LOG_INF("Module registered: %s (id=%u)", interface->name, (unsigned int) new_id);
+    module_mgr_notify_callback(new_id, MODULE_MGR_EVENT_REGISTERED);
     return 0;
 }
 
@@ -957,7 +984,7 @@ int module_manager_unregister(uint32_t module_id) {
     }
 
     /* 清除所有事件订阅 */
-    module_event_clear_all_unlocked(info);
+    module_event_clear_all_locked(info);
 
     /* 调用模块 shutdown 函数 */
     if (info->interface != NULL && info->interface->shutdown != NULL) {
@@ -982,12 +1009,12 @@ int module_manager_unregister(uint32_t module_id) {
     }
 
     /* 清空模块槽位 */
-    clear_module_slot_unlocked(info);
+    clear_module_slot_locked(info);
 
     k_mutex_unlock(&g_module_mgr.lock);
 
     LOG_INF("Module unregistered: id=%d", module_id);
-    notify_callback_unlocked(module_id, MODULE_MGR_EVENT_UNREGISTERED);
+    module_mgr_notify_callback(module_id, MODULE_MGR_EVENT_UNREGISTERED);
     return 0;
 }
 
@@ -1118,7 +1145,7 @@ int module_manager_start_module(uint32_t module_id) {
         info->status = MODULE_STATUS_ERROR;
         g_module_mgr.stats.error_modules++;
         k_mutex_unlock(&g_module_mgr.lock);
-        notify_callback_unlocked(module_id, MODULE_MGR_EVENT_ERROR);
+        module_mgr_notify_callback(module_id, MODULE_MGR_EVENT_ERROR);
         return ret;
     }
 
@@ -1128,7 +1155,7 @@ int module_manager_start_module(uint32_t module_id) {
     k_mutex_unlock(&g_module_mgr.lock);
 
     LOG_INF("Module started: %s", name != NULL ? name : "?");
-    notify_callback_unlocked(module_id, MODULE_MGR_EVENT_STARTED);
+    module_mgr_notify_callback(module_id, MODULE_MGR_EVENT_STARTED);
     return 0;
 }
 
@@ -1178,7 +1205,7 @@ int module_manager_stop_module(uint32_t module_id) {
     k_mutex_unlock(&g_module_mgr.lock);
 
     LOG_INF("Module stopped: %s", name != NULL ? name : "?");
-    notify_callback_unlocked(module_id, MODULE_MGR_EVENT_STOPPED);
+    module_mgr_notify_callback(module_id, MODULE_MGR_EVENT_STOPPED);
     return 0;
 }
 
@@ -1319,6 +1346,7 @@ int module_manager_suspend_module(uint32_t module_id) {
     k_mutex_unlock(&g_module_mgr.lock);
 
     LOG_INF("Module suspended: %s", name != NULL ? name : "?");
+    module_mgr_notify_callback(module_id, MODULE_MGR_EVENT_STATUS_CHANGED);
     return 0;
 }
 
@@ -1350,6 +1378,7 @@ int module_manager_resume_module(uint32_t module_id) {
     k_mutex_unlock(&g_module_mgr.lock);
 
     LOG_INF("Module resumed: %s", name != NULL ? name : "?");
+    module_mgr_notify_callback(module_id, MODULE_MGR_EVENT_STATUS_CHANGED);
     return 0;
 }
 
@@ -1610,9 +1639,10 @@ void module_manager_dump_info(void) {
     k_mutex_unlock(&g_module_mgr.lock);
 
     /* 打印模块信息 */
-    printk("\n=== Module Manager Info ===\n");
-    printk("Total modules: %u / %d\n", (unsigned int) mod_count, CONFIG_MAX_MODULES);
-    printk("Active: %u, Errors: %u\n\n", (unsigned int) active, (unsigned int) errors);
+    LOG_INF("");
+    LOG_INF("=== Module Manager Info ===");
+    LOG_INF("Total modules: %u / %d", (unsigned int) mod_count, CONFIG_MAX_MODULES);
+    LOG_INF("Active: %u, Errors: %u", (unsigned int) active, (unsigned int) errors);
 
     for (int i = 0; i < n; i++) {
         module_info_t* info = &snap[i];
@@ -1642,14 +1672,14 @@ void module_manager_dump_info(void) {
             break;
         }
 
-        printk("  [%u] %s - %s (v%u.%u.%u)\n", (unsigned int) info->id,
+        LOG_INF("  [%u] %s - %s (v%u.%u.%u)", (unsigned int) info->id,
                info->interface != NULL && info->interface->name != NULL ? info->interface->name : "N/A", status_str,
                info->interface != NULL ? MODULE_VERSION_MAJOR(info->interface->version) : 0,
                info->interface != NULL ? MODULE_VERSION_MINOR(info->interface->version) : 0,
                info->interface != NULL ? MODULE_VERSION_PATCH(info->interface->version) : 0);
     }
 
-    printk("\n");
+    LOG_INF("=== end ===");
 }
 
 /**

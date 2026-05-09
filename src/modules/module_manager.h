@@ -34,6 +34,12 @@
 extern "C" {
 #endif
 
+/**
+ * @brief 模块管理器公共 API
+ *
+ * @note 所有公开 API 必须在**线程上下文**调用；勿在 ISR 中调用（互斥锁非 ISR 安全）。
+ */
+
 /* =============================================================================
  * 配置宏 (Configuration Macros)
  * ============================================================================= */
@@ -159,8 +165,8 @@ int module_manager_shutdown(void);
  * @param module_id 输出参数：分配的模块 ID
  * @return 0 成功，负值错误码失败
  *
- * @note init() 在管理器互斥锁持有时调用，不要在 init 中调用
- *       module_manager_* API（会导致死锁）
+ * @note init() 在管理器互斥锁外调用（槽位占位后解锁再执行），但仍请不要在 init 内调用
+ *       可能阻塞过久或依赖其它模块尚未就绪的 module_manager_* API。
  * @note 如果 init 超过 CONFIG_MODULE_INIT_TIMEOUT_MS（当>0 时），
  *       注册将失败，如果 shutdown 非 NULL 则会被调用
  */
@@ -222,7 +228,8 @@ int module_manager_start_module(uint32_t module_id);
  * @brief 停止指定模块
  *
  * @param module_id 模块 ID
- * @return 0 成功，负值错误码失败
+ * @return 0 表示成功，或**幂等**：模块当前非 RUNNING 时亦返回 0（未再次调用业务 stop 回调）；
+ *         未找到或参数无效时返回 -1
  */
 int module_manager_stop_module(uint32_t module_id);
 

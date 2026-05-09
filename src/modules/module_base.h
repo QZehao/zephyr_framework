@@ -28,6 +28,8 @@
 #ifndef MODULE_BASE_H
 #define MODULE_BASE_H
 
+#include <zephyr/sys/util.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include "event_system.h"
@@ -115,6 +117,8 @@ typedef struct {
 #ifndef CONFIG_MODULE_MAX_EVENT_SUBSCRIPTIONS
 #define CONFIG_MODULE_MAX_EVENT_SUBSCRIPTIONS 8
 #endif
+
+BUILD_ASSERT(CONFIG_MODULE_MAX_EVENT_SUBSCRIPTIONS <= 255);
 
 /**
  * @brief 模块事件订阅结构
