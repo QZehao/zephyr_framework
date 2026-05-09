@@ -1,6 +1,16 @@
 /**
  * @file event_system_compat.c
- * @brief 事件系统兼容层实现
+ * @brief 事件系统兼容层实现（标准版与商业版统一入口、SYS_INIT）
+ * @author zeh (china_qzh@163.com)
+ * @version 1.0
+ * @date 2026-04-09
+ *
+ * @par 修改日志:
+ *
+ *    Date         Version        Author          Description
+ * 2026-04-09       1.0            zeh            初始版本
+ * 2026-05-09       1.0            zeh            完善文件头与修改日志
+ *
  */
 
 #include "event_system_compat.h"

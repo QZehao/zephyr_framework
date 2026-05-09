@@ -14,12 +14,11 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
- *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description
  * 2026-04-01       1.0            zeh            正式发布
+ * 2026-05-09       1.0            zeh            修正文档与注释
  *
  */
 
@@ -145,7 +144,7 @@ typedef bool (*event_filter_t)(const event_t* event, void* user_data);
  *   - priority: CONFIG_EVENT_DISPATCHER_PRIORITY
  *   - thread_name: "event_disp"
  *   - enable_stats: true
- *   - max_events_per_cycle: 100
+ *   - max_events_per_cycle: CONFIG_EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE
  */
 event_status_t event_dispatcher_init(const dispatcher_config_t* config);
 
@@ -159,7 +158,7 @@ event_status_t event_dispatcher_start(void);
 /**
  * @brief 停止分发器
  *
- * @return EVENT_OK 成功，其他错误码见 event_status_t
+ * @return EVENT_OK 成功；join 超时且终止验证仍失败时可能返回 EVENT_ERR_TIMEOUT（罕见，见实现注释）
  */
 event_status_t event_dispatcher_stop(void);
 
@@ -262,7 +261,8 @@ void event_dispatcher_reset_stats(void);
  * 实现语义为「自上一次 process_event 结束以来经过的时间」，不是
  * 单条事件从创建到分发的排队延迟；后者应使用 event->timestamp 等字段。
  *
- * @return 空闲时间（微秒），与 dispatcher_stats 中基于处理耗时的延迟统计含义不同
+ * @return 空闲时间（微秒），与 dispatcher_stats 中基于处理耗时的延迟统计含义不同。
+ *         内部基于 k_uptime_get()，有效分辨率约为毫秒级，不宜用于亚毫秒测量。
  *
  * @note 保留 API 名称 event_dispatcher_get_current_latency 以保持向后兼容
  */

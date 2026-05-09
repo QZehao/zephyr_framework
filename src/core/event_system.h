@@ -15,12 +15,11 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
- *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description
  * 2026-04-01       1.0            zeh            正式发布
+ * 2026-05-09       1.0            zeh            修正文档与注释
  *
  */
 
@@ -423,7 +422,7 @@ event_status_t event_publish(const event_t* event);
  * @note 此函数不使用互斥锁，适用于 ISR 上下文
  * @note 如果队列已满，事件将被丢弃
  * @note 避免在 ISR 中调用 event_publish_copy，因为其中包含 k_malloc
- * @note 与 event_publish 相同：event_system_stop 后 running 为假时返回 EVENT_ERR_INVALID_ARG
+ * @note 与 event_publish 相同：event_system_stop 后 running 为假时返回 EVENT_ERR_NOT_RUNNING
  */
 event_status_t event_publish_from_isr(const event_t* event);
 
