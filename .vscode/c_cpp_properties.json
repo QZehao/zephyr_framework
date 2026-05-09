@@ -8,7 +8,8 @@
                 "D:/Code/1-github-code/zephyrproject/zephyr/include",
                 "D:/Code/1-github-code/zephyrproject/zephyr/include/zephyr",
                 "D:/Code/1-github-code/zephyrproject/zephyr/modules",
-                "D:/Code/3-Project/zephyr_template/build/zephyr/include/generated",
+                "build/zephyr/include/generated",
+                "src/core",
                 "build/zephyr/include/generated/zephyr"
             ],
             "defines": [
