@@ -2,6 +2,8 @@
 
 基于 Zephyr RTOS 的高性能、实时、事件驱动应用程序模板。此模板使用发布 - 订阅模式，为构建可扩展的模块化嵌入式应用提供了坚实的基础。
 
+> **语言**: 中文版 | [English](README_EN.md)
+
 > 📺 **视频教程**：关注微信公众号 **硬核嵌入式**，正在连载本框架的详细教程！
 > 💬 **技术交流**：加微信/QQ群 [待补充]，与 500+ 嵌入式开发者交流
 
@@ -161,58 +163,111 @@
 ## 项目结构
 
 ```
-zephyr_template/
-├── APP_VERSION                 # 应用语义化版本（勿用文件名 VERSION，与 Zephyr 冲突）
-├── CMakeLists.txt              # 构建配置（独立应用需 ZEPHYR_BASE 或 zephyr_config.env）
-├── Kconfig                     # 应用 Kconfig（含事件/模块/IPC 等）
-├── Kconfig_proprietary         # 商业模块 Kconfig
-├── prj.conf                    # 默认 Zephyr 配置（最小配置，商用模块默认禁用）
-├── prj_example_*.conf          # 叠加配置示例
-├── app.overlay                 # 通用设备树覆盖
-├── west.yml                    # West 清单
-├── zephyr_config.env           # 本地路径（由 template 复制生成，勿提交密钥）
+zephyr_framework/
+├── APP_VERSION                       # 应用语义化版本（勿用文件名 VERSION，与 Zephyr 冲突）
+├── CMakeLists.txt                    # 构建配置（独立应用需 ZEPHYR_BASE 或 zephyr_config.env）
+├── Kconfig                           # 应用 Kconfig（含事件/模块/IPC 等）
+├── Kconfig.zephyr                    # Zephyr 顶层 Kconfig 入口
+├── Kconfig_proprietary               # 商业模块 Kconfig
+├── prj.conf                          # 默认 Zephyr 配置（最小配置，商用模块默认禁用）
+├── prj_min.conf                      # 极简版配置（32-64KB SRAM，框架占用 ~18KB）
+├── prj_sram.conf                     # 平衡版配置（64-128KB SRAM，框架占用 ~40KB）
+├── prj_tiny.conf                     # 极限版配置（≤ 32KB SRAM，框架占用 < 10KB）
+├── prj_app_kv_persist.conf           # 应用 KV 掉电保存示例
+├── prj_example_gpio_uart.conf        # GPIO/UART 示例叠加配置
+├── prj_example_module_ipc.conf       # IPC 示例叠加配置
+├── proprietary_modules.conf          # 商业模块默认配置
+├── app.overlay                       # 通用设备树覆盖
+├── west.yml                          # West 清单（默认 4.3.0-rc3）
+├── zephyr_config.env                 # 本地路径（由 template 复制生成，勿提交密钥）
 ├── zephyr_config.env.template
-├── .clang-format              # 代码格式化配置
-├── .clang-tidy                # 静态分析配置
-├── .pre-commit-config.yaml    # pre-commit 钩子配置
+├── Doxyfile                          # API 文档生成配置
+├── .clang-format                     # 代码格式化配置
+├── .clang-tidy                       # 静态分析配置
+├── .pre-commit-config.yaml           # pre-commit 钩子配置
 ├── boards/
-│   └── overlay.dts            # 通用设备树覆盖
-├── scripts/                    # 环境脚本、打包、串口工具等
-├── tests/                      # ztest 单元测试（native_posix）
+│   ├── overlay.dts                   # 通用设备树覆盖
+│   ├── nucleo_l4r5zi.overlay         # STM32 Nucleo L4R5ZI 板覆盖
+│   └── mimxrt1050_fire_mimxrt1052_qspi.overlay
+├── scripts/                          # 环境脚本、打包、版本管理、商业模块管理
+│   ├── setup_env.{sh,bat,ps1}        # 环境变量设置
+│   ├── build_all.{sh,bat}            # 批量构建脚本
+│   ├── analyze_map.{sh,bat,ps1}      # MAP 文件分析
+│   ├── package_release.{sh,ps1}      # 发布打包
+│   ├── proprietary_manage.{sh,bat,ps1} # 商业模块启用/禁用
+│   ├── bump_version.py               # 版本号同步
+│   └── module_config.py              # 模块配置工具
+├── tests/                            # ztest 单元测试（native_posix / native_sim）
 │   ├── CMakeLists.txt
-│   ├── Kconfig                 # rsource 复用根目录 Kconfig
+│   ├── Kconfig                       # rsource 复用根目录 Kconfig
 │   ├── prj.conf
-│   └── test_*.c
-├── docs/                       # 说明文档（总目录见 docs/00-入门/02-文档索引.md）
+│   ├── prj_native_sim.conf           # native_sim 平台叠加配置
+│   ├── prj_test_watchdog.conf        # 看门狗测试叠加配置
+│   ├── README.md
+│   ├── test_event_system.c
+│   ├── test_event_queue.c
+│   ├── test_event_dispatcher.c
+│   ├── test_event_memory.c
+│   ├── test_module_manager.c
+│   ├── test_ipc_service.c
+│   ├── test_sys_log.c
+│   ├── test_sys_memory.c
+│   ├── test_sys_timer.c
+│   ├── test_sys_watchdog.c
+│   ├── test_example_module_a.c
+│   ├── test_example_module_b.c
+│   ├── test_example_module_gpio.c
+│   ├── test_example_module_uart.c
+│   └── test_example_module_multi_dep.c
+├── docs/                             # 说明文档（总目录见 docs/00-入门/02-文档索引.md）
+│   ├── 00-入门/                      # 5 分钟体验、文档索引、术语速查、入门指南
+│   ├── 10-环境与构建/                # 环境搭建、独立应用构建
+│   ├── 20-架构设计/                  # 模块化设计方法论、核心技术实现
+│   ├── 30-核心模块/                  # 事件系统、模块系统、IPC、系统服务
+│   ├── 40-应用开发/                  # 应用开发、配置项、配置方案对比、设备树
+│   ├── 50-测试与CI/                  # 单元测试、CI 配置
+│   ├── 60-调试与排错/                # 烧录调试、故障排除、脚本说明
+│   ├── 70-发布与产品化/              # 版本管理、发布检查、OTA、安全
+│   ├── 80-贡献与维护/                # 贡献指南、代码规范
+│   └── 90-学习资源/                  # 嵌入式 AI、个人发展、项目评审
 └── src/
-    ├── core/
-    │   ├── event_system.c/h        # 事件系统核心（发布-订阅、类型管理）
-    │   ├── event_queue.c/h         # 事件队列管理（优先级、溢出处理）
-    │   ├── event_dispatcher.c/h    # 事件分发器（独立线程、统计、暂停/恢复）
-    │   ├── event_memory.c/h        # Slab 内存管理（优先级分层池、大数据块池）
-    │   └── event_system_compat.c/h # 事件系统兼容层
-    ├── services/
-    │   ├── sys_log.c/h
-    │   ├── sys_memory.c/h
-    │   ├── sys_watchdog.c/h
-    │   └── sys_timer.c/h
-    ├── modules/
+    ├── core/                         # 事件系统核心
+    │   ├── event_system.{c,h}        # 发布-订阅、类型管理
+    │   ├── event_queue.{c,h}         # 事件队列（优先级、溢出处理）
+    │   ├── event_dispatcher.{c,h}    # 事件分发器（独立线程、统计、暂停/恢复）
+    │   ├── event_dispatcher_autoinit.c # SYS_INIT 自动初始化
+    │   ├── event_memory.{c,h}        # Slab 内存管理（优先级分层池、大数据块池）
+    │   └── event_system_compat.{c,h} # 事件系统兼容层
+    ├── services/                     # 系统服务
+    │   ├── sys_log.{c,h}             # 统一日志（分级、内存环、可选 RTT）
+    │   ├── sys_memory.{c,h}          # 内存池管理（带泄漏检测）
+    │   ├── sys_watchdog.{c,h}        # 硬件/软件看门狗
+    │   └── sys_timer.{c,h}           # 高分辨率定时器
+    ├── modules/                      # 模块管理器与 Thread IPC 服务
     │   ├── module_base.h
-    │   ├── module_manager.c/h
-    │   ├── module_manager_compat.c/h  # 模块管理器兼容层
-    │   ├── ipc_service/         # Thread IPC 服务（Kconfig: THREAD_IPC_SERVICE）
-    │   ├── example_module_a.c/h
-    │   ├── example_module_b.c/h
-    │   ├── example_module_gpio.c/h
-    │   ├── example_module_uart.c/h
-    │   ├── example_module_ipc.c/h
-    │   └── example_module_multi_dep.c/h  # 多依赖示例
-    ├── app/
-    │   ├── app_main.c/h
-    │   ├── app_config.h
-    │   ├── app_version.c/h
-    │   └── app_kv.c/h          # 应用键值存储
-    └── proprietary/            # 商业闭源模块
+    │   ├── module_manager.{c,h}
+    │   ├── module_manager_compat.{c,h} # 模块管理器兼容层
+    │   └── ipc_service/              # Thread IPC 服务（Kconfig: THREAD_IPC_SERVICE）
+    │       ├── ipc_service.{c,h}
+    │       ├── ipc_service_event.{c,h}
+    │       ├── ipc_shared_mem.{c,h}
+    │       ├── ipc_service_example.c
+    │       ├── CMakeLists.txt
+    │       └── Kconfig
+    ├── modules_examples/             # 业务模块示例（条件编译）
+    │   ├── example_module_a.{c,h}
+    │   ├── example_module_b.{c,h}
+    │   ├── example_module_gpio.{c,h}
+    │   ├── example_module_uart.{c,h}
+    │   ├── example_module_ipc.{c,h}
+    │   └── example_module_multi_dep.{c,h} # 多依赖示例
+    ├── app/                          # 应用层
+    │   ├── app_main.{c,h}
+    │   ├── app_config.h              # 功能开关、初始化优先级、栈大小
+    │   ├── app_version.{c,h}
+    │   ├── app_version_config.h.in   # 版本头文件模板（CMake 生成）
+    │   └── app_kv.{c,h}              # 应用键值存储（可选掉电保存）
+    └── proprietary/                  # 商业闭源模块（可选，由 proprietary_manage 启用）
 ```
 
 ## 从本模板初始化新项目（检查清单）
@@ -252,7 +307,7 @@ CI（`.github/workflows/ci.yml`）当前使用 Zephyr **4.3.0-rc3** 构建镜像
 │   ├── zephyr/             # Zephyr 源代码 (ZEPHYR_BASE)
 │   ├── modules/            # Zephyr 模块
 │   └── ...
-└── zephyr_template/        # 应用程序目录 (本目录)
+└── zephyr_framework/       # 应用程序目录 (本目录)
     ├── CMakeLists.txt
     ├── prj.conf
     ├── src/
@@ -307,8 +362,9 @@ export ZEPHYR_SDK_INSTALL_DIR=/path/to/zephyr-sdk
 # 构建目标开发板
 west build -b <your_board> .
 
-# 构建 native POSIX（用于测试）
+# 构建 native POSIX 或 native_sim（用于测试）
 west build -b native_posix .
+west build -b native_sim .
 
 # 使用特定配置文件（可合并多个）
 west build -b <your_board> -DCONF_FILE="prj.conf;prj_example_module_ipc.conf" .
@@ -547,7 +603,7 @@ static int my_module_auto_register(void) {
 SYS_INIT(my_module_auto_register, POST_KERNEL, APP_INIT_PRIO_MODULE_MINE);
 ```
 
-多模块依赖、`depends_on` 写法与 Kconfig 开关说明见 **docs/30-核心模块/32-模块系统详细使用说明.md** 中的「应用启动与初始化顺序（Zephyr SYS_INIT）」「运行时依赖」与「配置选项」；多依赖示例源码为 `src/modules/example_module_multi_dep.c`。
+多模块依赖、`depends_on` 写法与 Kconfig 开关说明见 **docs/30-核心模块/32-模块系统详细使用说明.md** 中的「应用启动与初始化顺序（Zephyr SYS_INIT）」「运行时依赖」与「配置选项」；多依赖示例源码为 `src/modules_examples/example_module_multi_dep.c`。
 
 ## 事件流程
 
@@ -608,8 +664,13 @@ if (leaks > 0) {
 使用 `tests/` 下的 ztest，与主应用共享 `src/` 实现（不链接 `app_main`、示例业务模块）；默认 **开启** `CONFIG_THREAD_IPC_SERVICE` 并编入 `ipc_service` 做烟测，堆大小已加大（见 `tests/prj.conf`）。
 
 ```bash
+# native_posix 平台
 west build -b native_posix tests/ --build-dir build_tests
 west build -t run --build-dir build_tests
+
+# native_sim 平台
+west build -b native_sim tests/ --build-dir build_tests_sim
+west build -t run --build-dir build_tests_sim
 ```
 
 需设置 `ZEPHYR_BASE` 或提供根目录 `zephyr_config.env`。详见 tests/README.md。
