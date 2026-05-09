@@ -428,6 +428,8 @@ uint32_t event_dispatcher_process_all(uint32_t max_events) {
         max_events = EVENT_DISPATCHER_MAX_EVENTS_PER_CYCLE;
     }
 
+    /* SIL-2: config 在 event_dispatcher_init 后不再改变，
+     * 无需加锁；若未来支持运行时重配置，需改为原子读取或加锁。 */
     if (max_events == 0) {
         max_events = g_dispatcher.config.max_events_per_cycle;
     }

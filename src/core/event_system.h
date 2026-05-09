@@ -97,6 +97,9 @@ extern "C" {
  * 事件标志位定义 (Event Flags)
  * ============================================================================= */
 
+/** 无效的订阅者 ID */
+#define EVENT_SUBSCRIBER_ID_INVALID 0U
+
 /** 数据内联存储 */
 #define EVENT_FLAG_DATA_INLINE   0x01U
 
@@ -492,11 +495,8 @@ event_status_t event_publish_copy_rt(event_type_t type, event_priority_t priorit
  *
  * @note 等同于 event_create_with_data_rt，明确 ISR 上下文使用
  */
-static inline event_t* event_create_from_isr(event_type_t type,
-                                              event_priority_t priority,
-                                              const void* data, size_t data_len) {
-    return event_create_with_data_rt(type, priority, data, data_len);
-}
+event_t* event_create_from_isr(event_type_t type, event_priority_t priority,
+                                const void* data, size_t data_len);
 
 /* =============================================================================
  * 事件创建与内存管理 (Event Creation & Memory Management)

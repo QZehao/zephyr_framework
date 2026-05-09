@@ -134,6 +134,8 @@ struct k_mem_slab* event_memory_select_event_slab(event_priority_t priority)
     case EVENT_PRIORITY_NORMAL:
     case EVENT_PRIORITY_LOW:
     default:
+        /* SIL-2: LOW 与 NORMAL 共用同一 slab 池是有意设计，
+         * 两者在典型场景下数量最多，合并可减少内存碎片 */
         return &event_slab_normal;
     }
 }
@@ -276,7 +278,7 @@ K_MEM_SLAB_DEFINE(debug_track_slab, sizeof(debug_track_entry_t),
 static bool g_debug_initialized = false;
 
 /** 调试模块初始化保护标志 */
-static atomic_flag g_debug_init_flag = ATOMIC_FLAG_INIT;
+static atomic_t g_debug_init_flag = ATOMIC_INIT(0);
 
 /**
  * @brief 初始化调试模块（内部函数）
@@ -286,14 +288,14 @@ static atomic_flag g_debug_init_flag = ATOMIC_FLAG_INIT;
 static void event_debug_init(void)
 {
     if (!g_debug_initialized) {
-        while (atomic_flag_test_and_set(&g_debug_init_flag)) {
+        while (atomic_test_and_set_bit(&g_debug_init_flag, 0)) {
             k_yield();
         }
         if (!g_debug_initialized) {
             k_mutex_init(&g_debug_track_lock);
             g_debug_initialized = true;
         }
-        atomic_flag_clear(&g_debug_init_flag);
+        atomic_clear_bit(&g_debug_init_flag, 0);
     }
 }
 

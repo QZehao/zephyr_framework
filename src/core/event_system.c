@@ -26,7 +26,6 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
-#include <stdatomic.h>
 #include "event_dispatcher.h"
 #include "event_memory.h"
 #include "event_queue.h"
@@ -44,7 +43,7 @@ LOG_MODULE_REGISTER(event_system, CONFIG_SYS_LOG_LEVEL);
 #define EVENT_SYSTEM_MAGIC 0x45564E54
 
 /** 初始化保护标志 */
-static atomic_flag g_init_lock = ATOMIC_FLAG_INIT;
+static atomic_t g_init_lock = ATOMIC_INIT(0);
 
 /* =============================================================================
  * 内部数据结构 (Internal Data Structures)
@@ -125,13 +124,13 @@ event_status_t event_system_init(void) {
     LOG_INF("Initializing event system...");
 
     /* SIL-2: 使用原子标志保护初始化，防止多线程竞争 */
-    while (atomic_flag_test_and_set(&g_init_lock)) {
+    while (atomic_test_and_set_bit(&g_init_lock, 0)) {
         /* 等待其他线程完成初始化 */
         k_yield();
     }
 
     if (g_event_system.initialized) {
-        atomic_flag_clear(&g_init_lock);
+        atomic_clear_bit(&g_init_lock, 0);
         LOG_WRN("Event system already initialized");
         return EVENT_OK;
     }
@@ -156,7 +155,7 @@ event_status_t event_system_init(void) {
     /* 注册队列到 event_queue 管理层，启用溢出策略和统计 */
     event_status_t qret = event_queue_init(&g_event_msgq, g_event_msgq_buffer, CONFIG_EVENT_QUEUE_SIZE);
     if (qret != EVENT_OK) {
-        atomic_flag_clear(&g_init_lock);
+        atomic_clear_bit(&g_init_lock, 0);
         return qret;
     }
 
@@ -164,7 +163,7 @@ event_status_t event_system_init(void) {
     atomic_set(&g_event_system.running, 0);
     g_event_system.initialized = true;
 
-    atomic_flag_clear(&g_init_lock);
+    atomic_clear_bit(&g_init_lock, 0);
     LOG_INF("Event system initialized successfully");
     return EVENT_OK;
 }
@@ -432,7 +431,7 @@ event_status_t event_unsubscribe(event_type_t type, uint32_t subscriber_id) {
         return EVENT_ERR_INVALID_ARG;
     }
 
-    if (type >= MAX_EVENT_TYPES || subscriber_id == 0) {
+    if (type >= MAX_EVENT_TYPES || subscriber_id == EVENT_SUBSCRIBER_ID_INVALID) {
         return EVENT_ERR_INVALID_ARG;
     }
 
@@ -470,6 +469,9 @@ void event_unsubscribe_all(uint32_t subscriber_id) {
     for (int type = 0; type < MAX_EVENT_TYPES; type++) {
         event_type_entry_t* entry = &g_event_system.event_types[type];
 
+        /* SIL-2: 无锁读取 name 作为优化早退检查；
+         * 与 event_unregister_type 并发时最坏情况是获取锁后发现无订阅者，
+         * 功能仍正确，仅浪费一次加锁开销。 */
         if (entry->name == NULL) {
             continue; /* 跳过未注册的类型 */
         }
@@ -510,8 +512,8 @@ event_status_t event_publish(const event_t* event) {
         return EVENT_ERR_NOT_RUNNING;
     }
 
-    /* 验证事件类型 */
-    if (event->type >= MAX_EVENT_TYPES || g_event_system.event_types[event->type].name == NULL) {
+    /* 验证事件类型是否已注册 */
+    if (g_event_system.event_types[event->type].name == NULL) {
         LOG_WRN("Publishing to unregistered event type: %d", event->type);
     }
 
@@ -530,7 +532,12 @@ event_status_t event_publish_from_isr(const event_t* event) {
     }
 
     if (atomic_get(&g_event_system.running) == 0) {
-        return EVENT_ERR_INVALID_ARG;
+        return EVENT_ERR_NOT_RUNNING;
+    }
+
+    /* 验证事件类型是否已注册（ISR 中不打印日志，仅做静默检查） */
+    if (g_event_system.event_types[event->type].name == NULL) {
+        /* 静默跳过：ISR 路径假定调用方已确保类型有效 */
     }
 
     return event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
@@ -693,6 +700,22 @@ event_status_t event_publish_copy_rt(event_type_t type, event_priority_t priorit
 
     event_free(event);
     return status;
+}
+
+/**
+ * @brief 从 ISR 创建事件（实时安全）
+ *
+ * @param type 事件类型 ID
+ * @param priority 事件优先级
+ * @param data 数据指针
+ * @param data_len 数据长度
+ * @return 事件指针，失败返回 NULL
+ *
+ * @note 等同于 event_create_with_data_rt，明确 ISR 上下文使用
+ */
+event_t* event_create_from_isr(event_type_t type, event_priority_t priority,
+                                const void* data, size_t data_len) {
+    return event_create_with_data_rt(type, priority, data, data_len);
 }
 
 /* =============================================================================

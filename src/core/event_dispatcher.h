@@ -89,8 +89,7 @@ extern "C" {
 typedef enum {
     DISPATCHER_STOPPED = 0, /**< 分发器已停止 */
     DISPATCHER_RUNNING,     /**< 分发器正在运行 */
-    DISPATCHER_PAUSED,      /**< 分发器已暂停 */
-    DISPATCHER_ERROR        /**< 分发器错误状态 */
+    DISPATCHER_PAUSED       /**< 分发器已暂停 */
 } dispatcher_state_t;
 
 /**
