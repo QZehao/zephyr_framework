@@ -1,121 +1,121 @@
-# 模块化软件设计的详细方法
+> Language: [中文](../../zh-CN/20-架构设计/22-模块化软件设计的详细方法.md) | **English**
 
-> 语言: **中文** | [English](../../en/20-architecture/22-modular-design-detailed.md)
+# Detailed Modular Software Design Methods
 
-## 目录
+## Table of Contents
 
-- [概述](#概述)
-- [核心原则](#核心原则)
-- [模块划分方法](#模块划分方法)
-- [接口设计规范](#接口设计规范)
-- [依赖管理策略](#依赖管理策略)
-- [生命周期管理](#生命周期管理)
-- [模块间通信机制](#模块间通信机制)
-- [分层架构设计](#分层架构设计)
-- [错误处理与容错](#错误处理与容错)
-- [测试策略](#测试策略)
-- [最佳实践与反模式](#最佳实践与反模式)
-- [实战案例](#实战案例)
+- [Overview](#overview)
+- [Core Principles](#core-principles)
+- [Module Partitioning Methods](#module-partitioning-methods)
+- [Interface Design Specifications](#interface-design-specifications)
+- [Dependency Management Strategy](#dependency-management-strategy)
+- [Lifecycle Management](#lifecycle-management)
+- [Inter-Module Communication Mechanisms](#inter-module-communication-mechanisms)
+- [Layered Architecture Design](#layered-architecture-design)
+- [Error Handling and Fault Tolerance](#error-handling-and-fault-tolerance)
+- [Testing Strategy](#testing-strategy)
+- [Best Practices and Anti-Patterns](#best-practices-and-anti-patterns)
+- [Case Studies](#case-studies)
 
 ---
 
-## 概述
+## Overview
 
-模块化软件设计是一种将复杂系统分解为独立、可替换、可复用模块的软件架构方法。良好的模块化设计能够显著提升代码的可维护性、可测试性和可扩展性。
+Modular software design is a software architecture method that decomposes complex systems into independent, replaceable, reusable modules. Good modular design significantly improves code maintainability, testability, and extensibility.
 
-### 什么是模块
+### What is a Module
 
-**模块**是一个具有明确定义接口的软件单元，它封装了特定的功能实现，对外提供服务，同时隐藏内部细节。
+A **module** is a software unit with clearly defined interfaces that encapsulates specific functionality implementations, provides services externally, and hides internal details.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                      模块 (Module)                    │
+│                      Module                           │
 │  ┌───────────────────────────────────────────────┐  │
-│  │              公开接口 (Public Interface)        │  │
+│  │           Public Interface                     │  │
 │  │   - init()  - start()  - stop()  - control()   │  │
 │  └───────────────────────────────────────────────┘  │
 │                                                      │
 │  ┌───────────────────────────────────────────────┐  │
-│  │              内部实现 (Implementation)          │  │
-│  │   - 私有数据结构                                │  │
-│  │   - 内部函数                                    │  │
-│  │   - 状态机                                      │  │
-│  │   - 资源管理                                    │  │
+│  │           Internal Implementation               │  │
+│  │   - Private data structures                   │  │
+│  │   - Internal functions                         │  │
+│  │   - State machine                             │  │
+│  │   - Resource management                       │  │
 │  └───────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
 ```
 
-### 模块化的核心价值
+### Core Values of Modularization
 
-| 价值 | 描述 |
-|------|------|
-| **封装性** | 隐藏实现细节，只暴露必要接口 |
-| **独立性** | 模块可独立开发、测试、部署 |
-| **可替换性** | 相同接口的模块可相互替换 |
-| **可复用性** | 模块可在不同项目中复用 |
-| **可维护性** | 修改不影响其他模块 |
+| Value | Description |
+|-------|-------------|
+| **Encapsulation** | Hide implementation details, expose only necessary interfaces |
+| **Independence** | Modules can be independently developed, tested, deployed |
+| **Replaceability** | Modules with same interface can replace each other |
+| **Reusability** | Modules can be reused in different projects |
+| **Maintainability** | Modifications don't affect other modules |
 
 ---
 
-## 核心原则
+## Core Principles
 
-### 1. 单一职责原则 (SRP)
+### 1. Single Responsibility Principle (SRP)
 
-每个模块应该只有一个引起它变化的原因，即只负责一项职责。
+Each module should have only one reason for change, i.e., be responsible for only one thing.
 
 ```
-❌ 错误示例：职责混乱
+❌ Wrong Example: Responsibilities mixed
 
 ┌─────────────────────────────────┐
 │        DeviceManager            │
-│  - 设备初始化                    │
-│  - 数据采集                      │
-│  - 数据存储                      │
-│  - 网络通信                      │
-│  - UI显示                        │
+│  - Device initialization        │
+│  - Data collection              │
+│  - Data storage                 │
+│  - Network communication        │
+│  - UI display                   │
 └─────────────────────────────────┘
 
 
-✅ 正确示例：职责分离
+✅ Correct Example: Responsibilities separated
 
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
 │ DeviceDriver│  │ DataCollector│  │ DataStorage │
-│  - 初始化    │  │  - 采集      │  │  - 存储     │
-│  - 配置      │  │  - 过滤      │  │  - 读取     │
+│  - init     │  │  - collect  │  │  - store    │
+│  - config   │  │  - filter   │  │  - read     │
 └─────────────┘  └─────────────┘  └─────────────┘
        │                │                │
        └────────────────┼────────────────┘
                         │
               ┌─────────▼─────────┐
-              │   NetworkManager   │
-              │    - 通信传输       │
+              │   NetworkManager  │
+              │    - transmit    │
               └───────────────────┘
 ```
 
-### 2. 高内聚低耦合
+### 2. High Cohesion + Low Coupling
 
-**高内聚**：模块内部元素紧密相关，共同完成单一功能。
+**High Cohesion**: Elements within a module are tightly related, working together to complete a single function.
 
-**低耦合**：模块之间依赖关系最少化，接口简单明确。
+**Low Coupling**: Dependency between modules is minimized, interfaces are simple and clear.
 
 ```
-耦合程度（从低到高）：
+Coupling levels (from low to high):
 
-1. 无耦合      ───  模块完全独立
-2. 数据耦合    ───  通过简单数据参数交互（推荐）
-3. 数据结构耦合 ───  共享复杂数据结构
-4. 控制耦合    ───  传递控制信息
-5. 外部耦合    ───  共享外部设备/协议
-6. 公共耦合    ───  共享全局数据
-7. 内容耦合    ───  直接访问对方内部（禁止）
+1. No Coupling      ───  Modules completely independent
+2. Data Coupling    ───  Simple data parameter interaction (recommended)
+3. Stamp Coupling   ───  Shared complex data structures
+4. Control Coupling ───  Pass control information
+5. External Coupling ───  Shared external devices/protocols
+6. Common Coupling  ───  Shared global data
+7. Content Coupling ───  Directly access each other's internals (prohibited)
 ```
 
-### 3. 接口隔离原则 (ISP)
+### 3. Interface Segregation Principle (ISP)
 
-模块不应该被迫依赖它不使用的方法。应将大接口拆分为多个小接口。
+Modules should not be forced to depend on methods they don't use. Large interfaces should be split into multiple smaller ones.
 
 ```c
-// ❌ 违反 ISP：臃肿接口
+// ❌ Violating ISP: Bloated interface
 typedef struct {
     int (*init)(void);
     int (*read)(void* buf, size_t len);
@@ -126,7 +126,7 @@ typedef struct {
     int (*truncate)(size_t len);
 } file_interface_t;
 
-// ✅ 符合 ISP：接口分离
+// ✅ Complying with ISP: Interface segregation
 typedef struct {
     int (*init)(void);
     int (*read)(void* buf, size_t len);
@@ -144,27 +144,27 @@ typedef struct {
 } seekable_interface_t;
 ```
 
-### 4. 依赖倒置原则 (DIP)
+### 4. Dependency Inversion Principle (DIP)
 
-高层模块不应依赖低层模块，两者都应依赖抽象。
+High-level modules should not depend on low-level modules; both should depend on abstractions.
 
 ```
-❌ 直接依赖：
+❌ Direct dependency:
 
 ┌───────────────┐
-│ Application   │ ──────依赖──────▶ ┌─────────────┐
-└───────────────┘                   │ SensorDriver │
-                                    └─────────────┘
+│ Application   │ ──────depends on─────▶ ┌─────────────┐
+└───────────────┘                        │ SensorDriver │
+                                        └─────────────┘
 
 
-✅ 依赖倒置：
+✅ Dependency inversion:
 
-┌───────────────┐                   ┌───────────────┐
-│ Application   │ ───依赖──▶ ┌─────▶│ SensorDriver  │
-└───────────────┘           │      └───────────────┘
+┌───────────────┐                      ┌───────────────┐
+│ Application   │ ───depends on──▶ ┌─────▶│ SensorDriver  │
+└───────────────┘           │        └───────────────┘
                             │
                     ┌───────▼────────┐
-                    │ ISensor        │  (抽象接口)
+                    │ ISensor        │  (Abstract interface)
                     │ - read()       │
                     │ - configure()  │
                     └───────┬────────┘
@@ -174,20 +174,20 @@ typedef struct {
                     └──────────────────┘
 ```
 
-### 5. 开闭原则 (OCP)
+### 5. Open-Closed Principle (OCP)
 
-模块应对扩展开放，对修改关闭。
+Modules should be open for extension but closed for modification.
 
 ```c
-// ✅ 通过接口扩展，不修改现有代码
+// ✅ Extend through interfaces without modifying existing code
 
-// 定义传感器接口
+// Define sensor interface
 typedef struct {
     int (*read)(float* value);
     int (*configure)(const void* config);
 } sensor_interface_t;
 
-// 温度传感器实现
+// Temperature sensor implementation
 static int temp_sensor_read(float* value) { /* ... */ }
 static int temp_sensor_configure(const void* config) { /* ... */ }
 
@@ -196,7 +196,7 @@ const sensor_interface_t temp_sensor = {
     .configure = temp_sensor_configure
 };
 
-// 湿度传感器实现（新增，无需修改原有代码）
+// Humidity sensor implementation (added, no need to modify original code)
 static int humidity_sensor_read(float* value) { /* ... */ }
 static int humidity_sensor_configure(const void* config) { /* ... */ }
 
@@ -208,116 +208,119 @@ const sensor_interface_t humidity_sensor = {
 
 ---
 
-## 模块划分方法
+## Module Partitioning Methods
 
-### 按功能职责划分
+### Partition by Functional Responsibility
 
-最常用的划分方法，根据功能边界确定模块边界。
-
-```
-智能家居系统示例：
-
-├── core/                    # 核心层
-│   ├── event_system/       # 事件系统
-│   └── module_manager/     # 模块管理器
-│
-├── services/               # 系统服务层
-│   ├── sys_log/           # 日志服务
-│   ├── sys_timer/         # 定时器服务
-│   └── sys_watchdog/      # 看门狗服务
-│
-├── modules/               # 业务模块层
-│   ├── sensor_module/     # 传感器模块
-│   ├── network_module/    # 网络模块
-│   ├── storage_module/    # 存储模块
-│   └── display_module/    # 显示模块
-│
-└── app/                   # 应用层
-    ├── app_main.c         # 主程序
-    └── app_config.h       # 配置管理
-```
-
-### 按业务领域划分
-
-适用于业务复杂的应用，按领域模型组织。
+The most common partitioning method, determining module boundaries based on functional boundaries.
 
 ```
-电商系统示例：
+Smart Home System Example:
 
-├── order/                  # 订单领域
+├── core/                    # Core layer
+│   ├── event_system/       # Event system
+│   └── module_manager/     # Module manager
+│
+├── services/               # System service layer
+│   ├── sys_log/           # Logging service
+│   ├── sys_timer/         # Timer service
+│   └── sys_watchdog/      # Watchdog service
+│
+├── modules/               # Business module layer
+│   ├── sensor_module/     # Sensor module
+│   ├── network_module/    # Network module
+│   ├── storage_module/    # Storage module
+│   └── display_module/    # Display module
+│
+└── app/                   # Application layer
+    ├── app_main.c         # Main program
+    └── app_config.h       # Configuration management
+```
+
+### Partition by Business Domain
+
+Suitable for complex business applications, organized by domain models.
+
+```
+E-commerce System Example:
+
+├── order/                  # Order domain
 │   ├── order_manager.c
 │   ├── order_validator.c
 │   └── order_repository.c
 │
-├── inventory/             # 库存领域
+├── inventory/             # Inventory domain
 │   ├── stock_manager.c
 │   └── warehouse_adapter.c
 │
-├── payment/               # 支付领域
+├── payment/               # Payment domain
 │   ├── payment_processor.c
 │   └── payment_gateway.c
 │
-└── shipping/              # 物流领域
+└── shipping/              # Shipping domain
     ├── shipping_calculator.c
     └── carrier_adapter.c
 ```
 
-### 按层次划分
+### Partition by Layer
 
-经典的分层架构，每层只依赖下层。
+Classic layered architecture, each layer only depends on the layer below.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│               表示层 (Presentation)              │
-│              UI、API控制器、协议解析              │
+│            Presentation Layer                   │
+│          UI, API controllers, protocol parsing    │
 ├─────────────────────────────────────────────────┤
-│               应用层 (Application)               │
-│           用例编排、事务管理、事件发布            │
+│            Application Layer                    │
+│        Use case orchestration, transaction       │
+│        management, event publishing              │
 ├─────────────────────────────────────────────────┤
-│               领域层 (Domain)                    │
-│        业务实体、领域服务、业务规则验证            │
+│              Domain Layer                       │
+│     Business entities, domain services,         │
+│     business rule validation                    │
 ├─────────────────────────────────────────────────┤
-│             基础设施层 (Infrastructure)           │
-│       数据持久化、外部服务集成、消息队列           │
+│           Infrastructure Layer                  │
+│    Data persistence, external service           │
+│    integration, message queues                  │
 └─────────────────────────────────────────────────┘
 ```
 
-### 模块粒度控制
+### Module Granularity Control
 
 ```
-粒度过粗：
+Too coarse:
 ┌─────────────────────────────────┐
 │          Application            │
-│   (所有功能都在一起)              │
-│   10,000+ 行代码                 │
+│   (All functions together)       │
+│   10,000+ lines of code         │
 └─────────────────────────────────┘
-问题：难以理解、测试、维护
+Problem: Difficult to understand, test, maintain
 
-粒度过细：
+Too fine:
 ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐
 │UtilA  │ │UtilB  │ │UtilC  │ │UtilD  │
-│ 50行  │ │ 30行  │ │ 40行  │ │ 20行  │
+│ 50LOC │ │ 30LOC │ │ 40LOC │ │ 20LOC │
 └───────┘ └───────┘ └───────┘ └───────┘
-问题：模块爆炸、依赖复杂、调用开销大
+Problem: Module explosion, complex dependencies, high call overhead
 
-粒度适中：
+Just right:
 ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
 │ SensorModule│ │ NetModule   │ │ StoreModule │
-│   300行     │ │   400行     │ │   350行     │
+│   300 LOC   │ │   400 LOC   │ │   350 LOC   │
 └─────────────┘ └─────────────┘ └─────────────┘
-建议：单个模块 200-800 行代码
+Recommended: 200-800 lines per module
 ```
 
 ---
 
-## 接口设计规范
+## Interface Design Specifications
 
-### 接口定义原则
+### Interface Definition Principles
 
-#### 1. 接口与实现分离
+#### 1. Interface and Implementation Separation
 
 ```c
-// sensor_interface.h - 公开接口头文件
+// sensor_interface.h - Public interface header
 #ifndef SENSOR_INTERFACE_H
 #define SENSOR_INTERFACE_H
 
@@ -330,13 +333,13 @@ struct sensor_interface {
     void (*destroy)(const sensor_interface_t* self);
 };
 
-// 工厂函数
+// Factory functions
 const sensor_interface_t* temperature_sensor_create(void);
 const sensor_interface_t* humidity_sensor_create(void);
 
 #endif
 
-// temperature_sensor.c - 实现文件
+// temperature_sensor.c - Implementation file
 #include "sensor_interface.h"
 
 typedef struct {
@@ -345,11 +348,11 @@ typedef struct {
 } temp_sensor_ctx_t;
 
 static int temp_init(const sensor_interface_t* self, void* config) {
-    // 实现细节...
+    // Implementation details...
 }
 
 static int temp_read(const sensor_interface_t* self, float* value) {
-    // 实现细节...
+    // Implementation details...
 }
 
 static const sensor_interface_t temp_sensor_vtable = {
@@ -359,12 +362,12 @@ static const sensor_interface_t temp_sensor_vtable = {
 };
 ```
 
-#### 2. 最小接口原则
+#### 2. Minimal Interface Principle
 
-只暴露必要的接口，隐藏内部实现。
+Only expose necessary interfaces, hide internal implementation.
 
 ```c
-// ✅ 最小接口
+// ✅ Minimal interface
 typedef struct {
     int (*connect)(const char* address, uint16_t port);
     int (*send)(const void* data, size_t len);
@@ -372,24 +375,24 @@ typedef struct {
     void (*disconnect)(void);
 } network_interface_t;
 
-// ❌ 暴露过多细节
+// ❌ Exposing too many details
 typedef struct {
     int (*connect)(const char* address, uint16_t port);
     int (*send)(const void* data, size_t len);
     int (*receive)(void* buffer, size_t max_len);
     void (*disconnect)(void);
-    // 内部状态暴露
+    // Internal state exposed
     int socket_fd;
     bool is_connected;
     uint8_t* internal_buffer;
-    void (*internal_helper)(void);  // 内部函数不应暴露
+    void (*internal_helper)(void);  // Internal functions shouldn't be exposed
 } network_interface_bad_t;
 ```
 
-#### 3. 接口版本管理
+#### 3. Interface Version Management
 
 ```c
-// 版本编码
+// Version encoding
 #define MODULE_VERSION(major, minor, patch) \
     (((major) << 16) | ((minor) << 8) | (patch))
 
@@ -397,76 +400,76 @@ typedef struct {
 #define MODULE_VERSION_MINOR(v)  (((v) >> 8) & 0xFF)
 #define MODULE_VERSION_PATCH(v)  ((v) & 0xFF)
 
-// 接口定义
+// Interface definition
 typedef struct {
     const char* name;
-    uint32_t version;  // 模块版本
-    uint32_t api_version;  // API 兼容版本
+    uint32_t version;  // Module version
+    uint32_t api_version;  // API compatibility version
 
-    // 函数指针...
+    // Function pointers...
 } module_interface_t;
 
-// 版本兼容性检查
+// Version compatibility check
 static bool check_api_compatibility(uint32_t api_version) {
-    // 主版本号相同则兼容
+    // Compatible if major version number is the same
     return MODULE_VERSION_MAJOR(api_version) ==
            MODULE_VERSION_MAJOR(CURRENT_API_VERSION);
 }
 ```
 
-### 模块接口模板
+### Module Interface Template
 
-本项目使用的标准模块接口：
+Standard module interface used in this project:
 
 ```c
 /**
- * @brief 模块接口结构（虚函数表）
+ * @brief Module interface structure (virtual function table)
  */
 typedef struct {
-    const char*       name;      // 模块名称
-    uint32_t          version;   // 版本号
-    module_priority_t priority;  // 优先级
-    const char* const* depends_on; // 依赖列表
+    const char*       name;      // Module name
+    uint32_t          version;   // Version number
+    module_priority_t priority;  // Priority
+    const char* const* depends_on; // Dependency list
 
-    // 生命周期函数
-    int (*init)(void* config);    // 初始化
-    int (*start)(void);           // 启动
-    int (*stop)(void);            // 停止
-    int (*shutdown)(void);        // 销毁
+    // Lifecycle functions
+    int (*init)(void* config);    // Initialize
+    int (*start)(void);           // Start
+    int (*stop)(void);            // Stop
+    int (*shutdown)(void);        // Destroy
 
-    // 事件与控制
-    module_event_handler_t on_event;     // 事件处理
-    module_status_t (*get_status)(void); // 状态查询
-    int (*control)(int cmd, void* arg);  // 控制命令
+    // Events and control
+    module_event_handler_t on_event;     // Event handling
+    module_status_t (*get_status)(void); // Status query
+    int (*control)(int cmd, void* arg);  // Control commands
 } module_interface_t;
 ```
 
 ---
 
-## 依赖管理策略
+## Dependency Management Strategy
 
-### 依赖类型
+### Dependency Types
 
 ```
-1. 编译时依赖
-   - #include 头文件
-   - 链接库文件
+1. Compile-time dependency
+   - #include header files
+   - Link library files
 
-2. 运行时依赖
-   - 模块A需要模块B先启动
-   - 通过 depends_on 声明
+2. Runtime dependency
+   - Module A needs Module B to start first
+   - Declared through depends_on
 
-3. 配置时依赖
-   - Kconfig 中的 select/depends on
-   - 决定是否编译某模块
+3. Configuration-time dependency
+   - select/depends on in Kconfig
+   - Determines whether to compile a module
 ```
 
-### 依赖声明方式
+### Dependency Declaration Methods
 
-#### Kconfig 配置依赖
+#### Kconfig Configuration Dependencies
 
 ```kconfig
-# 模块A依赖于网络功能
+# Module A depends on networking functionality
 config MODULE_A
     bool "Enable Module A"
     depends on NETWORKING
@@ -476,55 +479,55 @@ config MODULE_A
       It requires networking support.
 ```
 
-#### 运行时依赖声明
+#### Runtime Dependency Declaration
 
 ```c
-// 声明依赖数组
+// Declare dependency array
 static const char* const sensor_module_deps[] = {
-    "network_module",   // 依赖网络模块
-    "storage_module",   // 依赖存储模块
-    NULL                // 必须以NULL结尾
+    "network_module",   // Depends on network module
+    "storage_module",   // Depends on storage module
+    NULL                // Must end with NULL
 };
 
-// 使用宏声明带依赖的模块接口
+// Use macro to declare module interface with dependencies
 DECLARE_MODULE_INTERFACE_WITH_DEPS(sensor_module, sensor_module_deps);
 ```
 
-### 依赖解析算法
+### Dependency Resolution Algorithm
 
-使用拓扑排序确定模块启动顺序：
+Use topological sorting to determine module startup order:
 
 ```
-依赖图示例：
-  应用模块
-     │
-     ├──▶ 数据处理模块
-     │        │
-     │        ├──▶ 传感器模块
-     │        │
-     │        └──▶ 存储模块
-     │
-     └──▶ 网络模块
-              │
-              └──▶ 驱动模块
+Dependency graph example:
+  Application module
+      │
+      ├──▶ Data processing module
+      │        │
+      │        ├──▶ Sensor module
+      │        │
+      │        └──▶ Storage module
+      │
+      └──▶ Network module
+               │
+               └──▶ Driver module
 
-拓扑排序结果：
-启动顺序: 驱动模块 → 存储模块 → 传感器模块 → 网络模块 → 数据处理模块 → 应用模块
-停止顺序: 应用模块 → 数据处理模块 → 网络模块 → 传感器模块 → 存储模块 → 驱动模块
+Topological sort result:
+Startup order: Driver module → Storage module → Sensor module → Network module → Data processing module → Application module
+Shutdown order: Application module → Data processing module → Network module → Sensor module → Storage module → Driver module
 ```
 
-Kahn 算法实现：
+Kahn's algorithm implementation:
 
 ```c
 /**
- * @brief 拓扑排序确定启动顺序
+ * @brief Topological sort to determine startup order
  */
 static int topological_sort(module_context_t** sorted, int* count) {
     int in_degree[MAX_MODULES] = {0};
     int queue[MAX_MODULES];
     int q_head = 0, q_tail = 0;
 
-    // 1. 计算入度
+    // 1. Calculate in-degree
     for (int i = 0; i < module_count; i++) {
         if (modules[i].depends_on) {
             for (int j = 0; modules[i].depends_on[j]; j++) {
@@ -536,20 +539,20 @@ static int topological_sort(module_context_t** sorted, int* count) {
         }
     }
 
-    // 2. 入度为0的入队
+    // 2. Enqueue nodes with in-degree of 0
     for (int i = 0; i < module_count; i++) {
         if (in_degree[i] == 0) {
             queue[q_tail++] = i;
         }
     }
 
-    // 3. 处理队列
+    // 3. Process queue
     *count = 0;
     while (q_head < q_tail) {
         int idx = queue[q_head++];
         sorted[(*count)++] = &modules[idx];
 
-        // 减少依赖此模块的其他模块的入度
+        // Reduce in-degree of other modules depending on this one
         for (int i = 0; i < module_count; i++) {
             if (is_dependent(i, modules[idx].name)) {
                 if (--in_degree[i] == 0) {
@@ -559,32 +562,32 @@ static int topological_sort(module_context_t** sorted, int* count) {
         }
     }
 
-    // 4. 检测循环依赖
+    // 4. Detect circular dependencies
     return (*count == module_count) ? 0 : -1;
 }
 ```
 
-### 循环依赖检测与解决
+### Circular Dependency Detection and Resolution
 
 ```
-循环依赖示例：
-  A → B → C → A  (闭环)
+Circular dependency example:
+  A → B → C → A  (closed loop)
 
-检测方法：
-1. 深度优先搜索 (DFS)
-2. 记录访问路径
-3. 发现重复访问即存在环
+Detection methods:
+1. Depth-First Search (DFS)
+2. Record visited path
+3. Repeated visit indicates a cycle
 
-解决方案：
-1. 重构：提取公共部分为独立模块
-2. 回调：使用依赖注入替代直接依赖
-3. 中介：引入中介者模块协调
+Solutions:
+1. Refactor: Extract common parts into independent modules
+2. Callbacks: Use dependency injection instead of direct dependencies
+3. Mediator: Introduce mediator module for coordination
 ```
 
 ```c
-// 使用回调函数打破循环依赖
+// Use callback functions to break circular dependencies
 
-// ❌ 循环依赖：A和B相互调用
+// ❌ Circular dependency: A and B call each other
 // module_a.c
 #include "module_b.h"
 void module_a_do_work(void) {
@@ -597,7 +600,7 @@ void module_b_process(void) {
     module_a_callback();
 }
 
-// ✅ 使用回调打破循环
+// ✅ Use callbacks to break circular dependency
 // module_a.h
 typedef void (*a_callback_t)(void* data);
 void module_a_set_callback(a_callback_t cb, void* user_data);
@@ -610,96 +613,91 @@ void module_b_init(void) {
 
 ---
 
-## 生命周期管理
+## Lifecycle Management
 
-### 模块状态机
+### Module State Machine
 
 ```
                     ┌──────────────────┐
-                    │ UNINITIALIZED    │
-                    │ (未初始化)        │
+                    │ UNINITIALIZED   │
                     └────────┬─────────┘
                              │ register()
                              ▼
                     ┌──────────────────┐
-                    │ INITIALIZING     │
-                    │ (初始化中)        │
+                    │ INITIALIZING    │
                     └────────┬─────────┘
-                             │ init() 成功
+                             │ init() success
                              ▼
                     ┌──────────────────┐
-              ┌─────│ INITIALIZED      │─────┐
-              │     │ (已初始化)        │     │
+              ┌─────│ INITIALIZED     │─────┐
               │     └────────┬─────────┘     │
               │              │ start()       │ stop()
               │              ▼               │
               │     ┌──────────────────┐     │
-              │     │ RUNNING          │◄────┤
-              │     │ (运行中)          │     │
+              │     │ RUNNING         │◄────┤
+              │     │ (running)        │     │
               │     └────────┬─────────┘     │
               │              │ suspend()     │
               │              ▼               │
               │     ┌──────────────────┐     │
-              └────►│ SUSPENDED        │─────┘
-                    │ (挂起)            │
+              └────►│ SUSPENDED       │─────┘
                     └────────┬─────────┘
                              │ error
                              ▼
                     ┌──────────────────┐
-                    │ ERROR            │
-                    │ (错误)            │
+                    │ ERROR           │
                     └──────────────────┘
 ```
 
-### 生命周期回调实现
+### Lifecycle Callback Implementation
 
 ```c
 /**
- * @brief 模块生命周期函数职责划分
+ * @brief Module lifecycle function responsibility division
  */
 
-// init(): 初始化阶段
-// - 验证配置参数
-// - 初始化静态数据结构
-// - 不启动线程/定时器
-// - 不申请动态内存（嵌入式推荐）
+// init(): Initialization phase
+// - Validate configuration parameters
+// - Initialize static data structures
+// - Don't start threads/timers
+// - Don't allocate dynamic memory (recommended for embedded)
 int my_module_init(void* config)
 {
-    // 参数验证
+    // Parameter validation
     if (config == NULL) {
         return -EINVAL;
     }
 
-    // 复制配置
+    // Copy configuration
     memcpy(&g_config, config, sizeof(g_config));
 
-    // 初始化数据结构
+    // Initialize data structures
     g_status = MODULE_STATUS_INITIALIZED;
 
     return 0;
 }
 
-// start(): 启动阶段
-// - 启动工作线程
-// - 启动定时器
-// - 注册中断处理
-// - 开始数据处理
+// start(): Startup phase
+// - Start worker threads
+// - Start timers
+// - Register interrupt handlers
+// - Begin data processing
 int my_module_start(void)
 {
-    // 启动定时器
+    // Start timer
     k_timer_start(&g_work_timer, K_MSEC(100), K_MSEC(100));
 
-    // 启动工作线程
+    // Start worker thread
     k_thread_start(&g_work_thread);
 
     g_status = MODULE_STATUS_RUNNING;
     return 0;
 }
 
-// stop(): 停止阶段
-// - 停止数据处理
-// - 停止定时器/线程
-// - 保留已分配资源
+// stop(): Stop phase
+// - Stop data processing
+// - Stop timers/threads
+// - Keep allocated resources
 int my_module_stop(void)
 {
     k_timer_stop(&g_work_timer);
@@ -709,16 +707,16 @@ int my_module_stop(void)
     return 0;
 }
 
-// shutdown(): 销毁阶段
-// - 释放所有资源
-// - 清理状态
-// - 可重新初始化
+// shutdown(): Destruction phase
+// - Release all resources
+// - Clean up state
+// - Can reinitialize
 int my_module_shutdown(void)
 {
-    // 停止所有活动
+    // Stop all activities
     my_module_stop();
 
-    // 清理资源
+    // Cleanup resources
     // ...
 
     g_status = MODULE_STATUS_UNINITIALIZED;
@@ -726,22 +724,22 @@ int my_module_shutdown(void)
 }
 ```
 
-### 初始化顺序控制
+### Initialization Order Control
 
-使用 Zephyr SYS_INIT 机制控制初始化顺序：
+Use Zephyr SYS_INIT mechanism to control initialization order:
 
 ```c
-// app_config.h - 定义初始化优先级
+// app_config.h - Define initialization priorities
 
-// 初始化阶段常量（数值越小越先执行）
-#define APP_INIT_PRIO_CORE         0    // 核心初始化
-#define APP_INIT_PRIO_SYSTEM       20   // 系统服务
-#define APP_INIT_PRIO_MODULE_MGR   40   // 模块管理器
-#define APP_INIT_PRIO_MODULE_BASE  60   // 基础模块
-#define APP_INIT_PRIO_MODULE_APP   80   // 应用模块
-#define APP_INIT_PRIO_APP_FINAL    100  // 应用完成
+// Initialization phase constants (smaller values execute first)
+#define APP_INIT_PRIO_CORE         0    // Core initialization
+#define APP_INIT_PRIO_SYSTEM       20   // System services
+#define APP_INIT_PRIO_MODULE_MGR   40   // Module manager
+#define APP_INIT_PRIO_MODULE_BASE  60   // Base modules
+#define APP_INIT_PRIO_MODULE_APP   80   // Application modules
+#define APP_INIT_PRIO_APP_FINAL    100  // Application completion
 
-// 模块自动注册
+// Module auto-registration
 static int my_module_auto_register(const struct device* dev)
 {
     my_module_config_t config = { /* ... */ };
@@ -750,39 +748,39 @@ static int my_module_auto_register(const struct device* dev)
     return module_manager_register(&my_module_interface, &config, &module_id);
 }
 
-// 在 POST_KERNEL 阶段自动注册
+// Auto-register in POST_KERNEL phase
 SYS_INIT(my_module_auto_register, POST_KERNEL, APP_INIT_PRIO_MODULE_APP);
 ```
 
 ---
 
-## 模块间通信机制
+## Inter-Module Communication Mechanisms
 
-### 通信模式对比
+### Communication Pattern Comparison
 
-| 模式 | 耦合度 | 实时性 | 适用场景 |
-|------|--------|--------|----------|
-| 直接函数调用 | 高 | 高 | 同步操作 |
-| 回调函数 | 中 | 高 | 事件通知 |
-| 事件系统 | 低 | 中 | 异步解耦 |
-| 消息队列 | 低 | 中 | 缓冲通信 |
-| 共享内存 | 高 | 高 | 大数据量 |
+| Pattern | Coupling | Real-time | Use Case |
+|---------|----------|-----------|----------|
+| Direct function call | High | High | Synchronous operations |
+| Callback function | Medium | High | Event notification |
+| Event system | Low | Medium | Async decoupling |
+| Message queue | Low | Medium | Buffered communication |
+| Shared memory | High | High | Large data volumes |
 
-### 事件驱动通信
+### Event-Driven Communication
 
-本项目的推荐通信方式：
+This project's recommended communication method:
 
 ```c
-// 发布-订阅模式
+// Publish-subscribe pattern
 
-// 1. 定义事件类型
+// 1. Define event types
 typedef enum {
     EVENT_TYPE_SENSOR_DATA = 1,
     EVENT_TYPE_NETWORK_STATUS,
     EVENT_TYPE_STORAGE_ERROR,
 } event_type_t;
 
-// 2. 定义事件结构
+// 2. Define event structure
 typedef struct {
     event_type_t type;
     uint8_t priority;
@@ -791,33 +789,33 @@ typedef struct {
     size_t data_len;
 } event_t;
 
-// 3. 模块订阅事件
+// 3. Module subscribes to events
 void sensor_module_init(void)
 {
     uint32_t module_id = module_manager_get_id_by_name("sensor_module");
 
-    // 订阅感兴趣的事件
+    // Subscribe to events of interest
     module_manager_subscribe(module_id, EVENT_TYPE_NETWORK_STATUS);
     module_manager_subscribe(module_id, EVENT_TYPE_STORAGE_ERROR);
 }
 
-// 4. 模块处理事件
+// 4. Module handles events
 void sensor_module_on_event(const event_t* event, void* user_data)
 {
     switch (event->type) {
     case EVENT_TYPE_NETWORK_STATUS:
-        // 处理网络状态变化
+        // Handle network status change
         handle_network_change(event->data);
         break;
 
     case EVENT_TYPE_STORAGE_ERROR:
-        // 处理存储错误
+        // Handle storage error
         handle_storage_error(event->data);
         break;
     }
 }
 
-// 5. 发布事件
+// 5. Publish events
 void network_module_notify_status(bool connected)
 {
     event_t event = {
@@ -832,13 +830,13 @@ void network_module_notify_status(bool connected)
 }
 ```
 
-### 回调机制
+### Callback Mechanism
 
 ```c
-// 定义回调类型
+// Define callback types
 typedef void (*data_callback_t)(const void* data, size_t len, void* user_data);
 
-// 模块注册回调
+// Module registers callback
 typedef struct {
     data_callback_t on_data;
     void* user_data;
@@ -858,22 +856,22 @@ int register_data_callback(data_callback_t cb, void* user_data)
     return -ENOMEM;
 }
 
-// 触发回调
+// Trigger callback
 void notify_data_received(const void* data, size_t len)
 {
     for (int i = 0; i < MAX_CALLBACKS; i++) {
         if (g_callbacks[i].on_data) {
-            // 注意：在锁外调用避免死锁
+            // Note: Call outside lock to avoid deadlock
             g_callbacks[i].on_data(data, len, g_callbacks[i].user_data);
         }
     }
 }
 ```
 
-### 共享数据模式
+### Shared Data Pattern
 
 ```c
-// 使用读写锁保护共享数据
+// Use read-write lock to protect shared data
 
 typedef struct {
     struct k_mutex lock;
@@ -883,7 +881,7 @@ typedef struct {
 
 static shared_sensor_data_t g_shared_data;
 
-// 写入（生产者）
+// Write (producer)
 int write_sensor_data(const sensor_data_t* data)
 {
     k_mutex_lock(&g_shared_data.lock, K_FOREVER);
@@ -893,7 +891,7 @@ int write_sensor_data(const sensor_data_t* data)
     return 0;
 }
 
-// 读取（消费者）
+// Read (consumer)
 int read_sensor_data(sensor_data_t* data)
 {
     k_mutex_lock(&g_shared_data.lock, K_FOREVER);
@@ -907,90 +905,91 @@ int read_sensor_data(sensor_data_t* data)
 
 ---
 
-## 分层架构设计
+## Layered Architecture Design
 
-### 标准分层模型
+### Standard Layered Model
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    应用层 (Application)                      │
-│              业务逻辑编排、用户交互处理                        │
+│                    Application Layer                         │
+│           Business logic orchestration, user interaction     │
 │                                                              │
-│  模块：app_main, app_config, app_version                     │
+│  Modules: app_main, app_config, app_version                │
 └────────────────────────────┬────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────┐
-│                    业务模块层 (Business Modules)             │
-│              独立业务功能单元、领域逻辑                        │
+│                   Business Modules Layer                    │
+│              Independent business function units             │
 │                                                              │
-│  模块：sensor_module, network_module, storage_module         │
+│  Modules: sensor_module, network_module, storage_module     │
 └────────────────────────────┬────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────┐
-│                    系统服务层 (System Services)              │
-│              通用系统服务、基础设施                           │
+│                   System Services Layer                      │
+│              General system services, infrastructure         │
 │                                                              │
-│  模块：sys_log, sys_timer, sys_memory, sys_watchdog          │
+│  Modules: sys_log, sys_timer, sys_memory, sys_watchdog     │
 └────────────────────────────┬────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────┐
-│                    核心框架层 (Core Framework)               │
-│              模块管理、事件系统、核心抽象                     │
+│                    Core Framework Layer                      │
+│              Module management, event system, core           │
+│              abstractions                                   │
 │                                                              │
-│  模块：module_manager, event_system, event_dispatcher        │
+│  Modules: module_manager, event_system, event_dispatcher   │
 └────────────────────────────┬────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────┐
-│                    硬件抽象层 (HAL/RTOS)                     │
-│              操作系统接口、硬件驱动                           │
+│                    Hardware Abstraction Layer (HAL/RTOS)    │
+│              OS interfaces, hardware drivers                 │
 │                                                              │
 │  Zephyr RTOS, Device Drivers, Hardware Peripherals           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 目录结构规范
+### Directory Structure Specification
 
 ```
 project/
 ├── src/
-│   ├── app/                    # 应用层
-│   │   ├── app_main.c         # 主入口
-│   │   ├── app_config.h       # 配置定义
-│   │   └── app_version.h      # 版本管理
+│   ├── app/                    # Application layer
+│   │   ├── app_main.c         # Main entry
+│   │   ├── app_config.h       # Configuration definitions
+│   │   └── app_version.h      # Version management
 │   │
-│   ├── modules/               # 业务模块层
-│   │   ├── module_base.h      # 模块基类接口
-│   │   ├── module_manager.c   # 模块管理器
-│   │   ├── sensor_module/     # 传感器模块
+│   ├── modules/               # Business modules layer
+│   │   ├── module_base.h      # Module base interface
+│   │   ├── module_manager.c   # Module manager
+│   │   ├── sensor_module/     # Sensor module
 │   │   │   ├── sensor_module.h
 │   │   │   └── sensor_module.c
-│   │   └── network_module/    # 网络模块
+│   │   └── network_module/    # Network module
 │   │       ├── network_module.h
 │   │       └── network_module.c
 │   │
-│   ├── services/              # 系统服务层
-│   │   ├── sys_log.c         # 日志服务
-│   │   ├── sys_timer.c       # 定时器服务
-│   │   └── sys_memory.c      # 内存管理
+│   ├── services/              # System services layer
+│   │   ├── sys_log.c         # Logging service
+│   │   ├── sys_timer.c       # Timer service
+│   │   └── sys_memory.c      # Memory management
 │   │
-│   └── core/                  # 核心框架层
-│       ├── event_system.c     # 事件系统
-│       └── event_dispatcher.c # 事件分发器
+│   └── core/                  # Core framework layer
+│       ├── event_system.c     # Event system
+│       └── event_dispatcher.c # Event dispatcher
 │
-├── include/                   # 公开头文件
-├── tests/                     # 测试代码
-├── docs/                      # 文档
-└── scripts/                   # 构建脚本
+├── include/                   # Public header files
+├── tests/                     # Test code
+├── docs/                      # Documentation
+└── scripts/                   # Build scripts
 ```
 
 ---
 
-## 错误处理与容错
+## Error Handling and Fault Tolerance
 
-### 错误码定义
+### Error Code Definitions
 
 ```c
-// 统一错误码定义
+// Unified error code definitions
 typedef enum {
     MODULE_OK = 0,
     MODULE_ERR_INVALID_PARAM = -1,
@@ -1003,13 +1002,13 @@ typedef enum {
     MODULE_ERR_NOT_SUPPORTED = -8,
 } module_error_t;
 
-// 错误码转换为字符串
+// Error code to string conversion
 static const char* module_error_str(int err)
 {
     switch (err) {
     case MODULE_OK:                return "OK";
     case MODULE_ERR_INVALID_PARAM: return "Invalid parameter";
-    case MODULE_ERR_NOT_FOUND:     return "Not found";
+    case MODULE_ERR_NOT_FOUND:      return "Not found";
     case MODULE_ERR_NOT_INITIALIZED: return "Not initialized";
     case MODULE_ERR_ALREADY_RUNNING: return "Already running";
     case MODULE_ERR_TIMEOUT:       return "Timeout";
@@ -1021,18 +1020,18 @@ static const char* module_error_str(int err)
 }
 ```
 
-### 健康检查机制
+### Health Check Mechanism
 
 ```c
-// 健康检查配置
+// Health check configuration
 typedef struct {
-    bool enable_health_check;       // 是否启用
-    uint32_t check_interval_ms;     // 检查间隔
-    bool enable_auto_recovery;      // 自动恢复
-    uint32_t max_restart_count;     // 最大重启次数
+    bool enable_health_check;       // Enable health check
+    uint32_t check_interval_ms;     // Check interval
+    bool enable_auto_recovery;      // Auto recovery
+    uint32_t max_restart_count;     // Max restart count
 } health_check_config_t;
 
-// 健康检查流程
+// Health check process
 static void health_check_handler(struct k_timer* timer)
 {
     for (int i = 0; i < module_count; i++) {
@@ -1042,7 +1041,7 @@ static void health_check_handler(struct k_timer* timer)
             continue;
         }
 
-        // 调用模块的 get_status 或自定义健康检查
+        // Call module's get_status or custom health check
         bool healthy = check_module_health(mod);
 
         if (!healthy) {
@@ -1057,7 +1056,7 @@ static void health_check_handler(struct k_timer* timer)
     }
 }
 
-// 自动恢复
+// Auto recovery
 static void attempt_recovery(module_context_t* mod)
 {
     if (mod->restart_count >= mod->config.max_restart_count) {
@@ -1070,7 +1069,7 @@ static void attempt_recovery(module_context_t* mod)
     LOG_INF("Attempting recovery for module %s (attempt %u)",
             mod->interface->name, mod->restart_count);
 
-    // 停止并重启
+    // Stop and restart
     mod->interface->stop();
     int ret = mod->interface->start();
 
@@ -1084,35 +1083,35 @@ static void attempt_recovery(module_context_t* mod)
 }
 ```
 
-### 防御性编程
+### Defensive Programming
 
 ```c
-// 参数验证
+// Parameter validation
 int module_process_data(const void* data, size_t len)
 {
-    // 空指针检查
+    // Null pointer check
     if (data == NULL) {
         LOG_ERR("NULL data pointer");
         return -EINVAL;
     }
 
-    // 长度检查
+    // Length check
     if (len == 0 || len > MAX_DATA_LEN) {
         LOG_ERR("Invalid data length: %zu", len);
         return -EINVAL;
     }
 
-    // 状态检查
+    // Status check
     if (g_status != MODULE_STATUS_RUNNING) {
         LOG_ERR("Module not running");
         return -EPERM;
     }
 
-    // 实际处理...
+    // Actual processing...
     return do_process(data, len);
 }
 
-// 边界检查
+// Boundary check
 int buffer_write(uint8_t* buf, size_t buf_size, const void* data, size_t data_len)
 {
     if (data_len > buf_size) {
@@ -1126,9 +1125,9 @@ int buffer_write(uint8_t* buf, size_t buf_size, const void* data, size_t data_le
 
 ---
 
-## 测试策略
+## Testing Strategy
 
-### 单元测试
+### Unit Testing
 
 ```c
 // tests/test_sensor_module.c
@@ -1136,22 +1135,22 @@ int buffer_write(uint8_t* buf, size_t buf_size, const void* data, size_t data_le
 #include <zephyr/ztest.h>
 #include "sensor_module.h"
 
-// 测试固件
+// Test setup
 static void test_setup(void* data)
 {
-    // 初始化测试环境
+    // Initialize test environment
     module_manager_init();
 }
 
 static void test_teardown(void* data)
 {
-    // 清理测试环境
+    // Cleanup test environment
     module_manager_shutdown();
 }
 
 ZTEST_SUITE(sensor_module_tests, NULL, NULL, test_setup, NULL, test_teardown);
 
-// 测试用例：正常初始化
+// Test case: Normal initialization
 ZTEST(sensor_module_tests, test_init_success)
 {
     sensor_module_config_t config = {
@@ -1166,7 +1165,7 @@ ZTEST(sensor_module_tests, test_init_success)
     zassert_not_equal(module_id, 0, "Module ID should be assigned");
 }
 
-// 测试用例：参数验证
+// Test case: Parameter validation
 ZTEST(sensor_module_tests, test_init_null_config)
 {
     uint32_t module_id;
@@ -1175,103 +1174,103 @@ ZTEST(sensor_module_tests, test_init_null_config)
     zassert_not_equal(ret, 0, "Should fail with NULL config");
 }
 
-// 测试用例：生命周期
+// Test case: Lifecycle
 ZTEST(sensor_module_tests, test_lifecycle)
 {
-    // 注册
+    // Register
     uint32_t module_id;
     register_test_module(&module_id);
 
-    // 检查初始状态
+    // Check initial state
     module_info_t info;
     module_manager_get_module_info(module_id, &info);
     zassert_equal(info.status, MODULE_STATUS_INITIALIZED);
 
-    // 启动
+    // Start
     module_manager_start_module(module_id);
     module_manager_get_module_info(module_id, &info);
     zassert_equal(info.status, MODULE_STATUS_RUNNING);
 
-    // 停止
+    // Stop
     module_manager_stop_module(module_id);
     module_manager_get_module_info(module_id, &info);
     zassert_equal(info.status, MODULE_STATUS_STOPPED);
 }
 ```
 
-### 模拟测试
+### Mock Testing
 
 ```c
-// 使用模拟对象测试模块交互
+// Use mock objects to test module interactions
 
-// 模拟依赖模块
+// Mock dependency module
 static int mock_storage_write(const void* data, size_t len)
 {
-    // 记录调用
+    // Record call
     mock_storage_write_called = true;
     mock_storage_write_data = data;
     mock_storage_write_len = len;
     return 0;
 }
 
-// 注入模拟
+// Inject mock
 static storage_interface_t mock_storage = {
     .write = mock_storage_write,
 };
 
 ZTEST(data_processor_tests, test_data_saved_to_storage)
 {
-    // 注入模拟存储
+    // Inject mock storage
     data_processor_set_storage(&mock_storage);
 
-    // 触发数据处理
+    // Trigger data processing
     process_sample_data();
 
-    // 验证存储被调用
+    // Verify storage was called
     zassert_true(mock_storage_write_called);
 }
 ```
 
 ---
 
-## 最佳实践与反模式
+## Best Practices and Anti-Patterns
 
-### 最佳实践
+### Best Practices
 
-#### 1. 模块命名规范
+#### 1. Module Naming Conventions
 
 ```c
-// 推荐的命名约定
+// Recommended naming conventions
 
-// 模块名：小写+下划线
+// Module name: lowercase with underscores
 // sensor_module, network_manager, data_processor
 
-// 函数名：模块名_动词_名词
+// Function name: module_name_verb_noun
 // sensor_module_read_data()
 // network_manager_connect()
 // data_processor_start()
 
-// 类型名：模块名_名词_t
+// Type name: module_name_noun_t
 // sensor_module_config_t
 // network_manager_state_t
 
-// 宏常量：模块名_大写
+// Macro constants: module_name_UPPERCASE
 // SENSOR_MODULE_MAX_SAMPLES
 // NETWORK_MANAGER_TIMEOUT_MS
 ```
 
-#### 2. 配置结构设计
+#### 2. Configuration Structure Design
 
 ```c
-// 提供合理的默认值
+// Provide reasonable default values
 typedef struct {
-    uint32_t sample_rate;       // 采样率，默认 100
-    uint32_t buffer_size;       // 缓冲区大小，默认 256
-    bool enable_filter;         // 启用滤波，默认 true
-    const char* device_name;    // 设备名，必须指定
+    uint32_t sample_rate;       // Sample rate, default 100
+    uint32_t buffer_size;       // Buffer size, default 256
+    bool enable_filter;         // Enable filter, default true
+    const char* device_name;    // Device name, must specify
 } sensor_module_config_t;
 
-// 提供默认配置宏
+// Provide default configuration macro
 #define SENSOR_MODULE_CONFIG_DEFAULT { \
     .sample_rate = 100, \
     .buffer_size = 256, \
@@ -1279,134 +1278,134 @@ typedef struct {
     .device_name = NULL \
 }
 
-// 使用示例
+// Usage example
 static sensor_module_config_t g_config = SENSOR_MODULE_CONFIG_DEFAULT;
 g_config.device_name = "SENSOR0";
 ```
 
-#### 3. 资源管理
+#### 3. Resource Management
 
 ```c
-// 资源获取即初始化 (RAII) 模式
+// Resource Acquisition Is Initialization (RAII) pattern
 
-// 初始化时获取资源
+// Acquire resources during initialization
 int module_init(void* config)
 {
     g_config = *(module_config_t*)config;
 
-    // 初始化互斥锁
+    // Initialize mutex
     k_mutex_init(&g_mutex);
 
-    // 初始化信号量
+    // Initialize semaphore
     k_sem_init(&g_sem, 0, 1);
 
-    // 初始化定时器
+    // Initialize timer
     k_timer_init(&g_timer, timer_handler, NULL);
 
     return 0;
 }
 
-// 销毁时释放资源
+// Release resources during destruction
 int module_shutdown(void)
 {
-    // 停止定时器
+    // Stop timer
     k_timer_stop(&g_timer);
 
-    // 确保没有线程持有资源
+    // Ensure no threads hold resources
     k_mutex_lock(&g_mutex, K_FOREVER);
-    // 清理资源...
+    // Cleanup resources...
     k_mutex_unlock(&g_mutex);
 
     return 0;
 }
 ```
 
-#### 4. 日志记录
+#### 4. Logging
 
 ```c
-// 分级日志
+// Level-based logging
 
-// 初始化阶段：信息日志
+// Initialization phase: info level
 LOG_INF("Initializing sensor module with rate=%u", config->sample_rate);
 
-// 运行阶段：调试日志
+// Running phase: debug level
 LOG_DBG("Processing sample %u", sample_count);
 
-// 错误情况：错误日志
+// Error situations: error level
 LOG_ERR("Failed to read sensor: %d", ret);
 
-// 关键路径：使用 LOG_DBG 避免性能影响
-// 问题排查：临时提升日志级别
+// Critical path: use LOG_DBG to avoid performance impact
+// Problem investigation: temporarily increase log level
 ```
 
-### 常见反模式
+### Common Anti-Patterns
 
-#### 1. 上帝模块
+#### 1. God Modules
 
 ```c
-// ❌ 反模式：一个模块做所有事情
+// ❌ Anti-pattern: One module does everything
 typedef struct {
-    // 传感器相关
-    // 网络相关
-    // 存储相关
-    // 显示相关
-    // ... 50+ 函数指针
+    // Sensor related
+    // Network related
+    // Storage related
+    // Display related
+    // ... 50+ function pointers
 } god_module_interface_t;
 
-// ✅ 正确：按职责拆分
+// ✅ Correct: Split by responsibility
 sensor_interface_t sensor;
 network_interface_t network;
 storage_interface_t storage;
 display_interface_t display;
 ```
 
-#### 2. 循环依赖
+#### 2. Circular Dependencies
 
 ```c
-// ❌ 反模式：A依赖B，B依赖A
+// ❌ Anti-pattern: A depends on B, B depends on A
 // module_a.h
 #include "module_b.h"
 
 // module_b.h
 #include "module_a.h"
 
-// ✅ 正确：提取公共接口
+// ✅ Correct: Extract common interface
 // common_interface.h
-// module_a.h (只包含 common_interface.h)
-// module_b.h (只包含 common_interface.h)
+// module_a.h (only includes common_interface.h)
+// module_b.h (only includes common_interface.h)
 ```
 
-#### 3. 过度耦合
+#### 3. Excessive Coupling
 
 ```c
-// ❌ 反模式：直接访问其他模块内部数据
-extern sensor_module_data_t g_sensor_data;  // 暴露内部数据
+// ❌ Anti-pattern: Directly access other module's internal data
+extern sensor_module_data_t g_sensor_data;  // Expose internal data
 
 void process_data(void)
 {
-    // 直接访问外部模块数据
-    float value = g_sensor_data.values[0];  // 高耦合
+    // Directly access external module data
+    float value = g_sensor_data.values[0];  // High coupling
 }
 
-// ✅ 正确：通过接口访问
+// ✅ Correct: Access through interface
 void process_data(void)
 {
     float value;
-    sensor_module_read(&value);  // 低耦合
+    sensor_module_read(&value);  // Low coupling
 }
 ```
 
-#### 4. 全局状态滥用
+#### 4. Global State Abuse
 
 ```c
-// ❌ 反模式：过多全局变量
+// ❌ Anti-pattern: Too many global variables
 static int g_count;
 static float g_value;
 static bool g_flag;
 static void* g_ptr;
-// ... 20+ 全局变量
+// ... 20+ global variables
 
-// ✅ 正确：封装到结构体
+// ✅ Correct: Encapsulate into struct
 typedef struct {
     int count;
     float value;
@@ -1419,11 +1418,11 @@ static module_state_t g_state;
 
 ---
 
-## 实战案例
+## Case Studies
 
-### 案例1：传感器数据处理模块
+### Case 1: Sensor Data Processing Module
 
-完整的模块设计示例：
+Complete module design example:
 
 ```c
 // sensor_processor.h
@@ -1432,24 +1431,24 @@ static module_state_t g_state;
 
 #include "module_base.h"
 
-// 配置结构
+// Configuration structure
 typedef struct {
-    uint32_t sample_rate_ms;    // 采样间隔
-    uint32_t buffer_size;       // 缓冲区大小
-    float threshold;            // 告警阈值
-    bool enable_filter;         // 启用滤波
+    uint32_t sample_rate_ms;    // Sample interval
+    uint32_t buffer_size;       // Buffer size
+    float threshold;            // Alarm threshold
+    bool enable_filter;         // Enable filter
 } sensor_processor_config_t;
 
-// 事件类型
+// Event types
 #define EVENT_TYPE_SENSOR_ALARM  100
 #define EVENT_TYPE_SENSOR_DATA   101
 
-// 公开 API
+// Public APIs
 int sensor_processor_get_latest(float* value);
 int sensor_processor_get_statistics(float* avg, float* max, float* min);
 int sensor_processor_set_threshold(float threshold);
 
-// 模块接口（由宏生成）
+// Module interface (generated by macro)
 extern const module_interface_t sensor_processor_interface;
 
 #endif
@@ -1460,7 +1459,7 @@ extern const module_interface_t sensor_processor_interface;
 
 LOG_MODULE_REGISTER(sensor_processor, LOG_LEVEL_INF);
 
-// 内部数据结构
+// Internal data structure
 typedef struct {
     float* buffer;
     uint32_t buffer_size;
@@ -1471,13 +1470,13 @@ typedef struct {
     uint32_t sample_count;
 } sensor_processor_ctx_t;
 
-// 静态实例
+// Static instances
 static sensor_processor_ctx_t g_ctx;
 static float g_buffer[CONFIG_SENSOR_BUFFER_SIZE];
 static sensor_processor_config_t g_config;
 static module_status_t g_status = MODULE_STATUS_UNINITIALIZED;
 
-// 初始化
+// Initialization
 static int sensor_processor_init(void* config)
 {
     if (config == NULL) {
@@ -1499,7 +1498,7 @@ static int sensor_processor_init(void* config)
     return 0;
 }
 
-// 启动
+// Startup
 static int sensor_processor_start(void)
 {
     g_status = MODULE_STATUS_RUNNING;
@@ -1507,7 +1506,7 @@ static int sensor_processor_start(void)
     return 0;
 }
 
-// 停止
+// Stop
 static int sensor_processor_stop(void)
 {
     g_status = MODULE_STATUS_STOPPED;
@@ -1515,7 +1514,7 @@ static int sensor_processor_stop(void)
     return 0;
 }
 
-// 销毁
+// Shutdown
 static int sensor_processor_shutdown(void)
 {
     g_status = MODULE_STATUS_UNINITIALIZED;
@@ -1523,7 +1522,7 @@ static int sensor_processor_shutdown(void)
     return 0;
 }
 
-// 事件处理
+// Event handling
 static void sensor_processor_on_event(const event_t* event, void* user_data)
 {
     if (event == NULL || g_status != MODULE_STATUS_RUNNING) {
@@ -1540,24 +1539,24 @@ static void sensor_processor_on_event(const event_t* event, void* user_data)
     }
 }
 
-// 状态查询
+// Status query
 static module_status_t sensor_processor_get_status(void)
 {
     return g_status;
 }
 
-// 控制命令
+// Control commands
 static int sensor_processor_control(int cmd, void* arg)
 {
     switch (cmd) {
-    case 0:  // 设置阈值
+    case 0:  // Set threshold
         if (arg) {
             g_ctx.threshold = *(float*)arg;
             return 0;
         }
         return -EINVAL;
 
-    case 1:  // 获取统计信息
+    case 1:  // Get statistics
         // ...
         return 0;
 
@@ -1566,21 +1565,21 @@ static int sensor_processor_control(int cmd, void* arg)
     }
 }
 
-// 内部函数
+// Internal functions
 static void process_sample(float value)
 {
-    // 滤波处理
+    // Filter processing
     if (g_ctx.filter_enabled) {
         value = value * 0.8f + g_ctx.last_value * 0.2f;
     }
     g_ctx.last_value = value;
 
-    // 存入缓冲区
+    // Store in buffer
     g_ctx.buffer[g_ctx.write_index] = value;
     g_ctx.write_index = (g_ctx.write_index + 1) % g_ctx.buffer_size;
     g_ctx.sample_count++;
 
-    // 阈值检测
+    // Threshold detection
     if (value > g_ctx.threshold) {
         trigger_alarm(value);
     }
@@ -1602,7 +1601,7 @@ static void trigger_alarm(float value)
     module_manager_broadcast(&event);
 }
 
-// 公开 API 实现
+// Public API implementation
 int sensor_processor_get_latest(float* value)
 {
     if (g_status != MODULE_STATUS_RUNNING || value == NULL) {
@@ -1614,28 +1613,28 @@ int sensor_processor_get_latest(float* value)
     return 0;
 }
 
-// 使用宏声明模块接口
+// Use macro to declare module interface
 DECLARE_MODULE_INTERFACE(sensor_processor);
 ```
 
-### 案例2：模块依赖配置
+### Case 2: Module Dependency Configuration
 
 ```c
-// 应用配置示例
+// Application configuration example
 
-// 定义依赖关系
+// Define dependency relationships
 static const char* const data_processor_deps[] = {
     "sensor_module",
     "storage_module",
     NULL
 };
 
-// 模块注册
+// Module registration
 static int register_all_modules(void)
 {
     uint32_t module_id;
 
-    // 1. 驱动层模块（无依赖）
+    // 1. Driver layer modules (no dependencies)
     sensor_module_config_t sensor_cfg = {
         .sample_rate = 100
     };
@@ -1646,13 +1645,13 @@ static int register_all_modules(void)
     };
     module_manager_register(&storage_module_interface, &storage_cfg, &module_id);
 
-    // 2. 业务层模块（有依赖）
+    // 2. Business layer modules (with dependencies)
     data_processor_config_t processor_cfg = {
         .buffer_size = 256
     };
     module_manager_register(&data_processor_interface, &processor_cfg, &module_id);
 
-    // 3. 应用层模块
+    // 3. Application layer modules
     application_config_t app_cfg = { /* ... */ };
     module_manager_register(&application_interface, &app_cfg, &module_id);
 
@@ -1662,28 +1661,28 @@ static int register_all_modules(void)
 
 ---
 
-## 附录
+## Appendix
 
-### 参考资料
+### References
 
-- [模块系统详细使用说明](../30-核心模块/32-模块系统详细使用说明.md)
-- [事件系统详细使用说明](../30-核心模块/31-事件系统详细使用说明.md)
-- [开发者入门指南](../00-入门/04-开发者入门指南.md)
-- [Zephyr RTOS 官方文档](https://docs.zephyrproject.org/)
+- [Detailed Module System Usage Guide](../30-核心模块/32-模块系统详细使用说明.md)
+- [Detailed Event System Usage Guide](../30-核心模块/31-事件系统详细使用说明.md)
+- [Developer Getting Started Guide](../00-入门/04-开发者入门指南.md)
+- [Zephyr RTOS Official Documentation](https://docs.zephyrproject.org/)
 
-### 术语表
+### Glossary
 
-| 术语 | 英文 | 定义 |
-|------|------|------|
-| 模块 | Module | 具有明确定义接口的软件单元 |
-| 接口 | Interface | 模块对外提供的服务契约 |
-| 依赖 | Dependency | 模块之间的关系，A依赖B表示A需要B |
-| 耦合 | Coupling | 模块之间的关联程度 |
-| 内聚 | Cohesion | 模块内部元素的关联程度 |
-| 封装 | Encapsulation | 隐藏实现细节 |
-| 抽象 | Abstraction | 忽略细节，关注本质 |
+| Term | English | Definition |
+|------|---------|------------|
+| 模块 | Module | Software unit with clearly defined interfaces |
+| 接口 | Interface | Service contract provided by module to outside |
+| 依赖 | Dependency | Relationship between modules, A depends on B means A needs B |
+| 耦合 | Coupling | Degree of association between modules |
+| 内聚 | Cohesion | Degree of association between elements within a module |
+| 封装 | Encapsulation | Hide implementation details |
+| 抽象 | Abstraction | Ignore details, focus on essence |
 
 ---
 
-**文档版本：1.0.0**
-**最后更新：2026-04-14**
+**Document Version: 1.0.0**
+**Last Updated: 2026-04-14**
