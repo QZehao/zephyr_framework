@@ -328,15 +328,15 @@ typedef void (*ipc_async_callback_t)(ipc_request_id_t request_id,
 
 | 函数 | 说明 |
 |------|------|
-| `int ipc_service_init(ipc_service_t *service, const char *name, ipc_service_func_t service_func, size_t stack_size, int priority, size_t request_queue_size, size_t response_queue_size)` | 初始化结构体、消息队列、互斥锁、Future 空闲链表。参数中的三项大小 **须与 Kconfig 一致**。 |
+| `int ipc_service_init(ipc_service_t *service, const char *name, ipc_service_func_t service_func, int priority)` | 初始化结构体、消息队列、互斥锁、Future 空闲链表。栈与队列大小由 Kconfig 决定：`CONFIG_THREAD_IPC_SERVICE_STACK_SIZE`、`CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE`、`CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE`。 |
 | `int ipc_service_start(ipc_service_t *service)` | 创建并启动 Worker 与 Dispatcher 线程。已运行则 `-EALREADY`。 |
-| `int ipc_service_stop(ipc_service_t *service)` | 置 `shutdown`、唤醒两线程、`k_thread_join`。**不释放**内嵌缓冲（随实例生命周期）。未启动则直接返回 `0`。 |
+| `int ipc_service_stop(ipc_service_t *service)` | 置 `shutdown`、唤醒两线程、`k_thread_join`；失败返回 `-EIO`（join 失败）或 `-EINVAL`（空指针）。**不释放**内嵌缓冲（随实例生命周期）。未启动则直接返回 `0`。 |
 
 ### 调用接口
 
 | 函数 | 说明 |
 |------|------|
-| `int ipc_call_sync(..., k_timeout_t timeout)` | 同步调用；`data` 不可为 `NULL`（即使 `data_size` 为 0）；`out_data` / `out_data_size` 不可为 `NULL`。 |
+| `int ipc_call_sync(..., k_timeout_t timeout)` | 同步调用；`data` 不可为 `NULL`（即使 `data_size` 为 0）；`out_data` / `out_data_size` 不可为 `NULL`。`K_NO_WAIT` / 零超时返回 `-EINVAL`。 |
 | `int ipc_call_async(..., ipc_async_callback_t callback, void *user_data, ipc_request_id_t *out_request_id)` | 异步调用；`callback` 不可为 `NULL`；`out_request_id` 可为 `NULL`。 |
 | `int ipc_call_future(..., ipc_future_t **out_future)` | 分配 Future 并投递请求；成功后须 `ipc_future_release`。 |
 
@@ -346,7 +346,7 @@ typedef void (*ipc_async_callback_t)(ipc_request_id_t request_id,
 |------|------|
 | `int ipc_future_wait(ipc_future_t *future, int *out_result, const void **out_data, size_t *out_data_size, k_timeout_t timeout)` | 等待完成信号量；输出参数均可为 `NULL`（按需）。 |
 | `bool ipc_future_is_ready(ipc_future_t *future)` | 非阻塞查询 `completed` 标志。 |
-| `int ipc_future_release(ipc_service_t *service, ipc_future_t *future)` | 归还 Future 到池；会校验指针是否属于该 `service` 的 `futures[]`，否则 `-EINVAL`。 |
+| `int ipc_future_release(ipc_service_t *service, ipc_future_t *future)` | 归还 Future 到池；会校验指针是否属于该 `service` 的 `futures[]`，否则 `-EINVAL`；若 future 被其它代码持有返回 `-EBUSY`；若已 release 返回 `-EALREADY`。 |
 
 ### 工具
 
@@ -362,6 +362,68 @@ typedef void (*ipc_async_callback_t)(ipc_request_id_t request_id,
 |------|------|
 | `event_status_t thread_ipc_event_register_types(void)` | 注册 `EVENT_TYPE_THREAD_IPC_RESPONSE`（幂等）。须在 `event_system_init()` 之后调用。 |
 | `event_status_t thread_ipc_event_publish_result(uint32_t source_id, ipc_request_id_t request_id, int result, event_priority_t priority)` | `event_publish_copy` 固定载荷；须在 `event_system_start()` 之后、`service_func` 等线程上下文中调用。 |
+
+---
+
+## 共享内存调用
+
+`CONFIG_THREAD_IPC_SERVICE_SHARED_MEM` 启用后，提供基于引用计数的共享内存池，解决调用者与服务函数之间的数据所有权问题。
+
+### 配置选项
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM` | bool | n | 启用共享内存子系统 |
+| `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE` | int | 8 | 内存块池大小 |
+| `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_BLOCK_SIZE` | int | 256 | 单块大小（字节） |
+| `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_LOG_LEVEL` | int | 3 | 日志级别 |
+
+### 类型定义
+
+```c
+typedef uint32_t ipc_shm_handle_t;  // 不透明句柄
+#define IPC_SHM_HANDLE_INVALID ((ipc_shm_handle_t)0xFFFFFFFFU)
+
+typedef enum {
+    IPC_SHM_STATE_FREE = 0,      // 空闲
+    IPC_SHM_STATE_ALLOCATED = 1, // 已分配（引用计数=1）
+    IPC_SHM_STATE_SHARED = 2,    // 共享中（引用计数>1）
+    IPC_SHM_STATE_INVALID = 3    // 无效状态
+} ipc_shm_state_t;
+```
+
+### 共享内存 API
+
+| 函数 | 说明 |
+|------|------|
+| `ipc_shm_handle_t ipc_shm_alloc(ipc_service_t *service, size_t size)` | 分配块，初始引用计数=1；失败返回 `IPC_SHM_HANDLE_INVALID` |
+| `void ipc_shm_acquire(ipc_service_t *service, ipc_shm_handle_t handle)` | 增加引用计数（将块传递给另一个消费者） |
+| `int ipc_shm_release(ipc_service_t *service, ipc_shm_handle_t handle)` | 减少引用计数；计数=0时自动回收；返回 `-EINVAL`(无效句柄)、`-EBUSY`(状态异常) |
+| `void *ipc_shm_get_ptr(ipc_service_t *service, ipc_shm_handle_t handle)` | 获取块指针；句柄无效返回 NULL |
+| `size_t ipc_shm_get_size(ipc_service_t *service, ipc_shm_handle_t handle)` | 获取块大小 |
+| `bool ipc_shm_is_valid(ipc_service_t *service, ipc_shm_handle_t handle)` | 验证句柄有效性 |
+| `void ipc_shm_get_stats(ipc_service_t *service, uint32_t *active, uint32_t *peak, uint32_t *free)` | 获取池统计 |
+| `int ipc_shm_init(ipc_service_t *service)` | 初始化共享内存池 |
+| `void ipc_shm_deinit(ipc_service_t *service)` | 反初始化，检测泄漏 |
+
+### 使用流程
+
+```c
+// 调用方
+ipc_shm_handle_t handle = ipc_shm_alloc(service, sizeof(my_data));
+void *ptr = ipc_shm_get_ptr(service, handle);
+memcpy(ptr, &my_data, sizeof(my_data));
+// 将 handle 通过 ipc_call_sync 传递给服务方
+
+// 服务方处理完后，通过 ipc_call_sync 的响应将 handle 返回调用方
+
+// 调用方使用完，释放引用
+ipc_shm_release(service, handle);
+```
+
+### 释放路径明示
+
+只有 `ipc_call_sync_shm` 才返回 handle 给调用者，且**必须**调用 `ipc_shm_release()` 释放。调用者持有 handle 期间，不能再次调用 `ipc_shm_alloc` 获得同一实例的块（会返回新 handle，原 handle 仍有效）。
 
 ---
 

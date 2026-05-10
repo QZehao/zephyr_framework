@@ -93,7 +93,19 @@ typedef struct {
 
 ### 4.2 `ipc_service_init` 参数
 
-`stack_size`、`request_queue_size`、`response_queue_size` **必须与 `prj.conf` 中 Kconfig 数值一致**（见 `THREAD_IPC_SERVICE_*`），否则返回 `-EINVAL`。
+当前 `ipc_service_init` 是 4 参数签名：
+
+```c
+int ipc_service_init(ipc_service_t *service, const char *name,
+                    ipc_service_func_t service_func, int priority);
+```
+
+栈大小、队列容量由 Kconfig 在编译期固定：
+- `CONFIG_THREAD_IPC_SERVICE_STACK_SIZE`
+- `CONFIG_THREAD_IPC_SERVICE_REQUEST_QUEUE_SIZE`
+- `CONFIG_THREAD_IPC_SERVICE_RESPONSE_QUEUE_SIZE`
+
+模块只需声明服务名称和工作线程优先级。
 
 ### 4.3 实现 `ipc_service_func_t`
 
@@ -146,12 +158,13 @@ typedef struct {
 
 | 现象 | 处理 |
 |------|------|
-| `ipc_service_init` 返回 `-EINVAL` | 检查传入的三个尺寸是否与 Kconfig 完全一致 |
+| `ipc_service_init` 返回 `-EINVAL` | 可能是 `service_func` 为 NULL 或 `priority` 越界 |
 | 模块 `start` 后 IPC 无响应 | 确认 `ipc_service_start` 成功，且 Worker/Dispatcher 未被 `stop` |
 | 停止阶段死锁或异常 | 确保 **`ipc_service_stop` 前** 已无线程阻塞在 `ipc_call_*`；示例通过 **先 join 演示线程** 保证 |
 | 事件桥无回调 | 确认 **`event_system_start()` 早于** 模块 `start`；且已 **`event_subscribe(EVENT_TYPE_THREAD_IPC_RESPONSE, …)`** |
 | 链接 `undefined reference to k_malloc` | 在 **`prj.conf`** 中设置 **`CONFIG_HEAP_MEM_POOL_SIZE`** 为非零（例如 8192） |
 | `region RAM overflowed` / `noinit will not fit` | 减小 IPC 栈/队列、关其一演示模块、或换更大 SRAM 的板型；可与 `prj.conf` 中当前保守数值对齐 |
+| `ipc_call_sync_shm` 返回 0 但 handle 无效 | 检查 `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM` 是否启用 |
 
 ---
 

@@ -6,35 +6,27 @@
 
 ## 已实现特性
 
-### ✅ 零拷贝缓冲区 (ipc_buffer_t)
+### ✅ 共享内存池 (ipc_shm_*)
 
-**状态：** 已实现
+**状态：** 已实现（替代原 `ipc_buffer_t` 规划）
 
 **功能：**
-- 引用计数实现安全跨线程共享
-- 池化静态分配，无动态内存
-- 外部内存包装（零拷贝从调用者）
-- 清确所有权语义（ref/unref）
+- 基于引用计数的固定大小块池（slab 风格）
+- 每块带引用计数，生命周期由 alloc/acquire/release 显式控制
+- 静态分配，无运行时 k_malloc
+- 调用 `ipc_call_sync_shm` 返回 handle，服务端在响应时携带 handle 回传调用者
 
-**使用示例：**
-```c
-// 分配缓冲区
-ipc_buffer_t* buf = ipc_buffer_alloc(&pool, 256);
-ipc_buffer_set_size(buf, memcpy(ipc_buffer_get_data(buf), data, len));
-
-// 共享缓冲区
-ipc_buffer_ref(buf);
-send_to_other_thread(buf);
-
-// 释放
-ipc_buffer_unref(buf);
-```
+**与原本 `ipc_buffer_t` 规划的差异：**
+- 不再用单独的"缓冲区"对象，而是 slab 风格的固定大小块池
+- 每块带引用计数，生命周期由 alloc/acquire/release 显式控制
+- 调用 `ipc_call_sync_shm` 返回 handle，服务端在响应时携带 handle 回传调用者
 
 **配置选项：**
-- `CONFIG_THREAD_IPC_BUFFER` - 启用特性
-- `CONFIG_THREAD_IPC_BUFFER_SMALL_SIZE/COUNT` - 小缓冲区池
-- `CONFIG_THREAD_IPC_BUFFER_MEDIUM_SIZE/COUNT` - 中缓冲区池
-- `CONFIG_THREAD_IPC_BUFFER_LARGE_SIZE/COUNT` - 大缓冲区池
+- `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM` - 启用共享内存子系统
+- `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_POOL_SIZE` - 内存块池大小
+- `CONFIG_THREAD_IPC_SERVICE_SHARED_MEM_BLOCK_SIZE` - 单块大小
+
+详细 API 见 **[Thread_IPC服务使用说明.md](33-Thread_IPC服务使用说明.md)**「共享内存调用」章节。
 
 ---
 
