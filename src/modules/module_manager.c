@@ -670,6 +670,8 @@ int module_manager_init(void) {
         g_module_mgr.modules[i].id = 0U;
     }
 
+    g_module_mgr.initialized = true;
+
     LOG_INF("Module manager initialized");
     return 0;
 }
