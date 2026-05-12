@@ -261,6 +261,32 @@ static int find_event_sub_index(const module_info_t* info, event_type_t type) {
 }
 
 /**
+ * @brief 将事件系统状态码映射为模块管理器错误码
+ */
+static int event_status_to_module_error(event_status_t status) {
+    switch (status) {
+    case EVENT_OK:
+        return MODULE_OK;
+    case EVENT_ERR_NO_MEM:
+        return MODULE_ERR_NO_MEM;
+    case EVENT_ERR_INVALID_ARG:
+        return MODULE_ERR_INVALID_ARG;
+    case EVENT_ERR_NOT_FOUND:
+        return MODULE_ERR_NOT_FOUND;
+    case EVENT_ERR_NO_SUBSCRIBER:
+        return MODULE_ERR_NOT_FOUND;
+    case EVENT_ERR_TIMEOUT:
+        return MODULE_ERR_TIMEOUT;
+    case EVENT_ERR_NOT_RUNNING:
+        return MODULE_ERR_NOT_RUNNING;
+    case EVENT_ERR_QUEUE_FULL:
+    case EVENT_ERR_QUEUE_EMPTY:
+    default:
+        return MODULE_ERR_IO;
+    }
+}
+
+/**
  * @brief 按优先级排序启动条目（冒泡排序）
  *
  * @param entries 启动条目数组
@@ -943,8 +969,11 @@ int module_manager_register(const module_interface_t* interface, void* config, u
  * @return MODULE_OK 成功，MODULE_ERR_NOT_FOUND 模块未找到
  */
 int module_manager_unregister(uint32_t module_id) {
-    if (!g_module_mgr.initialized || module_id == 0U) {
+    if (!g_module_mgr.initialized) {
         return MODULE_ERR_NOT_INITIALIZED;
+    }
+    if (module_id == 0U) {
+        return MODULE_ERR_INVALID_ARG;
     }
 
     k_mutex_lock(&g_module_mgr.lock, K_FOREVER);
@@ -1421,7 +1450,7 @@ int module_manager_subscribe(uint32_t module_id, event_type_t event_type) {
         event_subscribe(event_type, module_event_handler, (void*) (uintptr_t) module_id, &subscriber_id);
 
     if (status != EVENT_OK) {
-        return MODULE_ERR_IO;
+        return event_status_to_module_error(status);
     }
 
     k_mutex_lock(&g_module_mgr.lock, K_FOREVER);

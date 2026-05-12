@@ -37,62 +37,60 @@ LOG_MODULE_REGISTER(event_system, CONFIG_SYS_LOG_LEVEL);
  * ============================================================================= */
 
 /** 最大支持的事件类型数量（从 Kconfig 获取） */
-#define MAX_EVENT_TYPES    CONFIG_EVENT_MAX_TYPES
+#define MAX_EVENT_TYPES         CONFIG_EVENT_MAX_TYPES
 
 /** 魔术字，用于验证控制块有效性 ("EVNT") */
-#define EVENT_SYSTEM_MAGIC 0x45564E54
+#define EVENT_SYSTEM_MAGIC      0x45564E54
 
 /** 未初始化或已完成 shutdown（与 BSS 初值一致），非损坏状态 */
 #define EVENT_SYSTEM_MAGIC_IDLE 0U
 
 /** SIL-2: 验证事件系统魔术字（返回 event_status_t 版本） */
-#define EVENT_SYSTEM_VALIDATE() \
-    do { \
-        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) { \
-            return EVENT_ERR_INVALID_ARG; \
-        } \
-        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) { \
-            LOG_ERR("Event system magic corruption detected: 0x%08x", \
-                    g_event_system.magic); \
-            return EVENT_ERR_INVALID_ARG; \
-        } \
+#define EVENT_SYSTEM_VALIDATE()                                                                                        \
+    do {                                                                                                               \
+        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) {                                                         \
+            return EVENT_ERR_INVALID_ARG;                                                                              \
+        }                                                                                                              \
+        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) {                                                              \
+            LOG_ERR("Event system magic corruption detected: 0x%08x", g_event_system.magic);                           \
+            return EVENT_ERR_INVALID_ARG;                                                                              \
+        }                                                                                                              \
     } while (0)
 
 /** SIL-2: 验证事件系统魔术字（返回 void 版本） */
-#define EVENT_SYSTEM_VALIDATE_VOID() \
-    do { \
-        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) { \
-            return; \
-        } \
-        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) { \
-            LOG_ERR("Event system magic corruption detected: 0x%08x", \
-                    g_event_system.magic); \
-            return; \
-        } \
+#define EVENT_SYSTEM_VALIDATE_VOID()                                                                                   \
+    do {                                                                                                               \
+        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) {                                                         \
+            return;                                                                                                    \
+        }                                                                                                              \
+        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) {                                                              \
+            LOG_ERR("Event system magic corruption detected: 0x%08x", g_event_system.magic);                           \
+            return;                                                                                                    \
+        }                                                                                                              \
     } while (0)
 
 /** 分配类 API：空闲态静默失败，非法 magic 记录损坏 */
-#define EVENT_SYSTEM_CHECK_MAGIC_ALLOC() \
-    do { \
-        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) { \
-            return NULL; \
-        } \
-        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) { \
-            LOG_ERR("Event system magic corruption detected"); \
-            return NULL; \
-        } \
+#define EVENT_SYSTEM_CHECK_MAGIC_ALLOC()                                                                               \
+    do {                                                                                                               \
+        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) {                                                         \
+            return NULL;                                                                                               \
+        }                                                                                                              \
+        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) {                                                              \
+            LOG_ERR("Event system magic corruption detected");                                                         \
+            return NULL;                                                                                               \
+        }                                                                                                              \
     } while (0)
 
 /** 释放类 API：空闲态静默返回 */
-#define EVENT_SYSTEM_CHECK_MAGIC_FREE_VOID() \
-    do { \
-        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) { \
-            return; \
-        } \
-        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) { \
-            LOG_ERR("Event system magic corruption detected"); \
-            return; \
-        } \
+#define EVENT_SYSTEM_CHECK_MAGIC_FREE_VOID()                                                                           \
+    do {                                                                                                               \
+        if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) {                                                         \
+            return;                                                                                                    \
+        }                                                                                                              \
+        if (g_event_system.magic != EVENT_SYSTEM_MAGIC) {                                                              \
+            LOG_ERR("Event system magic corruption detected");                                                         \
+            return;                                                                                                    \
+        }                                                                                                              \
     } while (0)
 
 /** 初始化保护标志 */
@@ -173,30 +171,74 @@ static subscriber_entry_t* find_subscriber(event_type_entry_t* entry, uint32_t s
  *
  * 级联 fallback 可能导致数据被分配到比 data_len 对应更大的 slab 池中。
  * 释放时必须使用实际分配的 slab，否则会造成内存损坏。
+ *
+ * 使用查找表简化标记逻辑，提高可维护性。
  */
 static inline void event_set_slab_marker(event_t* event, struct k_mem_slab* slab) {
 #if EVENT_SLAB_ENABLED && EVENT_SLAB_LARGE_AVAILABLE
+    /* 定义 slab 到标记的映射表 */
+    static const struct {
+        struct k_mem_slab* slab;
+        uint8_t            flag;
+    } slab_markers[] = {
 #if EVENT_SLAB_256_AVAILABLE
-    if (slab == &event_slab_data_256) {
-        event->flags |= EVENT_FLAG_SLAB_256;
-        return;
-    }
+        {&event_slab_data_256, EVENT_FLAG_SLAB_256},
 #endif
 #if EVENT_SLAB_1K_AVAILABLE
-    if (slab == &event_slab_data_1k) {
-        event->flags |= EVENT_FLAG_SLAB_1K;
-        return;
-    }
+        {&event_slab_data_1k, EVENT_FLAG_SLAB_1K},
 #endif
 #if EVENT_SLAB_4K_AVAILABLE
-    if (slab == &event_slab_data_4k) {
-        event->flags |= EVENT_FLAG_SLAB_4K;
-        return;
-    }
+        {&event_slab_data_4k, EVENT_FLAG_SLAB_4K},
 #endif
+    };
+
+    /* 查找匹配的 slab 并设置标记 */
+    for (size_t i = 0; i < ARRAY_SIZE(slab_markers); i++) {
+        if (slab == slab_markers[i].slab) {
+            event->flags |= slab_markers[i].flag;
+            return;
+        }
+    }
+
+    /* 未找到匹配的 slab（不应该发生）*/
+    LOG_ERR("Unknown slab pointer %p, cannot set marker", slab);
 #else
+    ARG_UNUSED(event);
     ARG_UNUSED(slab);
 #endif
+}
+
+/**
+ * @brief 清理所有事件类型条目
+ *
+ * 释放所有事件类型的订阅者和相关资源。
+ */
+static void event_system_cleanup_event_types(void) {
+    /* SIL-2: 无条件清理所有事件类型条目（不以 name!=NULL 为条件），
+     * 避免 name 异常为 NULL 时订阅者数组不被清理 */
+    for (int type = 0; type < MAX_EVENT_TYPES; type++) {
+        event_type_entry_t* entry = &g_event_system.event_types[type];
+        k_mutex_lock(&entry->lock, K_FOREVER);
+        entry->name = NULL;
+        entry->subscriber_count = 0;
+        memset(entry->subscribers, 0, sizeof(entry->subscribers));
+        k_mutex_unlock(&entry->lock);
+    }
+}
+
+/**
+ * @brief 重置事件系统控制块
+ *
+ * 将控制块重置为初始状态。
+ */
+static void event_system_reset_control_block(void) {
+    /* SIL-2: 重置控制块 */
+    g_event_system.initialized = false;
+    g_event_system.total_events = 0;
+    atomic_set(&g_event_system.next_subscriber_id, 1);
+    g_event_system.event_queue = NULL;
+    /* 与未初始化态一致，避免将 shutdown 误判为 magic 损坏 */
+    g_event_system.magic = EVENT_SYSTEM_MAGIC_IDLE;
 }
 
 /**
@@ -210,8 +252,7 @@ static bool subscriber_id_in_use(uint32_t id) {
     for (int t = 0; t < MAX_EVENT_TYPES; t++) {
         event_type_entry_t* entry = &g_event_system.event_types[t];
         for (uint32_t i = 0; i < CONFIG_EVENT_MAX_SUBSCRIBERS; i++) {
-            if (entry->subscribers[i].is_active &&
-                entry->subscribers[i].subscriber_id == id) {
+            if (entry->subscribers[i].is_active && entry->subscribers[i].subscriber_id == id) {
                 return true;
             }
         }
@@ -391,27 +432,14 @@ event_status_t event_system_shutdown(void) {
     /* SIL-2: 反初始化事件队列，释放动态负载和 DROP_LOWEST scratch 缓冲区 */
     event_queue_deinit(g_event_system.event_queue);
 
-    /* SIL-2: 无条件清理所有事件类型条目（不以 name!=NULL 为条件），
-     * 避免 name 异常为 NULL 时订阅者数组不被清理 */
-    for (int type = 0; type < MAX_EVENT_TYPES; type++) {
-        event_type_entry_t* entry = &g_event_system.event_types[type];
-        k_mutex_lock(&entry->lock, K_FOREVER);
-        entry->name = NULL;
-        entry->subscriber_count = 0;
-        memset(entry->subscribers, 0, sizeof(entry->subscribers));
-        k_mutex_unlock(&entry->lock);
-    }
+    /* 清理所有事件类型条目 */
+    event_system_cleanup_event_types();
 
     /* SIL-2: 重置消息队列 */
     k_msgq_purge(&g_event_msgq);
 
-    /* SIL-2: 重置控制块 */
-    g_event_system.initialized = false;
-    g_event_system.total_events = 0;
-    atomic_set(&g_event_system.next_subscriber_id, 1);
-    g_event_system.event_queue = NULL;
-    /* 与未初始化态一致，避免将 shutdown 误判为 magic 损坏 */
-    g_event_system.magic = EVENT_SYSTEM_MAGIC_IDLE;
+    /* 重置控制块 */
+    event_system_reset_control_block();
 
     atomic_clear_bit(&g_init_lock, 0);
     LOG_INF("Event system shutdown complete");
@@ -535,7 +563,7 @@ event_status_t event_subscribe(event_type_t type, event_callback_t callback, voi
         return EVENT_ERR_INVALID_ARG;
     }
 
-    if (type >= MAX_EVENT_TYPES || callback == NULL) {
+    if (type >= MAX_EVENT_TYPES || callback == NULL || subscriber_id == NULL) {
         return EVENT_ERR_INVALID_ARG;
     }
 
@@ -683,13 +711,17 @@ event_status_t event_publish(const event_t* event) {
 
     if (atomic_get(&g_event_system.running) == 0) {
         atomic_dec(&g_publish_in_flight);
+#ifndef CONFIG_EVENT_SYSTEM_LOG_MINIMAL
         LOG_WRN("Event system not running, event dropped");
+#endif
         return EVENT_ERR_NOT_RUNNING;
     }
 
     if (event->type >= MAX_EVENT_TYPES) {
         atomic_dec(&g_publish_in_flight);
+#ifndef CONFIG_EVENT_SYSTEM_LOG_MINIMAL
         LOG_WRN("Invalid event type id %u (max %d)", (unsigned int) event->type, MAX_EVENT_TYPES);
+#endif
         return EVENT_ERR_INVALID_ARG;
     }
 
@@ -698,12 +730,13 @@ event_status_t event_publish(const event_t* event) {
      * 分发时 notify_subscribers 返回 NO_SUBSCRIBER，不会泄漏事件数据。 */
     if (g_event_system.event_types[event->type].name == NULL) {
         atomic_dec(&g_publish_in_flight);
+#ifndef CONFIG_EVENT_SYSTEM_LOG_MINIMAL
         LOG_WRN("Publishing to unregistered event type: %d", event->type);
+#endif
         return EVENT_ERR_NOT_FOUND;
     }
 
-    event_status_t st =
-        event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    event_status_t st = event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
     atomic_dec(&g_publish_in_flight);
     return st;
 }
@@ -739,8 +772,7 @@ event_status_t event_publish_from_isr(const event_t* event) {
         return EVENT_ERR_NOT_FOUND;
     }
 
-    event_status_t st =
-        event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
+    event_status_t st = event_queue_enqueue(g_event_system.event_queue, event, QUEUE_OVERFLOW_DROP_NEWEST, K_NO_WAIT);
     atomic_dec(&g_publish_in_flight);
     return st;
 }
@@ -914,8 +946,7 @@ event_status_t event_publish_copy_rt(event_type_t type, event_priority_t priorit
  *
  * @note 等同于 event_create_with_data_rt，明确 ISR 上下文使用
  */
-event_t* event_create_from_isr(event_type_t type, event_priority_t priority,
-                                const void* data, size_t data_len) {
+event_t* event_create_from_isr(event_type_t type, event_priority_t priority, const void* data, size_t data_len) {
     if (g_event_system.magic == EVENT_SYSTEM_MAGIC_IDLE) {
         return NULL;
     }
@@ -1073,18 +1104,23 @@ void event_free_data(event_t* event) {
             struct k_mem_slab* slab = NULL;
             switch (event->flags & EVENT_FLAG_SLAB_MASK) {
 #if EVENT_SLAB_256_AVAILABLE
-                case EVENT_FLAG_SLAB_256: slab = &event_slab_data_256; break;
+            case EVENT_FLAG_SLAB_256:
+                slab = &event_slab_data_256;
+                break;
 #endif
 #if EVENT_SLAB_1K_AVAILABLE
-                case EVENT_FLAG_SLAB_1K:  slab = &event_slab_data_1k;  break;
+            case EVENT_FLAG_SLAB_1K:
+                slab = &event_slab_data_1k;
+                break;
 #endif
 #if EVENT_SLAB_4K_AVAILABLE
-                case EVENT_FLAG_SLAB_4K:  slab = &event_slab_data_4k;  break;
+            case EVENT_FLAG_SLAB_4K:
+                slab = &event_slab_data_4k;
+                break;
 #endif
-                default:
-                    LOG_ERR("Unknown slab marker for ptr %p (flags=0x%02x)",
-                            event->data.ptr, event->flags);
-                    break;
+            default:
+                LOG_ERR("Unknown slab marker for ptr %p (flags=0x%02x)", event->data.ptr, event->flags);
+                break;
             }
             if (slab != NULL) {
                 k_mem_slab_free(slab, event->data.ptr);
