@@ -7,9 +7,9 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
-# Application tree rooted at this file's directory. When a product repo uses
-# add_subdirectory(framework), CMAKE_SOURCE_DIR points at the product root;
-# include paths and generated headers must still resolve inside framework/.
+# Directory that contains this framework's src/, prj.conf, etc. When this tree is
+# add_subdirectory()'d from a product repo, CMAKE_SOURCE_DIR is the outer repo root;
+# FW_APP_ROOT always points at the framework application tree (standalone: same as CMAKE_SOURCE_DIR).
 get_filename_component(FW_APP_ROOT "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
 
 # =============================================================================
@@ -79,10 +79,15 @@ message(STATUS "Project Version: ${PROJECT_VERSION}")
 # list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boards)
 
 # Find Zephyr package
-# For freestanding applications, explicitly specify ZEPHYR_BASE
-find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+# When a parent CMakeLists already ran find_package(Zephyr) + project() (e.g. product repo root),
+# skip here so the toolchain is not bootstrapped from a subdirectory (Windows host link issues).
+if(NOT ZEPHYR_GATEWAY_TOPLEVEL_BOOTSTRAP)
+    find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(zephyr_event_template VERSION ${PROJECT_VERSION})
+    project(zephyr_event_template VERSION ${PROJECT_VERSION})
+else()
+    message(STATUS "Zephyr already initialized by parent CMakeLists.txt; skipping find_package/project here.")
+endif()
 
 # =============================================================================
 # Git Information (Auto-detect)
