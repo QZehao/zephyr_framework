@@ -7,11 +7,6 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
-# Directory that contains this framework's src/, prj.conf, etc. When this tree is
-# add_subdirectory()'d from a product repo, CMAKE_SOURCE_DIR is the outer repo root;
-# FW_APP_ROOT always points at the framework application tree (standalone: same as CMAKE_SOURCE_DIR).
-get_filename_component(FW_APP_ROOT "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
-
 # =============================================================================
 # Load Zephyr Configuration
 # =============================================================================
@@ -54,7 +49,21 @@ message(STATUS "ZEPHYR_SDK_INSTALL_DIR: $ENV{ZEPHYR_SDK_INSTALL_DIR}")
 # (VERSION_MAJOR etc.); a semver line like 1.0.0 breaks configuration.
 # =============================================================================
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/APP_VERSION")
+# 版本文件：优先顶层应用仓库的 APP_VERSION（add_subdirectory 时 CMAKE_SOURCE_DIR 为应用根）；
+# 否则使用本目录（framework）下的 APP_VERSION（独立构建模板时二者相同）。
+if(EXISTS "${CMAKE_SOURCE_DIR}/APP_VERSION")
+	file(READ "${CMAKE_SOURCE_DIR}/APP_VERSION" PROJECT_VERSION_RAW)
+	string(STRIP "${PROJECT_VERSION_RAW}" PROJECT_VERSION_RAW)
+	if(PROJECT_VERSION_RAW MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+		set(PROJECT_VERSION_MAJOR ${CMAKE_MATCH_1})
+		set(PROJECT_VERSION_MINOR ${CMAKE_MATCH_2})
+		set(PROJECT_VERSION_PATCH ${CMAKE_MATCH_3})
+		set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+		message(STATUS "Project version from \${CMAKE_SOURCE_DIR}/APP_VERSION: ${PROJECT_VERSION}")
+	else()
+		message(FATAL_ERROR "APP_VERSION must contain a single line X.Y.Z, got: '${PROJECT_VERSION_RAW}'")
+	endif()
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/APP_VERSION")
 	file(READ "${CMAKE_CURRENT_SOURCE_DIR}/APP_VERSION" PROJECT_VERSION_RAW)
 	string(STRIP "${PROJECT_VERSION_RAW}" PROJECT_VERSION_RAW)
 	if(PROJECT_VERSION_RAW MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)")
@@ -62,6 +71,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/APP_VERSION")
 		set(PROJECT_VERSION_MINOR ${CMAKE_MATCH_2})
 		set(PROJECT_VERSION_PATCH ${CMAKE_MATCH_3})
 		set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+		message(STATUS "Project version from framework/APP_VERSION: ${PROJECT_VERSION}")
 	else()
 		message(FATAL_ERROR "APP_VERSION must contain a single line X.Y.Z, got: '${PROJECT_VERSION_RAW}'")
 	endif()
@@ -70,6 +80,7 @@ else()
 	set(PROJECT_VERSION_MINOR 0)
 	set(PROJECT_VERSION_PATCH 0)
 	set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+	message(STATUS "Project version default (no APP_VERSION): ${PROJECT_VERSION}")
 endif()
 
 message(STATUS "Project Version: ${PROJECT_VERSION}")
@@ -79,15 +90,10 @@ message(STATUS "Project Version: ${PROJECT_VERSION}")
 # list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boards)
 
 # Find Zephyr package
-# When a parent CMakeLists already ran find_package(Zephyr) + project() (e.g. product repo root),
-# skip here so the toolchain is not bootstrapped from a subdirectory (Windows host link issues).
-if(NOT ZEPHYR_GATEWAY_TOPLEVEL_BOOTSTRAP)
-    find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+# For freestanding applications, explicitly specify ZEPHYR_BASE
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-    project(zephyr_event_template VERSION ${PROJECT_VERSION})
-else()
-    message(STATUS "Zephyr already initialized by parent CMakeLists.txt; skipping find_package/project here.")
-endif()
+project(zephyr_event_template VERSION ${PROJECT_VERSION})
 
 # =============================================================================
 # Git Information (Auto-detect)
@@ -438,12 +444,12 @@ target_compile_definitions(app PRIVATE
 # =============================================================================
 
 target_include_directories(app PRIVATE
-    ${FW_APP_ROOT}/src
-    ${FW_APP_ROOT}/src/core
-    ${FW_APP_ROOT}/src/services
-    ${FW_APP_ROOT}/src/app
-    ${FW_APP_ROOT}/src/modules
-    ${FW_APP_ROOT}/src/modules_examples
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/services
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/modules
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/modules_examples
 )
 
 # =============================================================================
@@ -452,7 +458,7 @@ target_include_directories(app PRIVATE
 
 # Configure a version header file with build-time values
 configure_file(
-    ${FW_APP_ROOT}/src/app/app_version_config.h.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/app/app_version_config.h.in
     ${CMAKE_BINARY_DIR}/generated/app_version_config.h
     @ONLY
 )
