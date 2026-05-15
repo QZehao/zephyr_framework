@@ -22,8 +22,11 @@
 #include "data_bus_internal.h"
 #include "data_bus_memory.h"
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <stdio.h>
 #include <string.h>
+
+LOG_MODULE_REGISTER(data_bus_consumer, CONFIG_DATA_BUS_LOG_LEVEL);
 
 typedef struct {
 	bool active;
@@ -55,6 +58,8 @@ int data_bus_consumer_register(data_bus_channel_t *ch,
 	}
 
 	if (ch->consumer_count >= CONFIG_DATA_BUS_MAX_CONSUMERS_PER_CHANNEL) {
+		LOG_ERR("Channel '%s' consumer table full (max=%u)",
+			ch->name, CONFIG_DATA_BUS_MAX_CONSUMERS_PER_CHANNEL);
 		k_spin_unlock(&ch->lock, key);
 		return -ENOMEM;
 	}
@@ -76,6 +81,10 @@ int data_bus_consumer_register(data_bus_channel_t *ch,
 	ch->consumer_count++;
 
 	k_spin_unlock(&ch->lock, key);
+
+	LOG_INF("Consumer '%s' registered on '%s' (total=%u/%u)",
+		consumer->name, ch->name, ch->consumer_count,
+		CONFIG_DATA_BUS_MAX_CONSUMERS_PER_CHANNEL);
 
 	if (out_consumer != NULL) {
 		*out_consumer = consumer;
@@ -117,6 +126,7 @@ int data_bus_consumer_unregister(data_bus_consumer_t *consumer)
 	}
 
 	if (found_ch == NULL) {
+		LOG_WRN("Consumer unregister failed: not found");
 		k_mutex_unlock(&g_channels_lock);
 		return -EINVAL;
 	}
@@ -139,6 +149,9 @@ int data_bus_consumer_unregister(data_bus_consumer_t *consumer)
 	}
 
 	found_ch->consumer_count--;
+
+	LOG_INF("Consumer '%s' unregistered from '%s' (remain=%u)",
+		consumer->name, found_ch->name, found_ch->consumer_count);
 
 	k_spin_unlock(&found_ch->lock, key);
 	k_mutex_unlock(&g_channels_lock);
@@ -190,12 +203,18 @@ void data_bus_consumer_dispatch(data_bus_channel_t *ch, data_bus_block_t *block)
 	 * Add active_count so total references = 1 + active_count.
 	 * Each consumer gets an implicit reference.
 	 */
+	LOG_DBG("Dispatch ch='%s' seq=%u ref+%u=%d", ch->name, block->seq,
+		active_count, atomic_get(&block->ref_count));
+
 	atomic_add(&block->ref_count, active_count);
 
 	for (uint32_t i = 0; i < count; i++) {
 		if (!snaps[i].active || snaps[i].callback == NULL) {
 			continue;
 		}
+
+		LOG_DBG("  -> consumer[%u] manual_release=%d", i,
+			snaps[i].manual_release);
 
 		snaps[i].callback(ch, block, snaps[i].user_data);
 

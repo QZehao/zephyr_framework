@@ -22,7 +22,10 @@
 #include "data_bus_channel.h"
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
+#include <zephyr/logging/log.h>
 #include <string.h>
+
+LOG_MODULE_REGISTER(data_bus, CONFIG_DATA_BUS_LOG_LEVEL);
 
 /* ============================================================================
  * Global state
@@ -92,6 +95,9 @@ static void data_bus_dispatcher_thread(void *arg1, void *arg2, void *arg3)
 			k_spin_unlock(&ch->lock, key);
 
 			if (len == sizeof(block) && block != NULL) {
+				LOG_DBG("dispatch ch='%s' seq=%u len=%zu consumers=%u",
+					ch->name, block->seq, block->len, ch->consumer_count);
+
 				/* Dispatch to all consumers */
 				data_bus_consumer_dispatch(ch, block);
 
@@ -140,6 +146,9 @@ int data_bus_init(void)
 	k_thread_name_set(&g_dispatcher_thread_data, "data_bus_disp");
 
 	atomic_set(&g_initialized, 1);
+	LOG_INF("Data bus initialized (disp stack=%d prio=%d)",
+		CONFIG_DATA_BUS_DISPATCHER_STACK_SIZE,
+		CONFIG_DATA_BUS_DISPATCHER_PRIORITY);
 
 	return 0;
 }
@@ -203,6 +212,7 @@ int data_bus_deinit(void)
 	k_mutex_unlock(&g_channels_lock);
 
 	atomic_set(&g_initialized, 0);
+	LOG_INF("Data bus deinitialized");
 
 	return 0;
 }

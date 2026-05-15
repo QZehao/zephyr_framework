@@ -21,7 +21,10 @@
 #include "event_system.h"
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/logging/log.h>
 #include <string.h>
+
+LOG_MODULE_REGISTER(data_bus_bridge, CONFIG_DATA_BUS_LOG_LEVEL);
 
 /* Event type for data bus notifications */
 #ifndef EVENT_TYPE_DATA_BUS_AVAILABLE
@@ -55,6 +58,9 @@ void data_bus_event_bridge_notify(data_bus_channel_t *ch, uint32_t seq, size_t l
 
 	notification.seq = seq;
 	notification.len = (uint32_t)len;
+
+	LOG_DBG("Bridge notify ch='%s' seq=%u len=%u",
+		notification.channel_name, seq, (uint32_t)len);
 
 	event_publish_copy(EVENT_TYPE_DATA_BUS_AVAILABLE,
 			   EVENT_PRIORITY_NORMAL,

@@ -20,8 +20,11 @@
 #include "data_bus_memory.h"
 #include <zephyr/kernel.h>
 #include <zephyr/sys/__assert.h>
+#include <zephyr/logging/log.h>
 #include <stdio.h>
 #include <string.h>
+
+LOG_MODULE_REGISTER(data_bus_channel, CONFIG_DATA_BUS_LOG_LEVEL);
 
 /* ============================================================================
  * Channel object slab
@@ -134,6 +137,7 @@ int data_bus_channel_create(const char *name, data_bus_channel_t **out_channel)
 
 	/* Check for duplicate name */
 	if (find_in_table(name) != NULL) {
+		LOG_WRN("Channel '%s' already exists", name);
 		k_mutex_unlock(&g_channels_lock);
 		return -EEXIST;
 	}
@@ -148,6 +152,7 @@ int data_bus_channel_create(const char *name, data_bus_channel_t **out_channel)
 	data_bus_channel_t *ch = NULL;
 	int ret = k_mem_slab_alloc(&data_bus_channel_slab, (void **)&ch, K_NO_WAIT);
 	if (ret != 0) {
+		LOG_ERR("Channel slab exhausted (max=%u)", CONFIG_DATA_BUS_MAX_CHANNELS);
 		k_mutex_unlock(&g_channels_lock);
 		return -ENOMEM;
 	}
@@ -165,6 +170,8 @@ int data_bus_channel_create(const char *name, data_bus_channel_t **out_channel)
 
 	k_mutex_unlock(&g_channels_lock);
 
+	LOG_INF("Channel '%s' created (total=%u/%u)", name, g_channel_count,
+		CONFIG_DATA_BUS_MAX_CHANNELS);
 	*out_channel = ch;
 	return 0;
 }
@@ -185,6 +192,8 @@ int data_bus_channel_destroy(data_bus_channel_t *ch)
 	/* Check for active consumers */
 	for (uint32_t i = 0; i < ch->consumer_count; i++) {
 		if (ch->consumers[i].active) {
+			LOG_WRN("Channel '%s' destroy failed: active consumers remain",
+				ch->name);
 			k_mutex_unlock(&g_channels_lock);
 			return -EBUSY;
 		}
@@ -216,6 +225,8 @@ int data_bus_channel_destroy(data_bus_channel_t *ch)
 			break;
 		}
 	}
+
+	LOG_INF("Channel '%s' destroyed", ch->name);
 
 	/* Reset and free */
 	data_bus_channel_obj_reset(ch);
@@ -274,6 +285,8 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 		block = data_bus_mem_alloc(len);
 	}
 	if (block == NULL) {
+		LOG_ERR("Publish to '%s' failed: block allocation failed (len=%zu)",
+			ch->name, len);
 		k_spinlock_key_t fkey = k_spin_lock(&ch->lock);
 		ch->alloc_fail_count++;
 		k_spin_unlock(&ch->lock, fkey);
@@ -300,6 +313,8 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 	k_spin_unlock(&ch->lock, skey);
 
 	if (ret != sizeof(block)) {
+		LOG_WRN("Publish to '%s' dropped: queue full (depth=%u)",
+			ch->name, CONFIG_DATA_BUS_CHANNEL_QUEUE_DEPTH);
 		data_bus_mem_free(block);
 		k_spinlock_key_t fkey = k_spin_lock(&ch->lock);
 		ch->drop_count++;
@@ -307,6 +322,8 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 		k_spin_unlock(&ch->lock, fkey);
 		return -ENOBUFS;
 	}
+
+	LOG_DBG("Published to '%s' seq=%u len=%zu", ch->name, block->seq, len);
 
 	/* Signal dispatcher thread */
 	k_sem_give(&g_dispatcher_sem);
@@ -356,12 +373,17 @@ int data_bus_publish_block(data_bus_channel_t *ch, data_bus_block_t *block)
 	k_spin_unlock(&ch->lock, skey);
 
 	if (ret != sizeof(block)) {
+		LOG_WRN("publish_block to '%s' dropped: queue full (depth=%u)",
+			ch->name, CONFIG_DATA_BUS_CHANNEL_QUEUE_DEPTH);
 		k_spinlock_key_t fkey = k_spin_lock(&ch->lock);
 		ch->drop_count++;
 		ch->queue_full_count++;
 		k_spin_unlock(&ch->lock, fkey);
 		return -ENOBUFS;
 	}
+
+	LOG_DBG("publish_block to '%s' seq=%u len=%zu",
+		ch->name, block->seq, block->len);
 
 	/* Signal dispatcher */
 	k_sem_give(&g_dispatcher_sem);

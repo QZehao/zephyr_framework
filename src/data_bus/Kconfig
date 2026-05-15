@@ -84,4 +84,13 @@ config DATA_BUS_DEBUG_REFCNT
       Check abnormal ref_count during channel_destroy and deinit
       to help locate unpaired release causing slab exhaustion.
 
+config DATA_BUS_LOG_LEVEL
+    int "Log level"
+    default 3
+    range 0 4
+    depends on DATA_BUS
+    help
+      0=OFF, 1=ERROR, 2=WARNING, 3=INFO, 4=DEBUG
+      Set to 0 or 1 for production to reduce code size.
+
 endmenu

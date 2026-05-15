@@ -17,7 +17,10 @@
 #include "data_bus_memory.h"
 #include <zephyr/kernel.h>
 #include <zephyr/sys/__assert.h>
+#include <zephyr/logging/log.h>
 #include <string.h>
+
+LOG_MODULE_REGISTER(data_bus_mem, CONFIG_DATA_BUS_LOG_LEVEL);
 
 /* ============================================================================
  * Block struct slab (always enabled)
@@ -88,6 +91,8 @@ static data_bus_block_t *mem_alloc_impl(size_t len, bool isr)
 	/* ---- Step 1: allocate block struct from slab ---- */
 	int ret = k_mem_slab_alloc(&data_bus_block_slab, (void **)&block, K_NO_WAIT);
 	if (ret != 0) {
+		LOG_ERR("Block struct slab exhausted (max=%u)",
+			CONFIG_DATA_BUS_MAX_BLOCKS);
 		return NULL;
 	}
 
@@ -100,11 +105,13 @@ static data_bus_block_t *mem_alloc_impl(size_t len, bool isr)
 
 	if (data_ptr == NULL && !isr) {
 		/* Thread path: k_malloc fallback (only if slab disabled or exhausted) */
+		LOG_WRN("Data slab exhausted, falling back to k_malloc (len=%zu)", len);
 		data_ptr = k_malloc(len);
 		slab = NULL; /* mark as heap-allocated */
 	}
 
 	if (data_ptr == NULL) {
+		LOG_ERR("Data buffer allocation failed (len=%zu isr=%d)", len, isr);
 		/* Rollback: free block struct and fail */
 		k_mem_slab_free(&data_bus_block_slab, block);
 		return NULL;
@@ -183,6 +190,7 @@ void data_bus_block_release(data_bus_block_t *block)
 
 	if (prev == 1) {
 		/* Last reference: free data buffer and block struct */
+		LOG_DBG("Block freed (slab=%s)", block->slab ? "y" : "n");
 		if (block->ptr != NULL) {
 			free_data_buf(block->ptr, block->slab);
 		}
