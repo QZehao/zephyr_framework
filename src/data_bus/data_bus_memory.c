@@ -160,6 +160,16 @@ void data_bus_block_release(data_bus_block_t *block)
 	}
 
 	atomic_val_t prev = atomic_dec(&block->ref_count);
+
+	if (prev == 0) {
+		/* Release on ref_count 0 would underflow; restore and bail */
+		(void)atomic_inc(&block->ref_count);
+#if IS_ENABLED(CONFIG_DATA_BUS_DEBUG_REFCNT)
+		__ASSERT(0, "data_bus_block_release: ref_count underflow");
+#endif
+		return;
+	}
+
 	if (prev == 1) {
 		/* Last reference: free data buffer and block struct */
 		if (block->ptr != NULL) {

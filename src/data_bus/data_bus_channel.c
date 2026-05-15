@@ -8,6 +8,7 @@
 #include "data_bus_memory.h"
 #include <zephyr/kernel.h>
 #include <zephyr/sys/__assert.h>
+#include <stdio.h>
 #include <string.h>
 
 /* ============================================================================
@@ -55,11 +56,20 @@ int data_bus_channel_obj_init(data_bus_channel_t *ch, const char *name)
 
 	memset(ch, 0, sizeof(*ch));
 
-	ch->name = name;
+	{
+		int name_ret = snprintf(ch->name_storage, sizeof(ch->name_storage), "%s", name);
+
+		if (name_ret < 0 || (size_t)name_ret >= sizeof(ch->name_storage)) {
+			return -EINVAL;
+		}
+	}
+
+	ch->name = ch->name_storage;
 	ring_buf_init(&ch->queue, sizeof(ch->queue_buf), ch->queue_buf);
 	/* k_spinlock zero-initialized is valid */
 	ch->active = true;
 	ch->next_seq = 0;
+	atomic_set(&ch->dispatch_hold, 0);
 
 	return 0;
 }
@@ -75,6 +85,9 @@ void data_bus_channel_obj_reset(data_bus_channel_t *ch)
 	while (true) {
 		k_spinlock_key_t key = k_spin_lock(&ch->lock);
 		size_t len = ring_buf_get(&ch->queue, (uint8_t *)&block, sizeof(block));
+		if (len == sizeof(block) && block != NULL) {
+			ch->queue_used--;
+		}
 		k_spin_unlock(&ch->lock, key);
 
 		if (len != sizeof(block) || block == NULL) {
@@ -175,6 +188,11 @@ int data_bus_channel_destroy(data_bus_channel_t *ch)
 		return -EAGAIN;
 	}
 
+	if (atomic_get(&ch->dispatch_hold) != 0) {
+		k_mutex_unlock(&g_channels_lock);
+		return -EAGAIN;
+	}
+
 	/* Remove from table */
 	for (uint32_t i = 0; i < g_channel_count; i++) {
 		if (g_channels[i] == ch) {
@@ -244,7 +262,9 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 		block = data_bus_mem_alloc(len);
 	}
 	if (block == NULL) {
+		k_spinlock_key_t fkey = k_spin_lock(&ch->lock);
 		ch->alloc_fail_count++;
+		k_spin_unlock(&ch->lock, fkey);
 		return -ENOMEM;
 	}
 
@@ -269,8 +289,10 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 
 	if (ret != sizeof(block)) {
 		data_bus_mem_free(block);
+		k_spinlock_key_t fkey = k_spin_lock(&ch->lock);
 		ch->drop_count++;
 		ch->queue_full_count++;
+		k_spin_unlock(&ch->lock, fkey);
 		return -ENOBUFS;
 	}
 
@@ -322,8 +344,10 @@ int data_bus_publish_block(data_bus_channel_t *ch, data_bus_block_t *block)
 	k_spin_unlock(&ch->lock, skey);
 
 	if (ret != sizeof(block)) {
+		k_spinlock_key_t fkey = k_spin_lock(&ch->lock);
 		ch->drop_count++;
 		ch->queue_full_count++;
+		k_spin_unlock(&ch->lock, fkey);
 		return -ENOBUFS;
 	}
 

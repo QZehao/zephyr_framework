@@ -59,7 +59,7 @@ typedef void (*data_bus_consume_fn_t)(data_bus_channel_t* ch,
  * ============================================================================ */
 
 typedef struct {
-    const char*             name;           /**< Consumer name (for debugging) */
+    const char*             name;           /**< Consumer name (for debugging); copied on register */
     data_bus_consume_mode_t mode;           /**< REF (default) or COPY */
     data_bus_consume_fn_t   callback;       /**< Data arrival callback */
     void*                   user_data;      /**< Callback user data */
@@ -86,6 +86,7 @@ struct data_bus_block {
 
 struct data_bus_consumer {
     const char*             name;
+    char                    name_storage[CONFIG_DATA_BUS_CHANNEL_NAME_MAX];
     data_bus_consume_mode_t mode;
     data_bus_consume_fn_t   callback;
     void*                   user_data;
@@ -102,6 +103,7 @@ struct data_bus_consumer {
 
 struct data_bus_channel {
     const char*     name;
+    char            name_storage[CONFIG_DATA_BUS_CHANNEL_NAME_MAX];
     struct ring_buf queue;              /**< Ring buffer storing data_bus_block_t* */
     uint8_t         queue_buf[CONFIG_DATA_BUS_CHANNEL_QUEUE_DEPTH * sizeof(void*)];
     struct k_spinlock lock;
@@ -117,6 +119,7 @@ struct data_bus_channel {
     uint32_t        alloc_fail_count;
     uint32_t        peak_queue_usage;   /**< Historical max used slots */
     uint32_t        queue_used;         /**< Current used slots (protected by lock) */
+    atomic_t        dispatch_hold;      /**< Dispatcher pins channel while dequeuing/dispatching */
 };
 
 /* ============================================================================
@@ -166,7 +169,7 @@ int data_bus_deinit(void);
 /**
  * @brief Create a named channel
  *
- * @param name        Channel name (globally unique, NUL-terminated)
+ * @param name        Channel name (globally unique, NUL-terminated); copied into the channel
  * @param out_channel Output: channel object pointer
  * @return 0 on success, -EEXIST if name already exists, -EINVAL if name invalid,
  *         -ENOMEM if channel pool exhausted
@@ -182,7 +185,8 @@ int data_bus_channel_create(const char* name,
 /**
  * @brief Destroy a channel
  *
- * Returns -EBUSY if active consumers remain, -EAGAIN if queue not empty.
+ * Returns -EBUSY if active consumers remain, -EAGAIN if queue not empty or the
+ * dispatcher is still delivering a block for this channel (retry later).
  * Caller must unregister all consumers and wait for queue to drain.
  *
  * @return 0 on success, negative errno on failure

@@ -7,7 +7,17 @@
 #include "data_bus_internal.h"
 #include "data_bus_memory.h"
 #include <zephyr/kernel.h>
+#include <stdio.h>
 #include <string.h>
+
+typedef struct {
+	bool active;
+	data_bus_consume_mode_t mode;
+	data_bus_consume_fn_t callback;
+	void *user_data;
+	void *copy_buf;
+	size_t copy_buf_size;
+} data_bus_consumer_snap_t;
 
 /* ============================================================================
  * Public API: consumer registration
@@ -42,7 +52,13 @@ int data_bus_consumer_register(data_bus_channel_t *ch,
 	}
 
 	data_bus_consumer_t *consumer = &ch->consumers[ch->consumer_count];
-	consumer->name = cfg->name;
+
+	if (cfg->name != NULL) {
+		(void)snprintf(consumer->name_storage, sizeof(consumer->name_storage), "%s", cfg->name);
+	} else {
+		consumer->name_storage[0] = '\0';
+	}
+	consumer->name = consumer->name_storage;
 	consumer->mode = cfg->mode;
 	consumer->callback = cfg->callback;
 	consumer->user_data = cfg->user_data;
@@ -107,6 +123,7 @@ int data_bus_consumer_unregister(data_bus_consumer_t *consumer)
 	/* Compact the array by shifting remaining consumers */
 	for (uint32_t i = found_idx; i < found_ch->consumer_count - 1; i++) {
 		found_ch->consumers[i] = found_ch->consumers[i + 1];
+		found_ch->consumers[i].name = found_ch->consumers[i].name_storage;
 	}
 
 	/* Clear the last slot */
@@ -133,38 +150,53 @@ void data_bus_consumer_dispatch(data_bus_channel_t *ch, data_bus_block_t *block)
 		return;
 	}
 
-	/* Snapshot consumer count under lock */
+	data_bus_consumer_snap_t snaps[CONFIG_DATA_BUS_MAX_CONSUMERS_PER_CHANNEL];
+
 	k_spinlock_key_t key = k_spin_lock(&ch->lock);
 	uint32_t count = ch->consumer_count;
+	if (count > CONFIG_DATA_BUS_MAX_CONSUMERS_PER_CHANNEL) {
+		count = CONFIG_DATA_BUS_MAX_CONSUMERS_PER_CHANNEL;
+	}
+	for (uint32_t i = 0; i < count; i++) {
+		data_bus_consumer_t *c = &ch->consumers[i];
+
+		snaps[i].active = c->active;
+		snaps[i].mode = c->mode;
+		snaps[i].callback = c->callback;
+		snaps[i].user_data = c->user_data;
+		snaps[i].copy_buf = c->copy_buf;
+		snaps[i].copy_buf_size = c->copy_buf_size;
+	}
 	k_spin_unlock(&ch->lock, key);
 
 	for (uint32_t i = 0; i < count; i++) {
-		data_bus_consumer_t *consumer = &ch->consumers[i];
-
-		if (!consumer->active || consumer->callback == NULL) {
+		if (!snaps[i].active || snaps[i].callback == NULL) {
 			continue;
 		}
 
-		if (consumer->mode == DATA_BUS_MODE_REF) {
+		if (snaps[i].mode == DATA_BUS_MODE_REF) {
 			/* REF mode: share the original block */
 			data_bus_block_acquire(block);
-			consumer->callback(ch, block, consumer->user_data);
+			snaps[i].callback(ch, block, snaps[i].user_data);
 			/* Consumer is responsible for calling release() */
 		} else {
 			/* COPY mode: copy data to consumer's buffer */
 			data_bus_block_t copy;
+
 			memset(&copy, 0, sizeof(copy));
-			copy.ptr = consumer->copy_buf;
-			copy.len = (block->len < consumer->copy_buf_size)
-					   ? block->len
-					   : consumer->copy_buf_size;
+			copy.ptr = snaps[i].copy_buf;
+			copy.len = (block->len < snaps[i].copy_buf_size) ? block->len : snaps[i].copy_buf_size;
 			memcpy(copy.ptr, block->ptr, copy.len);
 
-			consumer->callback(ch, &copy, consumer->user_data);
+			snaps[i].callback(ch, &copy, snaps[i].user_data);
 			/* copy is on stack, no release needed */
 		}
 
-		/* Update last consumed sequence */
-		consumer->last_seq = block->seq;
+		k_spinlock_key_t lk = k_spin_lock(&ch->lock);
+		if (i < ch->consumer_count && ch->consumers[i].callback == snaps[i].callback &&
+		    ch->consumers[i].user_data == snaps[i].user_data && ch->consumers[i].mode == snaps[i].mode) {
+			ch->consumers[i].last_seq = block->seq;
+		}
+		k_spin_unlock(&ch->lock, lk);
 	}
 }

@@ -10,6 +10,7 @@
 #include "data_bus_channel.h"
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
+#include <string.h>
 
 /* ============================================================================
  * Global state
@@ -46,19 +47,35 @@ static void data_bus_dispatcher_thread(void *arg1, void *arg2, void *arg3)
 			break;
 		}
 
-		/* Scan all channels */
-		for (uint32_t i = 0; i < g_channel_count; i++) {
-			data_bus_channel_t *ch = g_channels[i];
-			if (ch == NULL || !ch->active) {
+		/* Snapshot channel pointers and pin each (prevents destroy slab-free vs UAF) */
+		data_bus_channel_t *snap[CONFIG_DATA_BUS_MAX_CHANNELS];
+
+		k_mutex_lock(&g_channels_lock, K_FOREVER);
+		uint32_t n = g_channel_count;
+		for (uint32_t i = 0; i < n; i++) {
+			snap[i] = g_channels[i];
+			if (snap[i] != NULL) {
+				(void)atomic_inc(&snap[i]->dispatch_hold);
+			}
+		}
+		k_mutex_unlock(&g_channels_lock);
+
+		for (uint32_t i = 0; i < n; i++) {
+			data_bus_channel_t *ch = snap[i];
+
+			if (ch == NULL) {
 				continue;
 			}
 
 			data_bus_block_t *block = NULL;
+			size_t len = 0;
 
 			k_spinlock_key_t key = k_spin_lock(&ch->lock);
-			size_t len = ring_buf_get(&ch->queue, (uint8_t *)&block, sizeof(block));
-			if (len == sizeof(block) && block != NULL) {
-				ch->queue_used--;
+			if (ch->active) {
+				len = ring_buf_get(&ch->queue, (uint8_t *)&block, sizeof(block));
+				if (len == sizeof(block) && block != NULL) {
+					ch->queue_used--;
+				}
 			}
 			k_spin_unlock(&ch->lock, key);
 
@@ -69,6 +86,10 @@ static void data_bus_dispatcher_thread(void *arg1, void *arg2, void *arg3)
 				/* Release bus reference */
 				data_bus_block_release(block);
 			}
+
+			k_mutex_lock(&g_channels_lock, K_FOREVER);
+			(void)atomic_dec(&ch->dispatch_hold);
+			k_mutex_unlock(&g_channels_lock);
 		}
 	}
 }
