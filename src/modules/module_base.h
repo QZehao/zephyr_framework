@@ -1,6 +1,6 @@
 /**
  * @file module_base.h
- * @brief 模块基类接口头文件 (Base Module Interface Header)
+ * @brief 模块基类接口头文件
  *
  * 所有业务模块的抽象接口定义。
  * 
@@ -37,7 +37,7 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * 类型定义 (Type Definitions)
+ * 类型定义
  * ============================================================================= */
 
 /**
@@ -93,10 +93,8 @@ typedef struct {
      * 未启用或未使用时可置 NULL。
      *
      * 关于 MODULE_MANAGER_DEPENDS_LIST_MAX / CONFIG_MODULE_MANAGER_DEPENDS_LIST_MAX：
-     * - 中文：表示「单个模块」在 depends_on 里最多列出多少个直接依赖名（不含末尾 NULL），
-     *   管理器遍历时有上限以防未正确终止；不是全系统模块个数，也不是依赖链深度。
-     * - EN: Upper bound on direct dependency names per module (excluding the trailing
-     *   NULL); iterate guard only. Not total module count, not dependency depth.
+     * 表示「单个模块」在 depends_on 里最多列出多少个直接依赖名（不含末尾 NULL），
+     * 管理器遍历时有上限以防未正确终止；不是全系统模块个数，也不是依赖链深度。
      */
     const char* const* depends_on;
     int (*init)(void* config);           /**< 初始化函数指针 */
@@ -144,7 +142,7 @@ typedef struct {
 } module_info_t;
 
 /* =============================================================================
- * 模块辅助宏 (Module Helper Macros)
+ * 模块辅助宏
  * ============================================================================= */
 
 /**

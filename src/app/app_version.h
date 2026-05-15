@@ -24,10 +24,10 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * Version Information (Auto-generated from CMake)
+ * 版本信息（由 CMake 自动生成）
  * ============================================================================= */
 
-/* Version numbers */
+/* 版本号 */
 #ifndef PROJECT_VERSION_MAJOR
 #define PROJECT_VERSION_MAJOR 1
 #endif
@@ -40,7 +40,7 @@ extern "C" {
 #define PROJECT_VERSION_PATCH 0
 #endif
 
-/* Version string */
+/* 版本字符串 */
 #ifndef PROJECT_VERSION
 #define PROJECT_VERSION "1.0.0"
 #endif
@@ -51,7 +51,7 @@ extern "C" {
 #define APP_VERSION_PATCH  PROJECT_VERSION_PATCH
 #define APP_VERSION_STRING PROJECT_VERSION
 
-/* Git information (auto-generated) */
+/* Git 信息（自动生成）*/
 #ifndef GIT_COMMIT_HASH
 #define GIT_COMMIT_HASH "unknown"
 #endif
@@ -68,7 +68,7 @@ extern "C" {
 #define GIT_DIRTY 0
 #endif
 
-/* Build information */
+/* 构建信息 */
 #ifndef BUILD_TIMESTAMP
 #define BUILD_TIMESTAMP __DATE__ " " __TIME__
 #endif
@@ -93,7 +93,7 @@ extern "C" {
 #endif
 #endif
 
-/* Compiler information */
+/* 编译器信息 */
 #define COMPILER_NAME                         "GCC"
 #define COMPILER_VERSION                      __VERSION__
 
@@ -109,7 +109,7 @@ extern "C" {
 
 #define VERSION_PATCH(version)                ((version) & 0xFF)
 
-/* Current version as encoded value */
+/* 当前版本编码值 */
 #define APP_VERSION_CODE                      VERSION_ENCODE(PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, PROJECT_VERSION_PATCH)
 
 /* =============================================================================
@@ -134,80 +134,80 @@ extern "C" {
  * ============================================================================= */
 
 /**
- * @brief Get version string
- * @param buffer 输出缓冲，建议至少 VERSION_STRING_MAX_LEN 字节（小于该值将失败）
- * @param size buffer 大小
- * @return APP_OK 成功；参数非法或缓冲过小为 APP_ERR_INVALID_PARAM（见 app_config.h）
+ * @brief 获取版本字符串
+ * @param buffer 输出缓冲区，建议至少 VERSION_STRING_MAX_LEN 字节（小于该值将失败）
+ * @param size 缓冲区大小
+ * @return APP_OK 成功；参数非法或缓冲区过小为 APP_ERR_INVALID_PARAM（见 app_config.h）
  */
 int app_version_get_string(char* buffer, size_t size);
 
 /**
- * @brief Get full version information string
- * @param buffer 输出缓冲，建议至少 VERSION_INFO_STRING_MAX_LEN 字节
- * @param size buffer 大小
- * @return APP_OK 成功；参数非法或缓冲过小为 APP_ERR_INVALID_PARAM
+ * @brief 获取完整版本信息字符串
+ * @param buffer 输出缓冲区，建议至少 VERSION_INFO_STRING_MAX_LEN 字节
+ * @param size 缓冲区大小
+ * @return APP_OK 成功；参数非法或缓冲区过小为 APP_ERR_INVALID_PARAM
  */
 int app_version_get_info_string(char* buffer, size_t size);
 
 /**
- * @brief Get encoded version code
- * @return Version code (encoded major.minor.patch)
+ * @brief 获取编码后的版本号
+ * @return 版本编码值（编码后的 major.minor.patch）
  */
 uint32_t app_version_get_code(void);
 
 /**
- * @brief Get major version
- * @return Major version number
+ * @brief 获取主版本号
+ * @return 主版本号
  */
 uint8_t app_version_get_major(void);
 
 /**
- * @brief Get minor version
- * @return Minor version number
+ * @brief 获取次版本号
+ * @return 次版本号
  */
 uint8_t app_version_get_minor(void);
 
 /**
- * @brief Get patch version
- * @return Patch version number
+ * @brief 获取补丁版本号
+ * @return 补丁版本号
  */
 uint8_t app_version_get_patch(void);
 
 /**
- * @brief Get git commit hash
- * @return Git commit hash string
+ * @brief 获取 Git 提交哈希
+ * @return Git 提交哈希字符串
  */
 const char* app_version_get_git_commit(void);
 
 /**
- * @brief Get git branch
- * @return Git branch string
+ * @brief 获取 Git 分支
+ * @return Git 分支字符串
  */
 const char* app_version_get_git_branch(void);
 
 /**
- * @brief Get build timestamp
- * @return Build timestamp string
+ * @brief 获取构建时间戳
+ * @return 构建时间戳字符串
  */
 const char* app_version_get_build_timestamp(void);
 
 /**
- * @brief Get build target
- * @return Build target string
+ * @brief 获取构建目标
+ * @return 构建目标字符串
  */
 const char* app_version_get_build_target(void);
 
 /**
- * @brief Check if running version matches expected version
- * @param major Expected major version
- * @param minor Expected minor version
- * @param patch Expected patch version
- * @return true if versions match, false otherwise
+ * @brief 检查运行版本是否与预期版本匹配
+ * @param major 预期主版本号
+ * @param minor 预期次版本号
+ * @param patch 预期补丁版本号
+ * @return 版本匹配返回 true，否则返回 false
  */
 bool app_version_check(uint8_t major, uint8_t minor, uint8_t patch);
 
 /**
- * @brief Print version information to log
+ * @brief 打印版本信息到日志
  */
 void app_version_print(void);
 

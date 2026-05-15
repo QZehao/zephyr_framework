@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * Log Level Definitions
+ * 日志级别定义
  * ============================================================================= */
 
 typedef enum {
@@ -37,19 +37,19 @@ typedef enum {
 } sys_log_level_t;
 
 /* =============================================================================
- * Log destination (bitmask; OR together)
+ * 日志目标（位掩码；可 OR 组合）
  * ============================================================================= */
 
 typedef uint32_t sys_log_dest_mask_t;
 
 #define SYS_LOG_DEST_CONSOLE (1U << 0)
 #define SYS_LOG_DEST_MEMORY  (1U << 1)
-#define SYS_LOG_DEST_RTT     (1U << 2) /* SEGGER RTT when CONFIG_SEGGER_RTT */
-#define SYS_LOG_DEST_UART    (1U << 3) /* Same printk path as console on typical boards */
+#define SYS_LOG_DEST_RTT     (1U << 2) /* SEGGER RTT（当 CONFIG_SEGGER_RTT 时）*/
+#define SYS_LOG_DEST_UART    (1U << 3) /* 典型开发板上与控制台共用 printk 路径 */
 #define SYS_LOG_DEST_ALL     0xFFu
 
 /* =============================================================================
- * Log Entry Structure
+ * 日志条目结构
  * ============================================================================= */
 
 #define SYS_LOG_MSG_MAX_LEN  128
@@ -57,12 +57,12 @@ typedef uint32_t sys_log_dest_mask_t;
 typedef struct {
     uint32_t        timestamp;
     sys_log_level_t level;
-    char            module_name[32]; /* SIL-2: 存储模块名称副本而非指针 */
+    char            module_name[32]; /* SIL-2：存储模块名称副本而非指针 */
     char            message[SYS_LOG_MSG_MAX_LEN];
 } sys_log_entry_t;
 
 /* =============================================================================
- * Configuration
+ * 配置
  * ============================================================================= */
 
 typedef struct {
@@ -76,76 +76,76 @@ typedef struct {
 } sys_log_config_t;
 
 /* =============================================================================
- * API Functions
+ * API 函数
  * ============================================================================= */
 
 /**
- * @brief Initialize logging system
- * @param config Configuration structure
- * @return 0 on success, negative error code on failure
+ * @brief 初始化日志系统
+ * @param config 配置结构体
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_log_init(const sys_log_config_t* config);
 
 /**
- * @brief Set log level for a module
- * @param module Module name
- * @param level Log level
+ * @brief 设置模块日志级别
+ * @param module 模块名称
+ * @param level 日志级别
  */
 void sys_log_set_level(const char* module, sys_log_level_t level);
 
 /**
- * @brief Get current log level
- * @param module Module name
- * @return Current log level
+ * @brief 获取当前日志级别
+ * @param module 模块名称
+ * @return 当前日志级别
  */
 sys_log_level_t sys_log_get_level(const char* module);
 
 /**
- * @brief Enable/disable log destination(s)
- * @param dest Bitmask (one or more SYS_LOG_DEST_* bits, or SYS_LOG_DEST_ALL)
- * @param enable true to enable, false to disable
+ * @brief 启用/禁用日志目标
+ * @param dest 位掩码（一个或多个 SYS_LOG_DEST_* 位，或 SYS_LOG_DEST_ALL）
+ * @param enable true 启用，false 禁用
  */
 void sys_log_set_destination(sys_log_dest_mask_t dest, bool enable);
 
 /**
- * @brief Log a message
- * @param level Log level
- * @param module Module name
- * @param format Printf-style format string
- * @param ... Format arguments
+ * @brief 记录日志消息
+ * @param level 日志级别
+ * @param module 模块名称
+ * @param format printf 风格格式字符串
+ * @param ... 格式参数
  */
 void sys_log_print(sys_log_level_t level, const char* module, const char* format, ...);
 
 /**
- * @brief Log a message with timestamp
- * @param level Log level
- * @param module Module name
- * @param format Printf-style format string
- * @param ... Format arguments
+ * @brief 记录带时间戳的日志消息
+ * @param level 日志级别
+ * @param module 模块名称
+ * @param format printf 风格格式字符串
+ * @param ... 格式参数
  */
 void sys_log_print_ts(sys_log_level_t level, const char* module, const char* format, ...);
 
 /**
- * @brief Log binary data
- * @param level Log level
- * @param module Module name
- * @param data Pointer to data
- * @param len Data length
- * @param ascii Show ASCII representation
+ * @brief 记录二进制数据
+ * @param level 日志级别
+ * @param module 模块名称
+ * @param data 数据指针
+ * @param len 数据长度
+ * @param ascii 显示 ASCII 表示
  */
 void sys_log_hexdump(sys_log_level_t level, const char* module, const void* data, size_t len, bool ascii);
 
 /**
- * @brief Get log entries from memory buffer
- * @param entries Output buffer for entries
- * @param count Number of entries to retrieve
- * @param oldest_first true to get oldest entries first
- * @return Number of entries retrieved
+ * @brief 从内存缓冲区获取日志条目
+ * @param entries 输出条目缓冲区
+ * @param count 要获取的条目数
+ * @param oldest_first true 表示先获取最旧的条目
+ * @return 获取的条目数
  */
 uint32_t sys_log_get_entries(sys_log_entry_t* entries, uint32_t count, bool oldest_first);
 
 /**
- * @brief Clear log memory buffer
+ * @brief 清空日志内存缓冲区
  */
 void sys_log_clear_buffer(void);
 
@@ -157,13 +157,13 @@ void sys_log_clear_buffer(void);
 uint32_t sys_log_get_count(void);
 
 /**
- * @brief Dump logs to console (requires CONSOLE and/or UART destination enabled)
- * @param level_filter Minimum level to display
+ * @brief 将日志转储到控制台（需要启用 CONSOLE 和/或 UART 目标）
+ * @param level_filter 要显示的最低级别
  */
 void sys_log_dump(sys_log_level_t level_filter);
 
 /* =============================================================================
- * Convenience Macros
+ * 便捷宏
  * ============================================================================= */
 
 #define LOG_E(module, fmt, ...)          sys_log_print(SYS_LOG_LEVEL_ERR, module, fmt, ##__VA_ARGS__)

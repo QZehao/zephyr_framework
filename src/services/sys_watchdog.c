@@ -49,7 +49,7 @@ LOG_MODULE_REGISTER(sys_watchdog, CONFIG_SYS_LOG_LEVEL);
 #endif
 
 /* =============================================================================
- * Internal Definitions
+ * 内部定义
  * ============================================================================= */
 
 #ifndef CONFIG_SYS_WATCHDOG_TIMEOUT_MS
@@ -61,10 +61,10 @@ LOG_MODULE_REGISTER(sys_watchdog, CONFIG_SYS_LOG_LEVEL);
 #endif
 
 #define MAX_MONITORED_THREADS CONFIG_MAX_MODULES
-#define WDT_FEED_MARGIN_MS    1000 /* Feed at least 1 second before expiry */
+#define WDT_FEED_MARGIN_MS    1000 /* 在到期前至少 1 秒喂狗 */
 
 /* =============================================================================
- * Internal Data Structures
+ * 内部数据结构
  * ============================================================================= */
 
 typedef struct {
@@ -98,13 +98,13 @@ typedef struct {
 } wdt_cb_t;
 
 /* =============================================================================
- * Static Variables
+ * 静态变量
  * ============================================================================= */
 
 static wdt_cb_t g_wdt;
 
 /* =============================================================================
- * Forward Declarations
+ * 前置声明
  * ============================================================================= */
 
 static void wdt_monitor_thread(void* p1, void* p2, void* p3);
@@ -112,7 +112,7 @@ static void wdt_feed_internal(void);
 static void wdt_expire_handler(void);
 
 /* =============================================================================
- * Core API Implementation
+ * 核心 API 实现
  * ============================================================================= */
 
 int sys_wdt_init(const wdt_config_t* config) {
@@ -120,7 +120,7 @@ int sys_wdt_init(const wdt_config_t* config) {
 
     memset(&g_wdt, 0, sizeof(g_wdt));
 
-    /* Set default or provided config */
+    /* 设置默认或提供的配置 */
     if (config != NULL) {
         g_wdt.config = *config;
     } else {
@@ -136,7 +136,7 @@ int sys_wdt_init(const wdt_config_t* config) {
         g_wdt.config.name = "sys_wdt";
     }
 
-    /* Initialize synchronization primitives */
+    /* 初始化同步原语 */
     k_mutex_init(&g_wdt.lock);
     k_sem_init(&g_wdt.feed_sem, 0, 1);
 
@@ -144,7 +144,7 @@ int sys_wdt_init(const wdt_config_t* config) {
     g_wdt.start_time = k_uptime_get_32();
     g_wdt.last_feed_time = g_wdt.start_time;
 
-    /* Initialize hardware watchdog if configured */
+    /* 如配置则初始化硬件看门狗 */
 #ifdef CONFIG_WATCHDOG
     if (g_wdt.config.mode == WDT_MODE_HARDWARE || g_wdt.config.mode == WDT_MODE_DUAL) {
         /* SIL-2: 尝试获取看门狗设备 */
@@ -198,9 +198,9 @@ int sys_wdt_start(void) {
     g_wdt.status = WDT_STATUS_RUNNING;
     g_wdt.last_feed_time = k_uptime_get_32();
 
-    /* Create monitor thread */
+    /* 创建监控线程 */
     k_thread_create(&g_wdt.monitor_thread, g_wdt.monitor_stack, K_THREAD_STACK_SIZEOF(g_wdt.monitor_stack),
-                    wdt_monitor_thread, NULL, NULL, NULL, 5, /* Priority */
+                    wdt_monitor_thread, NULL, NULL, NULL, 5, /* 优先级 */
                     0, K_FOREVER);
 
     k_thread_name_set(&g_wdt.monitor_thread, "wdt_mon");
@@ -285,7 +285,7 @@ wdt_status_t sys_wdt_get_status(void) {
 }
 
 /* =============================================================================
- * Thread Monitoring API
+ * 线程监控 API
  * ============================================================================= */
 
 int sys_wdt_monitor_thread(k_tid_t thread_id, const char* thread_name, uint32_t max_idle_ms) {
@@ -307,7 +307,7 @@ int sys_wdt_monitor_thread(k_tid_t thread_id, const char* thread_name, uint32_t 
         return -ENOMEM;
     }
 
-    /* Find empty slot or existing thread */
+    /* 查找空槽位或现有线程 */
     for (uint32_t i = 0; i < MAX_MONITORED_THREADS; i++) {
         if (!g_wdt.threads[i].is_monitored) {
             g_wdt.threads[i].thread_id = thread_id;
@@ -372,11 +372,11 @@ int sys_wdt_thread_alive(k_tid_t thread_id) {
     }
 
     k_mutex_unlock(&g_wdt.lock);
-    return -ENOENT; /* Thread not being monitored */
+    return -ENOENT; /* 线程未被监控 */
 }
 
 /* =============================================================================
- * Statistics & Debug API
+ * 统计与调试 API
  * ============================================================================= */
 
 void sys_wdt_get_stats(wdt_stats_t* stats) {
@@ -423,7 +423,7 @@ void sys_wdt_simulate_expire(void) {
 }
 
 /* =============================================================================
- * Internal Functions
+ * 内部函数
  * ============================================================================= */
 
 static void wdt_monitor_thread(void* p1, void* p2, void* p3) {

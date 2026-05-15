@@ -1,6 +1,6 @@
 /**
  * @file event_dispatcher.h
- * @brief 事件分发器头文件 (Event Dispatcher Header)
+ * @brief 事件分发器头文件
  *
  * 高性能事件分发器，支持优先级调度和统计功能。
  * 
@@ -35,10 +35,10 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * 配置验证宏 (Configuration Validation Macros)
+ * 配置验证宏
  * ============================================================================= */
 
-/** 最小合理栈大小 (256 字节) */
+/** 最小合理栈大小（256 字节） */
 #ifndef EVENT_DISPATCHER_MIN_STACK_SIZE
 #define EVENT_DISPATCHER_MIN_STACK_SIZE 256U
 #endif
@@ -79,7 +79,7 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * 类型定义 (Type Definitions)
+ * 类型定义
  * ============================================================================= */
 
 /**
@@ -129,7 +129,7 @@ typedef struct {
 typedef bool (*event_filter_t)(const event_t* event, void* user_data);
 
 /* =============================================================================
- * 分发器控制 API (Dispatcher Control API)
+ * 分发器控制 API
  * ============================================================================= */
 
 /**
@@ -195,7 +195,7 @@ dispatcher_state_t event_dispatcher_get_state(void);
 bool event_dispatcher_is_current_thread(void);
 
 /* =============================================================================
- * 事件处理 API (Event Processing API)
+ * 事件处理 API
  * ============================================================================= */
 
 /**
@@ -238,7 +238,7 @@ event_status_t event_dispatcher_process_one(k_timeout_t timeout);
 uint32_t event_dispatcher_process_all(uint32_t max_events);
 
 /* =============================================================================
- * 统计 API (Statistics API)
+ * 统计 API
  * ============================================================================= */
 
 /**

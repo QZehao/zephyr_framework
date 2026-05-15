@@ -25,19 +25,19 @@
 LOG_MODULE_REGISTER(example_module_b, CONFIG_SYS_LOG_LEVEL);
 
 /* =============================================================================
- * Internal Definitions
+ * 内部定义
  * ============================================================================= */
 
 #define EXAMPLE_MODULE_B_THREAD_PRIORITY   6
 #define EXAMPLE_MODULE_B_THREAD_STACK_SIZE 2048
 
-/* Control commands */
+/* 控制命令 */
 #define CMD_SEND_DATA                      1
 #define CMD_GET_STATS                      2
 #define CMD_CLEAR_BUFFERS                  3
 
 /* =============================================================================
- * Internal Data Structures
+ * 内部数据结构
  * ============================================================================= */
 
 typedef struct {
@@ -50,20 +50,20 @@ typedef struct {
 } example_module_b_cb_t;
 
 /* =============================================================================
- * Static Variables
+ * 静态变量
  * ============================================================================= */
 
 static example_module_b_cb_t g_module_b;
 
 /* =============================================================================
- * Forward Declarations
+ * 前置声明
  * ============================================================================= */
 
 static void module_b_thread_func(void* p1, void* p2, void* p3);
 static void on_sensor_data(const event_t* event, void* user_data);
 
 /* =============================================================================
- * Module Interface Implementation
+ * 模块接口实现
  * ============================================================================= */
 
 int example_module_b_init(void* config) {
@@ -72,7 +72,7 @@ int example_module_b_init(void* config) {
     if (config != NULL) {
         memcpy(&g_module_b.config, config, sizeof(example_module_b_config_t));
     } else {
-        /* Default configuration */
+        /* 默认配置 */
         g_module_b.config.tx_buffer_size = 512;
         g_module_b.config.rx_buffer_size = 512;
         g_module_b.config.timeout_ms = 1000;
@@ -94,11 +94,11 @@ int example_module_b_start(void) {
         return -1;
     }
 
-    /* Subscribe to sensor data events from module A */
+    /* 订阅来自模块 A 的传感器数据事件 */
     g_module_b.event_type = EVENT_TYPE_SENSOR_DATA;
     event_subscribe(g_module_b.event_type, on_sensor_data, &g_module_b, &g_module_b.subscriber_id);
 
-    /* Start module thread */
+    /* 启动模块线程 */
     k_thread_create(&g_module_b.thread, g_module_b.stack, K_THREAD_STACK_SIZEOF(g_module_b.stack), module_b_thread_func,
                     &g_module_b, NULL, NULL, EXAMPLE_MODULE_B_THREAD_PRIORITY, 0, K_NO_WAIT);
 
@@ -122,7 +122,7 @@ int example_module_b_stop(void) {
      */
     k_msleep(150);
 
-    /* Unsubscribe from events */
+    /* 取消事件订阅 */
     if (g_module_b.subscriber_id != 0) {
         event_unsubscribe(g_module_b.event_type, g_module_b.subscriber_id);
         g_module_b.subscriber_id = 0;
@@ -153,7 +153,7 @@ void example_module_b_on_event(const event_t* event, void* user_data) {
         return;
     }
 
-    /* Handle all events generically */
+    /* 通用处理所有事件 */
     LOG_DBG("Received event type: %d", event->type);
 
     if (event->data_len >= sizeof(int32_t)) {
@@ -170,11 +170,11 @@ void example_module_b_on_event(const event_t* event, void* user_data) {
 int example_module_b_control(int cmd, void* arg) {
     switch (cmd) {
     case CMD_GET_STATS:
-        /* Could return statistics */
+        /* 可返回统计信息 */
         return 0;
 
     case CMD_CLEAR_BUFFERS:
-        /* Could clear buffers */
+        /* 可清空缓冲区 */
         return 0;
 
     default:
@@ -183,7 +183,7 @@ int example_module_b_control(int cmd, void* arg) {
 }
 
 /* =============================================================================
- * Module-specific API
+ * 模块专用 API
  * ============================================================================= */
 
 int example_module_b_send(const void* data, size_t len) {
@@ -191,7 +191,7 @@ int example_module_b_send(const void* data, size_t len) {
         return -1;
     }
 
-    /* Simulate sending data */
+    /* 模拟发送数据 */
     LOG_DBG("Sending %d bytes", len);
     return (int) len;
 }
@@ -201,7 +201,7 @@ int example_module_b_receive(void* data, size_t len) {
         return -1;
     }
 
-    /* Simulate receiving data */
+    /* 模拟接收数据 */
     memset(data, 0, len);
     return 0;
 }
@@ -216,7 +216,7 @@ void example_module_b_get_stats(uint32_t* tx_count, uint32_t* rx_count, uint32_t
 }
 
 /* =============================================================================
- * Internal Functions
+ * 内部函数
  * ============================================================================= */
 
 static void module_b_thread_func(void* p1, void* p2, void* p3) {
@@ -227,7 +227,7 @@ static void module_b_thread_func(void* p1, void* p2, void* p3) {
     LOG_INF("Module B thread started");
 
     while (g_module_b.status == MODULE_STATUS_RUNNING) {
-        /* Simulate communication processing */
+        /* 模拟通信处理 */
         k_msleep(50);
     }
 
@@ -243,7 +243,7 @@ static void on_sensor_data(const event_t* event, void* user_data) {
 
     LOG_DBG("Received sensor data");
 
-    /* Process sensor data and potentially send response */
+    /* 处理传感器数据并可能发送响应 */
     if (event->data_len >= sizeof(int32_t)) {
         int32_t sensor_value;
         if (event->flags & EVENT_FLAG_DATA_INLINE) {
@@ -252,7 +252,7 @@ static void on_sensor_data(const event_t* event, void* user_data) {
             sensor_value = *(int32_t*) event->data.ptr;
         }
 
-        /* Example: Send acknowledgment */
+        /* 示例：发送确认 */
         uint32_t ack = sensor_value * 2; /* Simple transformation */
         example_module_b_send(&ack, sizeof(ack));
 
@@ -261,7 +261,7 @@ static void on_sensor_data(const event_t* event, void* user_data) {
 }
 
 /* =============================================================================
- * Module Interface Declaration
+ * 模块接口声明
  * ============================================================================= */
 
 const module_interface_t example_module_b_interface = {.name = "example_module_b",

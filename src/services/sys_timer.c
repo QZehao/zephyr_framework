@@ -44,7 +44,7 @@ LOG_MODULE_REGISTER(sys_timer, CONFIG_SYS_LOG_LEVEL);
 #endif
 
 /* =============================================================================
- * Internal Definitions
+ * 内部定义
  * ============================================================================= */
 
 #ifndef CONFIG_SYS_TIMER_STACK_SIZE
@@ -59,7 +59,7 @@ LOG_MODULE_REGISTER(sys_timer, CONFIG_SYS_LOG_LEVEL);
 #define TIMER_MAGIC 0x544D5253 /* "TMRS" */
 
 /* =============================================================================
- * Internal Data Structures
+ * 内部数据结构
  * ============================================================================= */
 
 struct sys_timer {
@@ -88,19 +88,19 @@ typedef struct {
 } sys_timer_cb_t;
 
 /* =============================================================================
- * Static Variables
+ * 静态变量
  * ============================================================================= */
 
 static sys_timer_cb_t g_sys_timer;
 
 /* =============================================================================
- * Forward Declarations
+ * 前置声明
  * ============================================================================= */
 
 static void timer_thread_func(void* p1, void* p2, void* p3);
 
 /* =============================================================================
- * Core API Implementation
+ * 核心 API 实现
  * ============================================================================= */
 
 int sys_timer_init(void) {
@@ -164,7 +164,7 @@ sys_timer_handle_t sys_timer_create(const sys_timer_config_t* config) {
 
     k_mutex_lock(&g_sys_timer.lock, K_FOREVER);
 
-    /* Find free timer slot */
+    /* 查找空闲定时器槽位 */
     sys_timer_handle_t timer = NULL;
     for (int i = 0; i < MAX_TIMERS; i++) {
         if (!g_sys_timer.timers[i].is_allocated) {
@@ -180,7 +180,7 @@ sys_timer_handle_t sys_timer_create(const sys_timer_config_t* config) {
         return NULL;
     }
 
-    /* Initialize timer */
+    /* 初始化定时器 */
     timer->config = *config;
     timer->status = SYS_TIMER_STOPPED;
     timer->fire_count = 0;
@@ -194,7 +194,7 @@ sys_timer_handle_t sys_timer_create(const sys_timer_config_t* config) {
 
     k_sem_init(&timer->sem, 0, 1);
 
-    /* Create timer thread */
+    /* 创建定时器线程 */
     int priority = config->priority != 0 ? config->priority : CONFIG_SYS_TIMER_PRIORITY;
 
     k_thread_create(&timer->thread, timer->stack, K_THREAD_STACK_SIZEOF(timer->stack), timer_thread_func, timer, NULL,
@@ -248,7 +248,7 @@ int sys_timer_delete(sys_timer_handle_t timer) {
         return -EINVAL;
     }
 
-    /* Clear timer */
+    /* 清除定时器 */
     timer->is_allocated = false;
     timer->terminate = false;
     timer->thread_started = false;
@@ -451,7 +451,7 @@ uint32_t sys_timer_get_time_until_expiry(sys_timer_handle_t timer) {
 }
 
 /* =============================================================================
- * Statistics API
+ * 统计 API
  * ============================================================================= */
 
 int sys_timer_get_stats(sys_timer_handle_t timer, sys_timer_stats_t* stats) {
@@ -467,7 +467,7 @@ int sys_timer_get_stats(sys_timer_handle_t timer, sys_timer_stats_t* stats) {
     }
 
     stats->fire_count = timer->fire_count;
-    stats->miss_count = 0; /* Could be implemented */
+    stats->miss_count = 0; /* 可实现 */
     stats->last_fire_time_ms = timer->last_fire_time;
     stats->avg_latency_us = timer->avg_latency_us;
     stats->max_latency_us = timer->max_latency_us;
@@ -495,7 +495,7 @@ int sys_timer_reset_stats(sys_timer_handle_t timer) {
 }
 
 /* =============================================================================
- * Convenience Functions
+ * 便捷函数
  * ============================================================================= */
 
 sys_timer_handle_t sys_timer_oneshot(uint32_t delay_ms, sys_timer_callback_t callback, void* user_data) {
@@ -539,7 +539,7 @@ uint32_t sys_timer_get_uptime(void) {
 }
 
 /* =============================================================================
- * Internal Functions
+ * 内部函数
  * ============================================================================= */
 
 static void timer_thread_func(void* p1, void* p2, void* p3) {

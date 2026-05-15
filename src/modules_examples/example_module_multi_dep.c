@@ -4,8 +4,7 @@
  *
  * 依赖名必须与目标模块 interface->name 完全一致（此处为 example_module_a / example_module_b）。
  * 
- * English: depends_on[] lists direct dependency names, NULL-terminated; not dependency depth.
- * 中文：depends_on 为直接依赖名列表，以 NULL 结尾；不是依赖链深度。
+ * depends_on 为直接依赖名列表，以 NULL 结尾；不是依赖链深度。
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-01

@@ -39,7 +39,7 @@
 LOG_MODULE_REGISTER(app_main, CONFIG_SYS_LOG_LEVEL);
 
 /* =============================================================================
- * Internal Data Structures
+ * 内部数据结构
  * ============================================================================= */
 
 typedef struct {
@@ -51,13 +51,13 @@ typedef struct {
 } app_cb_t;
 
 /* =============================================================================
- * Static Variables
+ * 静态变量
  * ============================================================================= */
 
 static app_cb_t g_app;
 
 /* =============================================================================
- * Forward Declarations
+ * 前置声明
  * ============================================================================= */
 
 static void app_heartbeat_timer_callback(sys_timer_handle_t timer, void* user_data);
@@ -77,7 +77,7 @@ SYS_INIT(app_init_kv_step, POST_KERNEL, APP_INIT_PRIO_APP_KV);
 SYS_INIT(app_init_finalize, POST_KERNEL, APP_INIT_PRIO_APP_FINAL);
 
 /* =============================================================================
- * Shell Commands
+ * Shell 命令
  * ============================================================================= */
 
 #ifdef CONFIG_SHELL
@@ -369,7 +369,7 @@ SHELL_CMD_REGISTER(app, &sub_app, "Application commands", NULL);
 #endif /* CONFIG_SHELL */
 
 /* =============================================================================
- * Auto-init steps (SYS_INIT, POST_KERNEL; order via APP_INIT_PRIO_*)
+ * 自动初始化步骤 (SYS_INIT, POST_KERNEL; 通过 APP_INIT_PRIO_* 控制顺序)
  * ============================================================================= */
 
 static void app_apply_config(const app_config_t* config) {
@@ -411,7 +411,7 @@ static int app_init_finalize(void) {
 }
 
 /* =============================================================================
- * Application API Implementation
+ * 应用 API 实现
  * ============================================================================= */
 
 int app_init(const app_config_t* config) {
@@ -437,16 +437,16 @@ int app_start(void) {
 
     /* 模块管理器已由 module_manager_compat.c 的 SYS_INIT 自动启动，此处不再重复调用 */
 
-    /* Start all registered modules */
+    /* 启动所有已注册模块 */
     int started = module_compat_start_all();
     LOG_INF("Started %d modules", started);
 
-    /* Start watchdog */
+    /* 启动看门狗 */
 #if APP_CONFIG_ENABLE_WATCHDOG
     sys_wdt_start();
 #endif
 
-    /* Create heartbeat timer (only if timer service is enabled and interval > 0) */
+    /* 创建心跳定时器（仅在启用定时器服务且间隔 > 0 时） */
 #if APP_CONFIG_ENABLE_TIMER_SVC && (APP_HEARTBEAT_INTERVAL_MS > 0)
     sys_timer_config_t heartbeat_config = {.mode = SYS_TIMER_PERIODIC,
                                            .delay_ms = APP_HEARTBEAT_INTERVAL_MS,
@@ -478,22 +478,22 @@ int app_stop(void) {
 
     g_app.running = false;
 
-    /* Stop all modules */
+    /* 停止所有模块 */
     module_compat_stop_all();
 
-    /* Stop event dispatcher before event system */
+    /* 在事件系统之前停止事件分发器 */
     if (event_dispatcher_stop() != EVENT_OK) {
         LOG_ERR("event_dispatcher_stop failed");
     } else {
         LOG_INF("Event dispatcher stopped");
     }
 
-    /* Stop event system */
+    /* 停止事件系统 */
     if (event_compat_stop() != 0) {
         LOG_ERR("event_compat_stop failed");
     }
 
-    /* Stop watchdog */
+    /* 停止看门狗 */
 #if APP_CONFIG_ENABLE_WATCHDOG
     sys_wdt_stop();
 #endif
@@ -518,18 +518,18 @@ uint32_t app_get_heartbeat_count(void) {
 }
 
 /* =============================================================================
- * Internal Functions
+ * 内部函数
  * ============================================================================= */
 
 static void app_heartbeat_timer_callback(sys_timer_handle_t timer, void* user_data) {
     g_app.heartbeat_count++;
 
-    /* Feed watchdog */
+    /* 喂看门狗 */
 #if APP_CONFIG_ENABLE_WATCHDOG
     sys_wdt_feed();
 #endif
 
-    /* Log periodic status */
+    /* 记录周期性状态 */
     if (g_app.heartbeat_count % 10 == 0) {
         LOG_INF("Heartbeat: %d, Uptime: %dms", g_app.heartbeat_count, app_get_uptime());
     }
@@ -543,36 +543,36 @@ static void app_print_banner(void) {
 }
 
 /* =============================================================================
- * Main Entry Point
+ * 主入口
  * ============================================================================= */
 
 int main(void) {
     LOG_ERR("FW_MARKER: %s | %s", GIT_COMMIT_HASH, BUILD_TIMESTAMP);
-    /* Initialize application */
+    /* 初始化应用 */
     if (app_init(NULL) != APP_OK) {
         LOG_ERR("Application initialization failed");
         return -1;
     }
 
-    /* Start application */
+    /* 启动应用 */
     if (app_start() != APP_OK) {
         LOG_ERR("Application start failed");
         return -1;
     }
 
-    /* Main loop - in event-driven design, this is mostly idle */
+    /* 主循环 - 事件驱动设计中，此处大部分时间空闲 */
     while (1) {
-        /* Feed watchdog in main loop too */
+        /* 主循环中也喂看门狗 */
 #if APP_CONFIG_ENABLE_WATCHDOG
         sys_wdt_feed();
 #endif
 
-        /* Sleep to save power */
+        /* 睡眠以节省功耗 */
         k_msleep(1000);
 
-        /* Could add main loop tasks here if needed */
+        /* 如需可在此处添加主循环任务 */
     }
 
-    /* Should not reach here */
+    /* 不应执行到此处 */
     return 0;
 }

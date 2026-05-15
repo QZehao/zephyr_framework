@@ -159,15 +159,15 @@ extern "C" {
 #define APP_MAX_MODULES               CONFIG_MAX_MODULES
 
 /* =============================================================================
- * Event Type Definitions
+ * 事件类型定义
  * ============================================================================= */
 
-/* Reserved event types (0-9 are system events) */
+/* 保留事件类型（0-9 为系统事件）*/
 #define APP_EVENT_TYPE_SYSTEM         0
 #define APP_EVENT_TYPE_ERROR          1
 #define APP_EVENT_TYPE_CONFIG         2
 
-/* Application event types (10+) */
+/* 应用事件类型（10+）*/
 #define APP_EVENT_TYPE_USER_START     10
 
 /* =============================================================================
@@ -186,22 +186,22 @@ extern "C" {
 #define APP_ERR_IO                    -9
 
 /* =============================================================================
- * Build Configuration
+ * 构建配置
  * ============================================================================= */
 
-/* Version information */
+/* 版本信息 */
 #define APP_BUILD_VERSION_MAJOR       PROJECT_VERSION_MAJOR
 #define APP_BUILD_VERSION_MINOR       PROJECT_VERSION_MINOR
 #define APP_BUILD_VERSION_PATCH       PROJECT_VERSION_PATCH
 
-/* Build type */
+/* 构建类型 */
 #ifdef NDEBUG
 #define APP_BUILD_TYPE "Release"
 #else
 #define APP_BUILD_TYPE "Debug"
 #endif
 
-/* Target information (set by build system) */
+/* 目标信息（由构建系统设置）*/
 #ifndef APP_TARGET_NAME
 #define APP_TARGET_NAME "generic"
 #endif

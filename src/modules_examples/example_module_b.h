@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * Module Configuration
+ * 模块配置
  * ============================================================================= */
 
 typedef struct {
@@ -32,7 +32,7 @@ typedef struct {
 } example_module_b_config_t;
 
 /* =============================================================================
- * Module Interface
+ * 模块接口
  * ============================================================================= */
 
 int             example_module_b_init(void* config);
@@ -43,34 +43,34 @@ void            example_module_b_on_event(const event_t* event, void* user_data)
 module_status_t example_module_b_get_status(void);
 int             example_module_b_control(int cmd, void* arg);
 
-/* Get module interface */
+/* 获取模块接口 */
 const module_interface_t* example_module_b_get_interface(void);
 
 /* =============================================================================
- * Module-specific API
+ * 模块专用 API
  * ============================================================================= */
 
 /**
- * @brief Send data through communication channel
- * @param data Data to send
- * @param len Data length
- * @return Number of bytes sent
+ * @brief 通过通信通道发送数据
+ * @param data 要发送的数据
+ * @param len 数据长度
+ * @return 发送的字节数
  */
 int example_module_b_send(const void* data, size_t len);
 
 /**
- * @brief Receive data from communication channel
- * @param data Output buffer
- * @param len Buffer length
- * @return Number of bytes received
+ * @brief 从通信通道接收数据
+ * @param data 输出缓冲区
+ * @param len 缓冲区长度
+ * @return 接收的字节数
  */
 int example_module_b_receive(void* data, size_t len);
 
 /**
- * @brief Get communication statistics
- * @param tx_count Output: transmitted bytes
- * @param rx_count Output: received bytes
- * @param errors Output: error count
+ * @brief 获取通信统计信息
+ * @param tx_count 输出：发送字节数
+ * @param rx_count 输出：接收字节数
+ * @param errors 输出：错误计数
  */
 void example_module_b_get_stats(uint32_t* tx_count, uint32_t* rx_count, uint32_t* errors);
 

@@ -25,20 +25,20 @@
 LOG_MODULE_REGISTER(example_module_a, CONFIG_SYS_LOG_LEVEL);
 
 /* =============================================================================
- * Internal Definitions
+ * 内部定义
  * ============================================================================= */
 
 #define EXAMPLE_MODULE_A_BUFFER_SIZE       256
 #define EXAMPLE_MODULE_A_THREAD_PRIORITY   5
 #define EXAMPLE_MODULE_A_THREAD_STACK_SIZE 2048
 
-/* Control commands */
+/* 控制命令 */
 #define CMD_SET_RATE                       1
 #define CMD_GET_RATE                       2
 #define CMD_RESET                          3
 
 /* =============================================================================
- * Internal Data Structures
+ * 内部数据结构
  * ============================================================================= */
 
 typedef struct {
@@ -62,21 +62,21 @@ typedef struct {
 } example_module_a_cb_t;
 
 /* =============================================================================
- * Static Variables
+ * 静态变量
  * ============================================================================= */
 
 static example_module_a_cb_t g_module_a;
 static uint32_t              g_subscriber_id = 0;
 
 /* =============================================================================
- * Forward Declarations
+ * 前置声明
  * ============================================================================= */
 
 static void module_a_thread_func(void* p1, void* p2, void* p3);
 static void publish_sensor_data(int32_t value, uint32_t timestamp);
 
 /* =============================================================================
- * Module Interface Implementation
+ * 模块接口实现
  * ============================================================================= */
 
 int example_module_a_init(void* config) {
@@ -84,7 +84,7 @@ int example_module_a_init(void* config) {
 
     memset(&g_module_a, 0, sizeof(g_module_a));
 
-    /* Set default or provided config */
+    /* 设置默认或提供的配置 */
     if (config != NULL) {
         g_module_a.config = *(example_module_a_config_t*) config;
     } else {
@@ -99,7 +99,7 @@ int example_module_a_init(void* config) {
 
     k_mutex_init(&g_module_a.buffer_lock);
 
-    /* Register event types */
+    /* 注册事件类型 */
     event_register_type(EVENT_TYPE_SENSOR_DATA, "sensor_data");
     event_register_type(EVENT_TYPE_SENSOR_CONFIG, "sensor_config");
 
@@ -114,14 +114,14 @@ int example_module_a_start(void) {
 
     g_module_a.status = MODULE_STATUS_RUNNING;
 
-    /* Create data acquisition thread */
+    /* 创建数据采集线程 */
     k_thread_create(&g_module_a.thread, g_module_a.stack, K_THREAD_STACK_SIZEOF(g_module_a.stack), module_a_thread_func,
                     NULL, NULL, NULL, EXAMPLE_MODULE_A_THREAD_PRIORITY, 0, K_FOREVER);
 
     k_thread_name_set(&g_module_a.thread, "mod_a_sensor");
     k_thread_start(&g_module_a.thread);
 
-    /* Subscribe to config events */
+    /* 订阅配置事件 */
     event_subscribe(EVENT_TYPE_SENSOR_CONFIG, example_module_a_on_event, &g_module_a, &g_subscriber_id);
 
     LOG_INF("Example Module A started");
@@ -141,7 +141,7 @@ int example_module_a_stop(void) {
      */
     k_msleep(50);
 
-    /* Unsubscribe from events */
+    /* 取消事件订阅 */
     if (g_subscriber_id != 0) {
         event_unsubscribe(EVENT_TYPE_SENSOR_CONFIG, g_subscriber_id);
         g_subscriber_id = 0;
@@ -169,7 +169,7 @@ void example_module_a_on_event(const event_t* event, void* user_data) {
 
     switch (event->type) {
     case EVENT_TYPE_SENSOR_CONFIG:
-        /* Handle configuration change */
+        /* 处理配置变更 */
         if (event->data_len >= sizeof(uint32_t)) {
             uint32_t new_rate;
             if (event->flags & EVENT_FLAG_DATA_INLINE) {
@@ -221,7 +221,7 @@ int example_module_a_control(int cmd, void* arg) {
 }
 
 /* =============================================================================
- * Module-specific API
+ * 模块专用 API
  * ============================================================================= */
 
 int example_module_a_get_data(void* data, size_t len) {
@@ -256,7 +256,7 @@ int example_module_a_set_rate(uint32_t rate_ms) {
 }
 
 /* =============================================================================
- * Internal Functions
+ * 内部函数
  * ============================================================================= */
 
 static void module_a_thread_func(void* p1, void* p2, void* p3) {
@@ -273,22 +273,22 @@ static void module_a_thread_func(void* p1, void* p2, void* p3) {
         uint32_t elapsed = now - last_sample_time;
 
         if (elapsed >= g_module_a.config.sample_rate_ms) {
-            /* Simulate sensor reading */
+            /* 模拟传感器读取 */
             static int32_t simulated_value = 0;
-            simulated_value += 100; /* Incrementing value for demo */
+            simulated_value += 100; /* 递增值用于演示 */
 
             sensor_sample_t sample = {
-                .value = simulated_value, .timestamp = now, .quality = 100 /* 100% quality */
+                .value = simulated_value, .timestamp = now, .quality = 100 /* 100% 质量 */
             };
 
-            /* Store in buffer */
+            /* 存入缓冲区 */
             k_mutex_lock(&g_module_a.buffer_lock, K_FOREVER);
             g_module_a.buffer[g_module_a.write_idx] = sample;
             g_module_a.write_idx = (g_module_a.write_idx + 1) % EXAMPLE_MODULE_A_BUFFER_SIZE;
             g_module_a.sample_count++;
             k_mutex_unlock(&g_module_a.buffer_lock);
 
-            /* Publish event */
+            /* 发布事件 */
             publish_sensor_data(simulated_value, now);
 
             last_sample_time = now;
@@ -297,7 +297,7 @@ static void module_a_thread_func(void* p1, void* p2, void* p3) {
             LOG_DBG("Sample acquired: value=%d, count=%d", simulated_value, g_module_a.sample_count);
         }
 
-        /* Sleep for a short period */
+        /* 短暂睡眠 */
         k_msleep(10);
     }
 
@@ -308,7 +308,7 @@ static void publish_sensor_data(int32_t value, uint32_t timestamp) {
     event_t event = {.type = EVENT_TYPE_SENSOR_DATA,
                      .priority = EVENT_PRIORITY_NORMAL,
                      .timestamp = timestamp,
-                     .source_id = 1, /* Module A ID */
+                     .source_id = 1, /* 模块 A ID */
                      .data_len = sizeof(int32_t),
                      .flags = EVENT_FLAG_DATA_INLINE};
 
@@ -318,7 +318,7 @@ static void publish_sensor_data(int32_t value, uint32_t timestamp) {
 }
 
 /* =============================================================================
- * Module Interface Declaration
+ * 模块接口声明
  * ============================================================================= */
 
 const module_interface_t example_module_a_interface = {.name = "example_module_a",

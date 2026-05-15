@@ -49,7 +49,7 @@ LOG_MODULE_REGISTER(sys_log, CONFIG_SYS_LOG_LEVEL);
 #define SYS_LOG_DEST_COUNT 4U
 
 /* =============================================================================
- * Internal Definitions
+ * 内部定义
  * ============================================================================= */
 
 #ifndef CONFIG_SYS_MEMORY_POOL_SIZE
@@ -58,7 +58,7 @@ LOG_MODULE_REGISTER(sys_log, CONFIG_SYS_LOG_LEVEL);
 
 #define MAX_LOG_ENTRIES (CONFIG_SYS_MEMORY_POOL_SIZE / sizeof(sys_log_entry_t))
 
-/* ANSI color codes */
+/* ANSI 颜色代码 */
 #define COLOR_RED       "\x1b[31m"
 #define COLOR_YELLOW    "\x1b[33m"
 #define COLOR_GREEN     "\x1b[32m"
@@ -66,7 +66,7 @@ LOG_MODULE_REGISTER(sys_log, CONFIG_SYS_LOG_LEVEL);
 #define COLOR_RESET     "\x1b[0m"
 
 /* =============================================================================
- * Internal Data Structures
+ * 内部数据结构
  * ============================================================================= */
 
 typedef struct {
@@ -84,14 +84,14 @@ typedef struct {
 } sys_log_cb_t;
 
 /* =============================================================================
- * Static Variables
+ * 静态变量
  * ============================================================================= */
 
 static sys_log_cb_t    g_sys_log;
 static sys_log_entry_t g_log_buffer_static[MAX_LOG_ENTRIES];
 
 /* =============================================================================
- * Internal Functions
+ * 内部函数
  * ============================================================================= */
 
 static const char* level_to_string(sys_log_level_t level) {
@@ -188,7 +188,7 @@ static void add_entry(sys_log_level_t level, const char* module, const char* msg
     if (g_sys_log.count < cap) {
         g_sys_log.count++;
     } else {
-        /* Buffer full, advance read index */
+        /* 缓冲区满，前移读索引 */
         g_sys_log.read_idx = (g_sys_log.read_idx + 1U) % cap;
     }
 
@@ -246,7 +246,7 @@ static void emit_log_line(sys_log_level_t level, const char* module, const char*
 }
 
 /* =============================================================================
- * API Implementation
+ * API 实现
  * ============================================================================= */
 
 int sys_log_init(const sys_log_config_t* config) {
@@ -255,7 +255,7 @@ int sys_log_init(const sys_log_config_t* config) {
     /* SIL-2: 清零全局控制块 */
     memset(&g_sys_log, 0, sizeof(g_sys_log));
 
-    /* Set default config */
+    /* 设置默认配置 */
     if (config != NULL) {
         /* SIL-2: 验证配置参数 */
         if (config->memory_buffer_size > 0 && config->memory_buffer_size < sizeof(sys_log_entry_t)) {
@@ -272,7 +272,7 @@ int sys_log_init(const sys_log_config_t* config) {
         g_sys_log.config.memory_buffer_size = CONFIG_SYS_MEMORY_POOL_SIZE;
     }
 
-    /* Initialize buffer */
+    /* 初始化缓冲区 */
     g_sys_log.buffer = g_log_buffer_static;
     g_sys_log.write_idx = 0;
     g_sys_log.read_idx = 0;
@@ -308,7 +308,7 @@ int sys_log_init(const sys_log_config_t* config) {
 
     apply_destinations_mask(g_sys_log.config.destinations);
 
-    /* Initialize module levels */
+    /* 初始化模块级别 */
     for (int i = 0; i < 16; i++) {
         g_sys_log.module_levels[i] = g_sys_log.config.default_level;
     }
@@ -434,10 +434,10 @@ void sys_log_hexdump(sys_log_level_t level, const char* module, const void* data
         size_t chunk = MIN(16, len - i);
         int    pos = 0;
 
-        /* Address */
+        /* 地址 */
         pos += snprintf(line + pos, sizeof(line) - pos, "%08X: ", (uint32_t) i);
 
-        /* Hex bytes */
+        /* 十六进制字节 */
         for (size_t j = 0; j < 16; j++) {
             if (j < chunk) {
                 pos += snprintf(line + pos, sizeof(line) - pos, "%02X ", bytes[i + j]);
@@ -458,7 +458,7 @@ void sys_log_hexdump(sys_log_level_t level, const char* module, const void* data
             pos += snprintf(line + pos, sizeof(line) - pos, "|");
         }
 
-        /* Log the line */
+        /* 记录该行 */
         sys_log_print(level, module, "%s", line);
     }
 }
@@ -480,13 +480,13 @@ uint32_t sys_log_get_entries(sys_log_entry_t* entries, uint32_t count, bool olde
     }
 
     if (oldest_first) {
-        /* Start from read index */
+        /* 从读索引开始 */
         for (uint32_t i = 0; i < to_read; i++) {
             uint32_t idx = (g_sys_log.read_idx + i) % cap;
             entries[i] = g_sys_log.buffer[idx];
         }
     } else {
-        /* Start from write index - 1 (newest first) */
+        /* 从写索引 - 1 开始（最新的在前）*/
         for (uint32_t i = 0; i < to_read; i++) {
             int32_t idx = (int32_t) g_sys_log.write_idx - 1 - (int32_t) i;
             if (idx < 0) {

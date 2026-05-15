@@ -1,6 +1,6 @@
 /**
  * @file event_queue.c
- * @brief 事件队列实现 (Event Queue Implementation)
+ * @brief 事件队列实现
  *
  * 基于优先级的队列实现，支持可配置的溢出处理。
  * 
@@ -30,7 +30,7 @@ LOG_MODULE_REGISTER(event_queue, CONFIG_SYS_LOG_LEVEL);
 extern void event_system_inc_dropped_count(void);
 
 /* =============================================================================
- * 内部数据结构 (Internal Data Structures)
+ * 内部数据结构
  * ============================================================================= */
 
 /**
@@ -248,7 +248,7 @@ static event_queue_cb_t* event_queue_find_cb(const struct k_msgq* queue) {
 }
 
 /* =============================================================================
- * 队列 API 实现 (Queue API Implementation)
+ * 队列 API 实现
  * ============================================================================= */
 
 /**

@@ -24,11 +24,11 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * Type Definitions
+ * 类型定义
  * ============================================================================= */
 
 /**
- * @brief Watchdog status
+ * @brief 看门狗状态
  */
 typedef enum {
     WDT_STATUS_STOPPED = 0,
@@ -39,26 +39,26 @@ typedef enum {
 } wdt_status_t;
 
 /**
- * @brief Watchdog mode
+ * @brief 看门狗模式
  */
 typedef enum {
-    WDT_MODE_SOFTWARE = 0, /* Software watchdog (thread monitoring) */
-    WDT_MODE_HARDWARE,     /* Hardware watchdog (if available) */
-    WDT_MODE_DUAL          /* Both hardware and software */
+    WDT_MODE_SOFTWARE = 0, /* 软件看门狗（线程监控）*/
+    WDT_MODE_HARDWARE,     /* 硬件看门狗（如可用）*/
+    WDT_MODE_DUAL          /* 硬件和软件同时启用 */
 } wdt_mode_t;
 
 /**
- * @brief Watchdog user callback (before expiry); distinct from Zephyr wdt_callback_t
+ * @brief 看门狗用户回调（过期前调用）；与 Zephyr wdt_callback_t 不同
  */
 typedef void (*sys_wdt_user_cb_t)(void* user_data);
 
 /**
- * @brief Watchdog configuration
+ * @brief 看门狗配置
  */
 typedef struct {
     wdt_mode_t        mode;
     uint32_t          timeout_ms;
-    uint32_t          feed_margin_ms; /* Feed before this time to avoid race */
+    uint32_t          feed_margin_ms; /* 在此前喂狗以避免竞态 */
     sys_wdt_user_cb_t pre_expire_callback;
     void*             callback_user_data;
     bool              reset_on_expire;
@@ -66,7 +66,7 @@ typedef struct {
 } wdt_config_t;
 
 /**
- * @brief Watchdog statistics
+ * @brief 看门狗统计
  */
 typedef struct {
     uint32_t feed_count;
@@ -78,108 +78,108 @@ typedef struct {
 } wdt_stats_t;
 
 /* =============================================================================
- * Core API
+ * 核心 API
  * ============================================================================= */
 
 /**
- * @brief Initialize watchdog system
- * @param config Watchdog configuration
- * @return 0 on success, negative error code on failure
+ * @brief 初始化看门狗系统
+ * @param config 看门狗配置
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_init(const wdt_config_t* config);
 
 /**
- * @brief Start watchdog
- * @return 0 on success, negative error code on failure
+ * @brief 启动看门狗
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_start(void);
 
 /**
- * @brief Stop watchdog
- * @return 0 on success, negative error code on failure
+ * @brief 停止看门狗
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_stop(void);
 
 /**
- * @brief Feed (kick) the watchdog
- * @return 0 on success, negative error code on failure
+ * @brief 喂看门狗
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_feed(void);
 
 /**
- * @brief Pause watchdog (for debugging)
- * @return 0 on success, negative error code on failure
+ * @brief 暂停看门狗（调试用）
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_pause(void);
 
 /**
- * @brief Resume watchdog
- * @return 0 on success, negative error code on failure
+ * @brief 恢复看门狗
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_resume(void);
 
 /**
- * @brief Get watchdog status
- * @return Current watchdog status
+ * @brief 获取看门狗状态
+ * @return 当前看门狗状态
  */
 wdt_status_t sys_wdt_get_status(void);
 
 /* =============================================================================
- * Thread Monitoring API (Software Watchdog)
+ * 线程监控 API（软件看门狗）
  * ============================================================================= */
 
 /**
- * @brief Register a thread for monitoring
- * @param thread_id Thread identifier
- * @param thread_name Thread name
- * @param max_idle_ms Maximum allowed idle time
- * @return 0 on success, negative error code on failure
+ * @brief 注册线程以进行监控
+ * @param thread_id 线程标识符
+ * @param thread_name 线程名称
+ * @param max_idle_ms 最大允许空闲时间
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_monitor_thread(k_tid_t thread_id, const char* thread_name, uint32_t max_idle_ms);
 
 /**
- * @brief Unregister a thread from monitoring
- * @param thread_id Thread identifier
- * @return 0 on success, negative error code on failure
+ * @brief 注销线程监控
+ * @param thread_id 线程标识符
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_unmonitor_thread(k_tid_t thread_id);
 
 /**
- * @brief Mark thread as alive (called by monitored thread)
- * @param thread_id Thread identifier
- * @return 0 on success, negative error code on failure
+ * @brief 标记线程为存活（由被监控线程调用）
+ * @param thread_id 线程标识符
+ * @return 成功返回 0，失败返回负错误码
  */
 int sys_wdt_thread_alive(k_tid_t thread_id);
 
 /* =============================================================================
- * Statistics & Debug API
+ * 统计与调试 API
  * ============================================================================= */
 
 /**
- * @brief Get watchdog statistics
- * @param stats Output: statistics structure
+ * @brief 获取看门狗统计信息
+ * @param stats 输出：统计信息结构体
  */
 void sys_wdt_get_stats(wdt_stats_t* stats);
 
 /**
- * @brief Reset watchdog statistics
+ * @brief 重置看门狗统计信息
  */
 void sys_wdt_reset_stats(void);
 
 /**
- * @brief Get time since last feed
- * @return Time in milliseconds
+ * @brief 获取自上次喂狗以来的时间
+ * @return 时间（毫秒）
  */
 uint32_t sys_wdt_get_time_since_feed(void);
 
 /**
- * @brief Get time until expiration
- * @return Time in milliseconds (0 if expired)
+ * @brief 获取距过期的时间
+ * @return 时间（毫秒，已过期则返回 0）
  */
 uint32_t sys_wdt_get_time_until_expire(void);
 
 /**
- * @brief Simulate watchdog expiration (for testing)
+ * @brief 模拟看门狗过期（测试用）
  */
 void sys_wdt_simulate_expire(void);
 

@@ -21,7 +21,7 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * Module Configuration
+ * 模块配置
  * ============================================================================= */
 
 typedef struct {
@@ -31,49 +31,49 @@ typedef struct {
 } example_module_a_config_t;
 
 /* =============================================================================
- * Module Interface (to be implemented in .c file)
+ * 模块接口（在 .c 文件中实现）
  * ============================================================================= */
 
-/* Module initialization */
+/* 模块初始化 */
 int example_module_a_init(void* config);
 
-/* Module start */
+/* 模块启动 */
 int example_module_a_start(void);
 
-/* Module stop */
+/* 模块停止 */
 int example_module_a_stop(void);
 
-/* Module shutdown */
+/* 模块关闭 */
 int example_module_a_shutdown(void);
 
-/* Event handler */
+/* 事件处理器 */
 void example_module_a_on_event(const event_t* event, void* user_data);
 
-/* Get module status */
+/* 获取模块状态 */
 module_status_t example_module_a_get_status(void);
 
-/* Module control */
+/* 模块控制 */
 int example_module_a_control(int cmd, void* arg);
 
-/* Get module interface */
+/* 获取模块接口 */
 const module_interface_t* example_module_a_get_interface(void);
 
 /* =============================================================================
- * Module-specific API
+ * 模块专用 API
  * ============================================================================= */
 
 /**
- * @brief Get latest sensor data
- * @param data Output buffer
- * @param len Buffer length
- * @return Number of bytes read
+ * @brief 获取最新传感器数据
+ * @param data 输出缓冲区
+ * @param len 缓冲区长度
+ * @return 读取的字节数
  */
 int example_module_a_get_data(void* data, size_t len);
 
 /**
  * @brief Set sampling rate
  * @param rate_ms Sampling rate in milliseconds
- * @return 0 on success, negative error code on failure
+ * @return 成功返回 0，失败返回负错误码
  */
 int example_module_a_set_rate(uint32_t rate_ms);
 

@@ -24,10 +24,10 @@
 LOG_MODULE_REGISTER(app_version, CONFIG_SYS_LOG_LEVEL);
 
 /* =============================================================================
- * Version Information Storage
+ * 版本信息存储
  * ============================================================================= */
 
-/* Version structure for easy access */
+/* 版本结构体，便于访问 */
 typedef struct {
     uint8_t     major;
     uint8_t     minor;
@@ -42,7 +42,7 @@ typedef struct {
     const char* compiler_version;
 } app_version_info_t;
 
-/* Static version info */
+/* 静态版本信息 */
 static const app_version_info_t g_version_info = {.major = PROJECT_VERSION_MAJOR,
                                                   .minor = PROJECT_VERSION_MINOR,
                                                   .patch = PROJECT_VERSION_PATCH,
@@ -56,7 +56,7 @@ static const app_version_info_t g_version_info = {.major = PROJECT_VERSION_MAJOR
                                                   .compiler_version = COMPILER_VERSION};
 
 /* =============================================================================
- * Version API Implementation
+ * 版本 API 实现
  * ============================================================================= */
 
 int app_version_get_string(char* buffer, size_t size) {
@@ -149,7 +149,7 @@ void app_version_print(void) {
 }
 
 /* =============================================================================
- * Shell Commands
+ * Shell 命令
  * ============================================================================= */
 
 #ifdef CONFIG_SHELL
