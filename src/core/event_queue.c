@@ -3,7 +3,7 @@
  * @brief 事件队列实现 (Event Queue Implementation)
  *
  * 基于优先级的队列实现，支持可配置的溢出处理。
- *
+ * 
  * 实现说明：
  * - 基于 Zephyr k_msgq 实现
  * - 支持多种溢出策略
@@ -11,8 +11,6 @@
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-01
- *
- * Zehao Qian
  *
  * @par 修改日志:
  *

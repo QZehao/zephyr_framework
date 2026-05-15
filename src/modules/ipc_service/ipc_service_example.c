@@ -6,7 +6,7 @@
  * 1. SYNC（同步）- 阻塞调用，等待结果返回
  * 2. ASYNC（异步）- 回调模式，立即返回，结果通过回调通知
  * 3. FUTURE（未来值）- Future/Promise 模式，可轮询或等待结果
- *
+ * 
  * 使用流程：
  * 1. 定义服务函数 example_service_func
  * 2. 初始化并启动服务
@@ -14,8 +14,6 @@
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-01
- *
- * @note 本文件仅应在 CONFIG_THREAD_IPC_SERVICE_EXAMPLE=y 时编入（见 CMakeLists / Kconfig）。
  *
  * @par 修改日志:
  *

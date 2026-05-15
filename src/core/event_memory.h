@@ -4,20 +4,21 @@
  *
  * 提供 Slab 池定义和内存管理函数声明。
  * 支持优先级分层和大数据块分配。
- *
+ * 
  * 主要特性：
  * - 优先级分层 Slab 池（CRITICAL/HIGH/NORMAL）
  * - 大数据 Slab 池（256B/1KB/4KB）
  * - 运行时状态查询
  * - 内存调试支持（可选）
- *
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-15
  *
  * @par 修改日志:
+ *
  *    Date         Version        Author          Description
  * 2026-04-15       1.0            zeh            初始版本
+ *
  */
 
 #ifndef EVENT_MEMORY_H

@@ -3,20 +3,18 @@
  * @brief 模块基类接口头文件 (Base Module Interface Header)
  *
  * 所有业务模块的抽象接口定义。
- *
+ * 
  * 主要功能：
  * - 定义模块的标准接口（虚函数表）
  * - 提供模块状态和优先级枚举
  * - 提供模块注册宏
  * - 支持模块订阅事件系统
- *
+ * 
  * 模块生命周期：
  * UNINITIALIZED -> INITIALIZING -> INITIALIZED -> RUNNING -> STOPPED
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-01
- *
- * Zehao Qian
  *
  * @par 修改日志:
  *

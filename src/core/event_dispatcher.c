@@ -3,7 +3,7 @@
  * @brief 事件分发器实现 (Event Dispatcher Implementation)
  *
  * 高性能事件分发器，支持优先级调度和统计功能。
- *
+ * 
  * 主要功能：
  * - 事件分发线程管理
  * - 事件过滤

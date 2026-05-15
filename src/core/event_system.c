@@ -3,7 +3,7 @@
  * @brief 核心事件系统实现 (Core Event System Implementation)
  *
  * 基于发布 - 订阅模式的线程安全高性能事件系统。
- *
+ * 
  * 架构说明：
  * - 事件队列：使用 Zephyr k_msgq 实现，支持多生产者单消费者
  * - 事件分发：由 event_dispatcher 模块中的线程消费队列并调用 event_notify_subscribers
@@ -13,8 +13,6 @@
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-01
- *
- * Zehao Qian
  *
  * @par 修改日志:
  *

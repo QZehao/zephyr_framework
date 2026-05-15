@@ -8,15 +8,16 @@
  * - 互斥锁保护共享状态
  * - 错误码返回检查
  * - 资源泄漏防护
- *
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-13
  *
  * @par 修改日志:
+ *
  *    Date         Version        Author          Description
- *  2026-04-13     1.0            zeh            初始版本
- *  2026-05-09     1.1            zeh            active_count 原子化避免与 block 锁逆向嵌套 pool 锁；k_mutex_init 用法修正
+ * 2026-04-13     1.0            zeh            初始版本
+ * 2026-05-09     1.1            zeh            active_count 原子化避免与 block 锁逆向嵌套 pool 锁；k_mutex_init 用法修正
+ *
  */
 
 #include "ipc_shared_mem.h"

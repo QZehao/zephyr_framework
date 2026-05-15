@@ -5,8 +5,6 @@
  * @version 1.0
  * @date 2026-04-01
  *
- * Zehao Qian
- *
  * @par 修改日志:
  *
  *    Date         Version        Author          Description

@@ -7,12 +7,12 @@
  * - 分发线程（dispatcher）：从响应队列取消息，根据 request_id 查找 pending 表投递响应
  * - 请求队列：调用者 -> 工作线程
  * - 响应队列：工作线程 -> 分发线程 -> 调用者
- *
+ * 
  * 设计要点：
  * - 无堆分配：所有内存静态分配
  * - pending 表与 future 空闲链表受 pending_lock 保护
  * - 停止时向两队列投递哑包以唤醒阻塞的 k_msgq_get
- *
+ * 
  * 三种调用模式：
  * - SYNC：使用 response_sem 信号量同步
  * - ASYNC：直接在分发线程中调用回调

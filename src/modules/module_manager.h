@@ -3,7 +3,7 @@
  * @brief 模块管理器头文件 (Module Manager Header)
  *
  * 提供模块的动态注册、生命周期管理和通信功能。
- *
+ * 
  * 主要功能：
  * - 模块动态注册与注销
  * - 模块生命周期管理（初始化、启动、停止、关闭）
@@ -13,8 +13,6 @@
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-01
- *
- * Zehao Qian
  *
  * @par 修改日志:
  *

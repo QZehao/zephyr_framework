@@ -8,11 +8,11 @@
  * - 双消息队列设计（请求队列 + 响应队列）
  * - 无堆内存分配（队列和栈嵌入结构体）
  * - 支持三种调用模式：SYNC（阻塞）、ASYNC（回调）、FUTURE（未来值）
- *
+ * 
  * 配置要求：CONFIG_THREAD_IPC_SERVICE=y
- *
+ * 
  * 注意：与 Zephyr 子系统 IPC_SERVICE（核间 IPC）无关
- *
+ * 
  * 典型使用流程：
  * 1. 定义服务函数 ipc_service_func_t
  * 2. 调用 ipc_service_init() 初始化服务

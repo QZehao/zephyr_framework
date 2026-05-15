@@ -1,6 +1,14 @@
 /**
  * @file module_manager_compat.c
  * @brief 模块管理器兼容层实现
+ * @author zeh (china_qzh@163.com)
+ * @version 1.0
+ * @date 2026-04-01
+ *
+ * @par 修改日志:
+ *
+ *    Date         Version        Author          Description
+ *
  */
 
 #include "module_manager_compat.h"

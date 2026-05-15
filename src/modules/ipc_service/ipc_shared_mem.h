@@ -6,22 +6,23 @@
  * - 解决调用者与服务函数之间的数据所有权不明确问题
  * - 提供引用计数自动管理，确保缓冲区在请求处理期间有效
  * - 提供安全的跨线程数据共享机制
- *
+ * 
  * SIL-2 合规：
  * - 所有输入参数验证
  * - 原子操作保护引用计数
  * - 互斥锁保护共享状态
  * - 错误码返回检查
  * - 资源泄漏防护
- *
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-13
  *
  * @par 修改日志:
+ *
  *    Date         Version        Author          Description
- *  2026-04-13     1.0            zeh            初始版本
- *  2026-05-09     1.1            zeh            未启用时 stub 句柄与 active_count 字段说明
+ * 2026-04-13     1.0            zeh            初始版本
+ * 2026-05-09     1.1            zeh            未启用时 stub 句柄与 active_count 字段说明
+ *
  */
 
 #ifndef ZEPHYR_IPC_SHARED_MEM_H_

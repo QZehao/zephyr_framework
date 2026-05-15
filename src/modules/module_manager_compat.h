@@ -3,18 +3,21 @@
  * @brief 模块管理器兼容层 - 标准版与商业版统一入口
  *
  * 提供模块管理器的抽象层，使得应用代码可以在标准版和商业版之间切换。
- *
+ * 
  * 使用方式：
  * - 标准版：默认使用，无需额外配置
  * - 商业版：在 prj.conf 中同时启用 CONFIG_USE_MODULE_MANAGER_PRO 与 CONFIG_MODULE_MANAGER_PRO
- *
- * @note PRO 模式下模块接口为 module_manager_pro_module_interface_t，与 module_base 的
+ * 
  *       module_interface_t 二进制不兼容；注册/注销请使用 src/proprietary 头文件中的
  *       module_manager_pro_* API。本头文件中仅 init/start/stop/shutdown 与统计映射到 PRO。
- *
  * @author zeh (china_qzh@163.com)
  * @version 1.1
  * @date 2026-04-09
+ *
+ * @par 修改日志:
+ *
+ *    Date         Version        Author          Description
+ *
  */
 
 #ifndef MODULE_MANAGER_COMPAT_H

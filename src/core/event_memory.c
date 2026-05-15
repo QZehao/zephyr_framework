@@ -3,14 +3,15 @@
  * @brief 事件系统内存管理模块实现 (Event Memory Management Implementation)
  *
  * 实现 Slab 池定义和内存管理函数。
- *
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-15
  *
  * @par 修改日志:
+ *
  *    Date         Version        Author          Description
  * 2026-04-15       1.0            zeh            初始版本
+ *
  */
 
 #include "event_memory.h"
