@@ -53,7 +53,7 @@ static data_bus_channel_t *find_in_table(const char *name)
 {
 	for (uint32_t i = 0; i < g_channel_count; i++) {
 		data_bus_channel_t *ch = g_channels[i];
-		if (ch != NULL && ch->active && strcmp(ch->name, name) == 0) {
+		if (ch != NULL && atomic_get(&ch->active) && strcmp(ch->name, name) == 0) {
 			return ch;
 		}
 	}
@@ -113,7 +113,7 @@ void data_bus_channel_obj_reset(data_bus_channel_t *ch)
 
 	/* 注销所有消费者 */
 	for (uint32_t i = 0; i < ch->consumer_count; i++) {
-		ch->consumers[i].active = false;
+		atomic_set(&ch->consumers[i].active, 0);
 	}
 	ch->consumer_count = 0;
 
@@ -191,7 +191,7 @@ int data_bus_channel_destroy(data_bus_channel_t *ch)
 
 	/* 检查活跃消费者 */
 	for (uint32_t i = 0; i < ch->consumer_count; i++) {
-		if (ch->consumers[i].active) {
+		if (atomic_get(&ch->consumers[i].active)) {
 			LOG_WRN("Channel '%s' destroy failed: active consumers remain",
 				ch->name);
 			k_mutex_unlock(&g_channels_lock);
@@ -253,10 +253,10 @@ data_bus_channel_t *data_bus_channel_find(const char *name)
  * 内部辅助：将块入队到通道
  * ============================================================================ */
 
-static int channel_enqueue_block(data_bus_channel_t *ch, data_bus_block_t *block)
+static uint32_t channel_enqueue_block(data_bus_channel_t *ch, data_bus_block_t *block)
 {
 	k_spinlock_key_t key = k_spin_lock(&ch->lock);
-	int ret = ring_buf_put(&ch->queue, (uint8_t *)&block, sizeof(block));
+	uint32_t ret = ring_buf_put(&ch->queue, (uint8_t *)&block, sizeof(block));
 	if (ret == sizeof(block)) {
 		block->seq = ch->next_seq++;
 		ch->publish_count++;
@@ -315,7 +315,7 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 	/* block->len 已由 mem_alloc 设置，ref_count 已为 0 */
 
 	/* 入队 */
-	int ret = channel_enqueue_block(ch, block);
+	uint32_t ret = channel_enqueue_block(ch, block);
 
 	if (ret != sizeof(block)) {
 		LOG_WRN("Publish to '%s' dropped: queue full (depth=%u)",
@@ -360,7 +360,7 @@ int data_bus_publish_block(data_bus_channel_t *ch, data_bus_block_t *block)
 	}
 
 	/* 入队 */
-	int ret = channel_enqueue_block(ch, block);
+	uint32_t ret = channel_enqueue_block(ch, block);
 
 	if (ret != sizeof(block)) {
 		LOG_WRN("publish_block to '%s' dropped: queue full (depth=%u)",

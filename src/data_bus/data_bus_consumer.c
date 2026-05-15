@@ -206,7 +206,7 @@ void data_bus_consumer_dispatch(data_bus_channel_t *ch, data_bus_block_t *block)
 	 * 每个消费者获得一份隐式引用。
 	 */
 	LOG_DBG("Dispatch ch='%s' seq=%u ref+%u=%d", ch->name, block->seq,
-		active_count, atomic_get(&block->ref_count));
+		active_count, (int)atomic_get(&block->ref_count));
 
 	atomic_add(&block->ref_count, active_count);
 

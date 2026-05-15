@@ -180,15 +180,6 @@ int data_bus_deinit(void)
 	while (g_channel_count > 0) {
 		data_bus_channel_t *ch = g_channels[0];
 		if (ch != NULL) {
-			/* 标记通道关闭，阻止新发布 */
-			atomic_set(&ch->active, 0);
-
-			/* 注销所有消费者 */
-			for (uint32_t i = 0; i < ch->consumer_count; i++) {
-				atomic_set(&ch->consumers[i].active, 0);
-			}
-			ch->consumer_count = 0;
-
 			/* 排空队列并释放所有块 */
 			data_bus_block_t *block = NULL;
 			while (true) {
