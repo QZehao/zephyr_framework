@@ -82,21 +82,28 @@ static void data_bus_dispatcher_thread(void *arg1, void *arg2, void *arg3)
 				continue;
 			}
 
-			data_bus_block_t *block = NULL;
-			size_t len = 0;
+			/* 批量出队：连续处理最多 8 个块，避免高负载通道饥饿 */
+			for (int batch = 0; batch < 8; batch++) {
+				data_bus_block_t *block = NULL;
+				size_t len = 0;
+				uint32_t consumer_count_snap = 0;
 
-			k_spinlock_key_t key = k_spin_lock(&ch->lock);
-			if (ch->active) {
-				len = ring_buf_get(&ch->queue, (uint8_t *)&block, sizeof(block));
-				if (len == sizeof(block) && block != NULL) {
-					ch->queue_used--;
+				k_spinlock_key_t key = k_spin_lock(&ch->lock);
+				if (atomic_get(&ch->active)) {
+					len = ring_buf_get(&ch->queue, (uint8_t *)&block, sizeof(block));
+					if (len == sizeof(block) && block != NULL) {
+						ch->queue_used--;
+					}
+					consumer_count_snap = ch->consumer_count;
 				}
-			}
-			k_spin_unlock(&ch->lock, key);
+				k_spin_unlock(&ch->lock, key);
 
-			if (len == sizeof(block) && block != NULL) {
+				if (len != sizeof(block) || block == NULL) {
+					break;
+				}
+
 				LOG_DBG("dispatch ch='%s' seq=%u len=%zu consumers=%u",
-					ch->name, block->seq, block->len, ch->consumer_count);
+					ch->name, block->seq, block->len, consumer_count_snap);
 
 				/* 分发给所有消费者 */
 				data_bus_consumer_dispatch(ch, block);
@@ -105,9 +112,7 @@ static void data_bus_dispatcher_thread(void *arg1, void *arg2, void *arg3)
 				data_bus_block_release(block);
 			}
 
-			k_mutex_lock(&g_channels_lock, K_FOREVER);
 			(void)atomic_dec(&ch->dispatch_hold);
-			k_mutex_unlock(&g_channels_lock);
 		}
 	}
 }
@@ -175,9 +180,12 @@ int data_bus_deinit(void)
 	while (g_channel_count > 0) {
 		data_bus_channel_t *ch = g_channels[0];
 		if (ch != NULL) {
+			/* 标记通道关闭，阻止新发布 */
+			atomic_set(&ch->active, 0);
+
 			/* 注销所有消费者 */
 			for (uint32_t i = 0; i < ch->consumer_count; i++) {
-				ch->consumers[i].active = false;
+				atomic_set(&ch->consumers[i].active, 0);
 			}
 			ch->consumer_count = 0;
 

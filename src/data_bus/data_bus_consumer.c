@@ -29,6 +29,7 @@
 LOG_MODULE_REGISTER(data_bus_consumer, CONFIG_DATA_BUS_LOG_LEVEL);
 
 typedef struct {
+	data_bus_consumer_t *consumer;  /* 消费者对象指针（固定地址，用于回调后安全匹配） */
 	bool active;
 	bool manual_release;
 	data_bus_consume_fn_t callback;
@@ -52,7 +53,7 @@ int data_bus_consumer_register(data_bus_channel_t *ch,
 
 	k_spinlock_key_t key = k_spin_lock(&ch->lock);
 
-	if (!ch->active) {
+	if (!atomic_get(&ch->active)) {
 		k_spin_unlock(&ch->lock, key);
 		return -ESHUTDOWN;
 	}
@@ -76,7 +77,7 @@ int data_bus_consumer_register(data_bus_channel_t *ch,
 	consumer->callback = cfg->callback;
 	consumer->user_data = cfg->user_data;
 	consumer->last_seq = 0;
-	consumer->active = true;
+	atomic_set(&consumer->active, 1);
 
 	ch->consumer_count++;
 
@@ -134,7 +135,7 @@ int data_bus_consumer_unregister(data_bus_consumer_t *consumer)
 	k_spinlock_key_t key = k_spin_lock(&found_ch->lock);
 
 	/* 标记为非活跃 */
-	consumer->active = false;
+	atomic_set(&consumer->active, 0);
 
 	/* 通过移位压缩数组 */
 	for (uint32_t i = found_idx; i < found_ch->consumer_count - 1; i++) {
@@ -179,7 +180,8 @@ void data_bus_consumer_dispatch(data_bus_channel_t *ch, data_bus_block_t *block)
 	for (uint32_t i = 0; i < count; i++) {
 		data_bus_consumer_t *c = &ch->consumers[i];
 
-		snaps[i].active = c->active;
+		snaps[i].consumer = c;
+		snaps[i].active = atomic_get(&c->active);
 		snaps[i].manual_release = c->manual_release;
 		snaps[i].callback = c->callback;
 		snaps[i].user_data = c->user_data;
@@ -224,10 +226,11 @@ void data_bus_consumer_dispatch(data_bus_channel_t *ch, data_bus_block_t *block)
 		}
 
 		k_spinlock_key_t lk = k_spin_lock(&ch->lock);
-		if (i < ch->consumer_count &&
-		    ch->consumers[i].callback == snaps[i].callback &&
-		    ch->consumers[i].user_data == snaps[i].user_data) {
-			ch->consumers[i].last_seq = block->seq;
+		data_bus_consumer_t *target = snaps[i].consumer;
+		if (target != NULL && atomic_get(&target->active) &&
+		    target->callback == snaps[i].callback &&
+		    target->user_data == snaps[i].user_data) {
+			target->last_seq = block->seq;
 		}
 		k_spin_unlock(&ch->lock, lk);
 	}

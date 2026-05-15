@@ -82,7 +82,7 @@ int data_bus_channel_obj_init(data_bus_channel_t *ch, const char *name)
 	ch->name = ch->name_storage;
 	ring_buf_init(&ch->queue, sizeof(ch->queue_buf), ch->queue_buf);
 	/* k_spinlock 零初始化是有效的 */
-	ch->active = true;
+	atomic_set(&ch->active, 1);
 	ch->next_seq = 0;
 	atomic_set(&ch->dispatch_hold, 0);
 
@@ -117,7 +117,7 @@ void data_bus_channel_obj_reset(data_bus_channel_t *ch)
 	}
 	ch->consumer_count = 0;
 
-	ch->active = false;
+	atomic_set(&ch->active, 0);
 }
 
 /* ============================================================================
@@ -184,7 +184,7 @@ int data_bus_channel_destroy(data_bus_channel_t *ch)
 
 	k_mutex_lock(&g_channels_lock, K_FOREVER);
 
-	if (!ch->active) {
+	if (!atomic_get(&ch->active)) {
 		k_mutex_unlock(&g_channels_lock);
 		return -EINVAL;
 	}
@@ -250,6 +250,27 @@ data_bus_channel_t *data_bus_channel_find(const char *name)
 }
 
 /* ============================================================================
+ * 内部辅助：将块入队到通道
+ * ============================================================================ */
+
+static int channel_enqueue_block(data_bus_channel_t *ch, data_bus_block_t *block)
+{
+	k_spinlock_key_t key = k_spin_lock(&ch->lock);
+	int ret = ring_buf_put(&ch->queue, (uint8_t *)&block, sizeof(block));
+	if (ret == sizeof(block)) {
+		block->seq = ch->next_seq++;
+		ch->publish_count++;
+		atomic_set(&block->ref_count, 1);
+		ch->queue_used++;
+		if (ch->queue_used > ch->peak_queue_usage) {
+			ch->peak_queue_usage = ch->queue_used;
+		}
+	}
+	k_spin_unlock(&ch->lock, key);
+	return ret;
+}
+
+/* ============================================================================
  * 公共 API: 发布
  * ============================================================================ */
 
@@ -267,11 +288,7 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 		return -ESHUTDOWN;
 	}
 
-	k_spinlock_key_t skey = k_spin_lock(&ch->lock);
-	bool active = ch->active;
-	k_spin_unlock(&ch->lock, skey);
-
-	if (!active) {
+	if (!atomic_get(&ch->active)) {
 		return -ESHUTDOWN;
 	}
 
@@ -295,22 +312,10 @@ int data_bus_publish(data_bus_channel_t *ch, const void *data, size_t len)
 
 	/* 拷贝数据 */
 	memcpy(block->ptr, data, len);
-	/* block->len 已由 mem_alloc 设置 */
-	atomic_set(&block->ref_count, 0);
+	/* block->len 已由 mem_alloc 设置，ref_count 已为 0 */
 
 	/* 入队 */
-	skey = k_spin_lock(&ch->lock);
-	int ret = ring_buf_put(&ch->queue, (uint8_t *)&block, sizeof(block));
-	if (ret == sizeof(block)) {
-		block->seq = ch->next_seq++;
-		ch->publish_count++;
-		atomic_set(&block->ref_count, 1);
-		ch->queue_used++;
-		if (ch->queue_used > ch->peak_queue_usage) {
-			ch->peak_queue_usage = ch->queue_used;
-		}
-	}
-	k_spin_unlock(&ch->lock, skey);
+	int ret = channel_enqueue_block(ch, block);
 
 	if (ret != sizeof(block)) {
 		LOG_WRN("Publish to '%s' dropped: queue full (depth=%u)",
@@ -350,27 +355,12 @@ int data_bus_publish_block(data_bus_channel_t *ch, data_bus_block_t *block)
 		return -ESHUTDOWN;
 	}
 
-	k_spinlock_key_t skey = k_spin_lock(&ch->lock);
-	bool active = ch->active;
-	k_spin_unlock(&ch->lock, skey);
-
-	if (!active) {
+	if (!atomic_get(&ch->active)) {
 		return -ESHUTDOWN;
 	}
 
 	/* 入队 */
-	skey = k_spin_lock(&ch->lock);
-	int ret = ring_buf_put(&ch->queue, (uint8_t *)&block, sizeof(block));
-	if (ret == sizeof(block)) {
-		block->seq = ch->next_seq++;
-		ch->publish_count++;
-		atomic_set(&block->ref_count, 1);
-		ch->queue_used++;
-		if (ch->queue_used > ch->peak_queue_usage) {
-			ch->peak_queue_usage = ch->queue_used;
-		}
-	}
-	k_spin_unlock(&ch->lock, skey);
+	int ret = channel_enqueue_block(ch, block);
 
 	if (ret != sizeof(block)) {
 		LOG_WRN("publish_block to '%s' dropped: queue full (depth=%u)",

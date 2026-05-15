@@ -94,8 +94,7 @@ struct data_bus_consumer {
     data_bus_consume_fn_t   callback;
     void*                   user_data;
     uint32_t                last_seq;       /**< 最后消费的序列号 */
-    bool                    active;         /**< 分发器和注销可能竞争；
-                                                 在 32 位架构上天然原子 */
+    atomic_t                active;         /**< 原子标志：1=活跃, 0=已注销 */
 };
 
 /* ============================================================================
@@ -108,7 +107,7 @@ struct data_bus_channel {
     struct ring_buf queue;              /**< 环形缓冲区，存储 data_bus_block_t* */
     uint8_t         queue_buf[CONFIG_DATA_BUS_CHANNEL_QUEUE_DEPTH * sizeof(void*)];
     struct k_spinlock lock;
-    bool            active;
+    atomic_t        active;
 
     data_bus_consumer_t consumers[CONFIG_DATA_BUS_MAX_CONSUMERS_PER_CHANNEL];
     uint32_t        consumer_count;
