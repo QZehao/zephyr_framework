@@ -23,7 +23,7 @@ extern "C" {
 #endif
 
 /* =============================================================================
- * Application Configuration
+ * 应用配置
  * ============================================================================= */
 
 typedef struct {
@@ -34,7 +34,7 @@ typedef struct {
 } app_config_t;
 
 /* =============================================================================
- * Application API
+ * 应用 API
  * ============================================================================= */
 
 /**
@@ -57,20 +57,20 @@ int app_start(void);
 int app_stop(void);
 
 /**
- * @brief Get application uptime
- * @return Uptime in milliseconds
+ * @brief 获取应用运行时间
+ * @return 运行时间（毫秒）
  */
 uint32_t app_get_uptime(void);
 
 /**
- * @brief Check if application is running
- * @return true if running, false otherwise
+ * @brief 检查应用是否正在运行
+ * @return 正在运行返回 true，否则返回 false
  */
 bool app_is_running(void);
 
 /**
- * @brief Get application heartbeat count
- * @return Heartbeat count
+ * @brief 获取应用心跳计数
+ * @return 心跳计数
  */
 uint32_t app_get_heartbeat_count(void);
 

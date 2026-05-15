@@ -71,8 +71,8 @@ const module_interface_t* example_module_a_get_interface(void);
 int example_module_a_get_data(void* data, size_t len);
 
 /**
- * @brief Set sampling rate
- * @param rate_ms Sampling rate in milliseconds
+ * @brief 设置采样率
+ * @param rate_ms 采样率（毫秒）
  * @return 成功返回 0，失败返回负错误码
  */
 int example_module_a_set_rate(uint32_t rate_ms);

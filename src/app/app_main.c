@@ -1,6 +1,6 @@
 /**
  * @file app_main.c
- * @brief 
+ * @brief 应用主入口实现
  * @author zeh (china_qzh@163.com)
  * @version 1.0
  * @date 2026-04-01

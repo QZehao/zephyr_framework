@@ -344,7 +344,7 @@ size_t sys_mem_get_min_free_size(void);
  * @param  size      大小（字节）
  * @param  module    模块名称
  * @param  line      行号
- * @return void*
+ * @return 分配的内存指针，失败返回 NULL
  */
 void* sys_mem_alloc_with_info(sys_mem_pool_type_t type, size_t size, const char* module, uint32_t line);
 #ifdef __cplusplus
